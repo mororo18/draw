@@ -160,15 +160,15 @@ impl Window {
 
 
         /* allocates memory and creates the window buffer */
-		let pixel_bits = 32_i32;
-		let pixel_bytes = pixel_bits / 8;
-		let mut window_buffer_size = ((width * height) as u32) * (pixel_bytes as u32);
+        let pixel_bits = 32_i32;
+        let pixel_bytes = pixel_bits / 8;
+        let mut window_buffer_size = ((width * height) as u32) * (pixel_bytes as u32);
 
-		let layout = Layout::array::<i8>(window_buffer_size as usize)
+        let layout = Layout::array::<i8>(window_buffer_size as usize)
                                         .expect("layout deu merda");
-		let mut mem: *mut u8  = unsafe{alloc(layout)};
+        let mut mem: *mut u8  = unsafe{alloc(layout)};
 
-		let mut window_buffer: *mut xlib::XImage = unsafe{xlib::XCreateImage(display,  
+        let mut window_buffer: *mut xlib::XImage = unsafe{xlib::XCreateImage(display,  
                                                                     visinfo.visual, 
                                                                     visinfo.depth as u32,
                                                                     xlib::ZPixmap,
@@ -178,7 +178,7 @@ impl Window {
                                                                     height as _,
                                                                     pixel_bits, 0)};
         // graphics context
-		let default_gc: xlib::GC = unsafe{xlib::XDefaultGC(display, default_screen)};
+        let default_gc: xlib::GC = unsafe{xlib::XDefaultGC(display, default_screen)};
 
         // special way for the window manager to tell you that the window close button was
         // pressed without actually closing the window itself. 
@@ -223,35 +223,35 @@ impl Window {
 
     pub
     fn run(&mut self) {
-		let mut window_open = true;
-		let mut size_change = false;
+        let mut window_open = true;
+        let mut size_change = false;
         while window_open {
 
-			let mut ev = unsafe{MaybeUninit::<xlib::XEvent >::zeroed().assume_init()};
+            let mut ev = unsafe{MaybeUninit::<xlib::XEvent >::zeroed().assume_init()};
 
             fn ptr_cast<T, U>(ev: &mut U) -> *mut T {
                 (ev as *mut U).cast::<T>()
             }
 
-			while unsafe{xlib::XPending(self.display)} > 0 {
-				unsafe{xlib::XNextEvent(self.display, &mut ev as *mut _);}
+            while unsafe{xlib::XPending(self.display)} > 0 {
+                unsafe{xlib::XNextEvent(self.display, &mut ev as *mut _);}
 
                 let kcode_left  = unsafe{xlib::XKeysymToKeycode(self.display, XK_Left.into()).into()};
                 let kcode_right = unsafe{xlib::XKeysymToKeycode(self.display, XK_Right.into()).into()};
                 let kcode_up    = unsafe{xlib::XKeysymToKeycode(self.display, XK_Up.into()).into()};
                 let kcode_down  = unsafe{xlib::XKeysymToKeycode(self.display, XK_Down.into()).into()};
 
-				match unsafe {ev.type_} {
+                match unsafe {ev.type_} {
                     /*
-					DestroyNotify => {
+                    DestroyNotify => {
                         println!("DestroyNotify");
-						let e: *mut XDestroyWindowEvent =  (&mut ev as *mut XEvent).cast::<XDestroyWindowEvent>() ;
-						if (*e).window == window {
-							window_open = false;
-						}
+                        let e: *mut XDestroyWindowEvent =  (&mut ev as *mut XEvent).cast::<XDestroyWindowEvent>() ;
+                        if (*e).window == window {
+                            window_open = false;
+                        }
 
                         break;
-					},
+                    },
                     */
 
                     xlib::ClientMessage => {
@@ -309,31 +309,31 @@ impl Window {
                     xlib::MapNotify => println!("MapNotify"),
 
                     _ => println!("Unknown notify {}", unsafe{ev.type_}),
-				}
+                }
 
-			}
+            }
 
             if size_change {
 
-				size_change = false;
-				unsafe{xlib::XDestroyImage(self.window_buffer)}; // Free's the memory we malloced;
+                size_change = false;
+                unsafe{xlib::XDestroyImage(self.window_buffer)}; // Free's the memory we malloced;
 
-				////loop {}
+                ////loop {}
 
-				println!("w {} \n h {}", self.width, self.height);
-				self.window_buffer_size = self.width * self.height * self.pixel_bytes;
-				let layout = Layout::array::<i8>(self.window_buffer_size as usize).expect("layout deu merda");
-				self.mem = unsafe{alloc(layout)};
+                println!("w {} \n h {}", self.width, self.height);
+                self.window_buffer_size = self.width * self.height * self.pixel_bytes;
+                let layout = Layout::array::<i8>(self.window_buffer_size as usize).expect("layout deu merda");
+                self.mem = unsafe{alloc(layout)};
 
-				self.window_buffer = unsafe{xlib::XCreateImage(self.display, 
+                self.window_buffer = unsafe{xlib::XCreateImage(self.display, 
                                                         self.visinfo.visual, 
                                                         self.visinfo.depth as u32,
-											            xlib::ZPixmap, 
+                                                        xlib::ZPixmap, 
                                                         0, 
                                                         self.mem as *mut _, 
                                                         self.width as _, 
                                                         self.height as _,
-											            self.pixel_bits as _, 
+                                                        self.pixel_bits as _, 
                                                         0)};
             }
 
@@ -364,6 +364,6 @@ impl Window {
                             self.window_buffer, 0, 0, 0, 0,
                             self.width as _, 
                             self.height as _)};
-		}
+        }
     }
 }

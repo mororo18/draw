@@ -8,12 +8,7 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gtk = "0.18.0"
-glib = "0.18.0"
-gdk-pixbuf = "0.18.0"
-cairo-rs = "0.18.0"
 rand = "0.8.5"
-fragile = "2.0.0"
 x11 = "2.21.0"
 
 #[target.<triple>.<links>] # `links` build script override

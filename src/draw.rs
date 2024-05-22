@@ -9,6 +9,9 @@ use std::ffi::CString;
 
 use std::result::*;
 
+use std::time::UNIX_EPOCH;
+use std::time::SystemTime;
+
 pub
 struct Window {
     width:  usize,
@@ -339,6 +342,8 @@ impl Window {
 
             unsafe{
 
+
+                let time = SystemTime::now().duration_since(UNIX_EPOCH).expect("asfdas").as_secs() as f64;
                 let pitch = (self.width as isize) *
                     (self.pixel_bytes as isize);
                 for y in 0..(self.height as isize) {
@@ -348,11 +353,14 @@ impl Window {
                     for x in 0..(self.width as isize) {
                         let p: *mut u32 = row.byte_offset(x * (self.pixel_bytes as isize)).cast::<u32>();;
 
+                        *p = (0xffffffff_i64 as f64 * f64::sin(time).abs()) as u32;
+                        /*
                         if x % 16 == 0 && y % 16 == 0 {
                             *p = 0xffffffff;
                         } else {
                             *p = 0;
                         }
+                        */
                     }
                 }
         

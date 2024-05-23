@@ -221,11 +221,20 @@ impl Window {
 
     }
 
+    // criar funcao "handle" que retorna um enum, ou vec de enums, contendo os eventos recebidos
+
     pub
     fn run(&mut self) {
         let mut window_open = true;
         let mut size_change = false;
         while window_open {
+
+            unsafe{xlib::XPutImage(self.display, 
+                            self.window,
+                            self.default_gc, 
+                            self.window_buffer, 0, 0, 0, 0,
+                            self.width as _, 
+                            self.height as _)};
 
             let mut ev = unsafe{MaybeUninit::<xlib::XEvent >::zeroed().assume_init()};
 
@@ -358,12 +367,6 @@ impl Window {
         
             }
 
-            unsafe{xlib::XPutImage(self.display, 
-                            self.window,
-                            self.default_gc, 
-                            self.window_buffer, 0, 0, 0, 0,
-                            self.width as _, 
-                            self.height as _)};
         }
     }
 }

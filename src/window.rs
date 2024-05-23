@@ -76,8 +76,10 @@ impl Window {
     pub 
     fn new (width: usize, height:usize) -> Self {
 
-        let min_width    = 400;
-        let min_height   = 300;
+        //let min_width    = 400;
+        //let min_height   = 300;
+        let min_width    = width as i32;
+        let min_height   = height as i32;
         let max_width    = 0;
         let max_height   = 0;
 
@@ -391,14 +393,19 @@ impl Window {
     }
 
     pub 
-    fn write_frame(&mut self, src: &[u8]) {
+    fn write_frame_from_ptr(&mut self, src: *const u8, sz: usize) {
 
         let mem_len = self.width * self.height * self.pixel_bytes;
-        if (src.len() > mem_len) {panic!("fn write_frame(&[u8]) overflow");}
+        if src.is_null() || sz > mem_len {panic!("frame overflow");}
 
         unsafe {
-        self.mem.copy_from_nonoverlapping(src.as_ptr() as *const _, src.len());
+        self.mem.copy_from_nonoverlapping(src, sz);
         }
+    }
+
+    pub 
+    fn write_frame_from_slice(&mut self, src: &[u8]) {
+        self.write_frame_from_ptr(src.as_ptr() as *const _, src.len());
     }
 
     pub

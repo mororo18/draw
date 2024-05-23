@@ -11,5 +11,8 @@ build = "build.rs"
 rand = "0.8.5"
 x11 = "2.21.0"
 
+[rust]
+debug = true
+
 #[target.<triple>.<links>] # `links` build script override
 #rustc-link-lib = ["X11"]

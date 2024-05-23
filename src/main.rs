@@ -6,7 +6,10 @@ use window::{
     Event,
 };
 
-use draw::Canva;
+use draw::{
+    Canva,
+    Vec2,
+};
 
 fn main() {
 
@@ -27,8 +30,11 @@ fn main() {
             }
         }
 
+        let a = Vec2::<f64>::new(200.35, 200.46);
+        let b = Vec2::<f64>::new(700.35, 250.46);
 
-        canva.draw_pixel(300, 400);
+        println!("{:?}", a);
+        canva.draw_line(a, b);
 
         win.write_frame_from_slice(canva.as_bytes_slice());
     }

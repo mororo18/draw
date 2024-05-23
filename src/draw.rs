@@ -52,17 +52,31 @@ impl Pixel {
 pub
 struct Canva {
     frame: Vec<Pixel>,
+    width: usize,
+    height: usize,
 }
 
 impl Canva {
     pub
     fn new (width: usize, height: usize) -> Self {
         let len: usize = width * height;
-        let frame = vec![Pixel::blue(); len];
+        let frame = vec![Pixel::black(); len];
 
         Canva {
             frame: frame,
+            width: width,
+            height: height,
         }
+    }
+
+    fn in_bounds (&self, x: usize, y: usize) -> bool {
+        x < self.height && y < self.width
+    }
+
+    pub
+    fn draw_pixel (&mut self, x: usize, y: usize) {
+        if self.in_bounds(x, y) == false {panic!("drawing out of bounds")}
+        self.frame[self.width * x + y] = Pixel::white();
     }
 
     pub

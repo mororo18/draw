@@ -27,13 +27,10 @@ fn main() {
             }
         }
 
-        //let ptr: *const u8 = canva.as_ptr();
-        //let sz: usize = canva.size_bytes();
-        //
-        //let a = vec![0_u8; 800*600*4];
-        win.write_frame_from_slice(canva.as_bytes_slice());
 
+        canva.draw_pixel(300, 400);
+
+        win.write_frame_from_slice(canva.as_bytes_slice());
     }
 
-    canva.size_bytes();
 }

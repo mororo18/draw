@@ -1,4 +1,4 @@
-#![feature(ascii_char)] 
+use itertools::Either;
 
 enum Color {
     Red,
@@ -90,6 +90,177 @@ impl Canva {
 
         let m = (b_center.y - a_center.y) / (b_center.x - a_center.x);
 
+        //println!("m = {m}");
+        if 1.0 < m {
+            self.midpoint_draw(a_center, b_center, 0);
+        } else if 0.0 < m && m <= 1.0 {
+            self.midpoint_draw(a_center, b_center, 1);
+        } else if -1.0 < m && m <= 0.0 {
+            self.midpoint_draw(a_center, b_center, 2);
+        } else if m <= -1.0 {
+            self.midpoint_draw(a_center, b_center, 3);
+        }
+    }
+
+    fn midpoint_draw(&mut self, _a_center: Vec2<f64>, _b_center: Vec2<f64>, idx: usize) {
+        // idx      m \in
+        // ===================
+        // 0        (1,   inf]      
+        // 1        (0,     1]      
+        // 2        (-1,    0]      
+        // 3        (-inf, -1]      
+
+        // Eh necessario que  a_center.x < b_center.x 
+        //println!("idx = {idx}");
+
+        let (a_center, b_center) = 
+            match _a_center.x <= _b_center.x {
+                true  => (_a_center, _b_center),
+                false => (_b_center, _a_center),
+            };
+
+        let midpoint_x: [f64; 4] = [
+            0.5,
+            1.0,
+            1.0,
+            0.5,
+        ];
+
+        let midpoint_y: [f64; 4] = [
+            1.0,
+            0.5,
+           -0.5,
+           -1.0,
+        ];
+
+
+        let iter_axis_first: [_; 4] = [
+            a_center.y as usize,
+            a_center.x as usize,
+            a_center.x as usize,
+            a_center.y as usize
+        ];
+
+        let iter_axis_last: [_; 4] = [
+            b_center.y as usize,
+            b_center.x as usize,
+            b_center.x as usize,
+            b_center.y as usize
+        ];
+
+        let f = |x: f64, y:f64| -> f64 {
+            (a_center.y - b_center.y) * x + 
+            (b_center.x - a_center.x) * y +
+            (a_center.x * b_center.y) - 
+            (b_center.x * a_center.y)
+        };
+
+        let inc_axis_begin = [
+            a_center.x as i32,
+            a_center.y as i32,
+            a_center.y as i32,
+            a_center.x as i32
+        ];
+
+        let increment: [i32; 4] = [
+            1,
+            1,
+           -1,
+            1,
+        ];
+
+        let mut inc_axis = inc_axis_begin[idx];
+        let mut d = f(a_center.x + midpoint_x[idx],
+                      a_center.y + midpoint_y[idx]); // alt
+
+        let delta_y = (a_center.y - b_center.y);// *
+            //if idx == 0 || idx == 3 {-1.0} else {1.0};
+        let delta_x = if idx == 0 || idx == 1 {(b_center.x - a_center.x)} else {-(b_center.x - a_center.x)};
+
+        fn iter_range(first: usize, last: usize, cond: bool) 
+            -> Either<impl Iterator<Item = usize>, 
+                      impl Iterator<Item = usize>> 
+        {
+            if cond     {Either::Right((last..=first).rev())}
+            else        {Either::Left(first..=last)}
+        }
+
+        //println!("firs = {}\n last = {}", iter_axis_first[idx], iter_axis_last[idx]);
+        // tem que arrumar essa gambiarra aq
+        for iter_axis in iter_range(iter_axis_first[idx], iter_axis_last[idx], idx==3) {
+
+            //println!("d = {d}, {idx}");
+
+            let (x, y) = match idx {
+                0 => (inc_axis, iter_axis as i32),
+                1 => (iter_axis as i32, inc_axis),
+                2 => (iter_axis as i32, inc_axis),
+                3 => (inc_axis, iter_axis as i32),
+                _ => (0, 0),
+            };
+
+            self.draw_pixel_coord(x as usize, y as usize);
+
+            let d_cond = match idx {
+                0 => d > 0.0,
+                1 => d < 0.0,
+                2 => d > 0.0,
+                3 => d < 0.0,
+                _ => false,
+            };
+
+            if d_cond {
+                inc_axis += increment[idx]; // alta
+                d += delta_x  + delta_y; // alt
+            } else {
+                // necessita otimizacao (tqv no futuro)
+                d += match idx {
+                    0 => delta_x,
+                    1 => delta_y,
+                    2 => delta_y,
+                    3 => delta_x,
+                    _ => 0.0,
+                };
+            }
+        }
+    }
+    // m \in (-1, 0]
+    fn midpoint_draw_two(&mut self, a_center: Vec2<f64>, b_center: Vec2<f64>) {
+
+        //assert!(a_center.x < b_center.x, "uso incorreto");
+        //assert!(a_center.y > b_center.y, "uso incorreto");
+
+        let f = |x: f64, y:f64| -> f64 {
+            (a_center.y - b_center.y) * x + 
+            (b_center.x - a_center.x) * y +
+            (a_center.x * b_center.y) - 
+            (b_center.x * a_center.y)
+        };
+
+        let mut y = a_center.y as i32;
+        let mut d = f(a_center.x + 1.0, a_center.y - 0.5); // alt
+
+        let col_first = a_center.x as usize;
+        let col_last  = b_center.x as usize;
+
+        //println!("first {col_first}\nlast {col_last}");
+        for x in col_first..=col_last {
+            self.draw_pixel_coord(x,y as usize);
+
+            if d > 0.0 {
+                y += -1; // alta
+                d += - (b_center.x - a_center.x) + (a_center.y - b_center.y); // alt
+            } else {
+                d += a_center.y - b_center.y;
+            }
+        }
+    }
+
+    fn midpoint_draw_one(&mut self, a_center: Vec2<f64>, b_center: Vec2<f64>) {
+
+        //assert!(a_center.x < b_center.x, "uso incorreto");
+        //assert!(a_center.y < b_center.y, "uso incorreto");
+
         let f = |x: f64, y:f64| -> f64 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
@@ -98,31 +269,20 @@ impl Canva {
         };
 
 
-        println!("m = {m}");
-        if 0.0 < m && m <= 1.0 {
-            self.midpoint_draw(a_center, b_center, f);
-            println!("midpoint");
-        }
-    }
+        let mut y = a_center.y as usize;
+        let mut d = f(a_center.x + 1.0, a_center.y + 0.5);
 
-    fn midpoint_draw<F>(&mut self, a: Vec2<f64>, b: Vec2<f64>, mut f:  F ) 
-    where
-        F: FnMut(f64, f64) -> f64,
-    {
-        let mut y = a.y as usize;
-        let mut d = f(a.x + 1.0, a.y + 0.5);
-
-        let col_first = a.x as usize;
-        let col_last  = b.x as usize;
+        let col_first = a_center.x as usize;
+        let col_last  = b_center.x as usize;
 
         for x in col_first..=col_last {
-            self.draw_pixel_coord(x,y);
+            self.draw_pixel_coord(x,y as usize);
 
             if d < 0.0 {
                 y += 1;
-                d += (b.x - a.x) + (a.y - b.y);
+                d += (b_center.x - a_center.x) + (a_center.y - b_center.y);
             } else {
-                d += a.y - b.y;
+                d += a_center.y - b_center.y;
             }
         }
     }
@@ -161,7 +321,13 @@ impl Canva {
 
     pub
     fn draw_pixel_coord (&mut self, x: usize, y: usize) {
-        if self.in_bounds(x, y) == false {panic!("drawing out of bounds")}
+        assert!(self.in_bounds(x, y),
+                    "Drawing out of bounds. \
+                    Point ({x}, {y}) doesnt fit ({0}, {1})",
+                    self.width, self.height
+        );
+
+        //println!("Drawing {x}, {y}");
 
         let y_inv = self.height - y - 1;
         self.frame[self.width * y_inv + x] = Pixel::white();
@@ -173,7 +339,7 @@ impl Canva {
     }
 
     fn in_bounds (&self, x: usize, y: usize) -> bool {
-        x < self.width && y < self.height
+        (x < self.width) && (y < self.height)
     }
 
     pub

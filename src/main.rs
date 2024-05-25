@@ -36,11 +36,14 @@ fn main() {
         let x_right = 500;
         let x_left = 300;
 
-        let center_a = Vec2::<f64>::new(400.0, 320.0);
-        let center_b = Vec2::<f64>::new(420.0, 300.0);
-        let center_c = Vec2::<f64>::new(400.0, 280.0);
+        let a = Vec2::<f64>::new(100.0, 100.0);
+        let b = Vec2::<f64>::new(300.0, 100.0);
+        let c = Vec2::<f64>::new(200.0, 250.0);
         let center_d = Vec2::<f64>::new(380.0, 300.0);
 
+
+        canva.draw_triangle(a, b, c);
+        /*
         for p in x_left..=x_right {
             let side = Vec2::<f64>::new(p as f64, y_top as f64);
             canva.draw_line(center_a, side);
@@ -60,6 +63,7 @@ fn main() {
             let side = Vec2::<f64>::new(x_left as f64, p as f64);
             canva.draw_line(center_d, side);
         }
+        */
 
 
         //let b = Vec2::<f64>::new(0.0, 400.0);

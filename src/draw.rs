@@ -1,4 +1,6 @@
 use itertools::Either;
+use std::ops::{Mul, Add};
+use std::cmp;
 
 enum Color {
     Red,
@@ -6,7 +8,7 @@ enum Color {
     Blue,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Pixel {
     // little endian
     b:  u8,
@@ -49,6 +51,50 @@ impl Pixel {
     fn black() -> Self {Pixel::new(0,0,0)}
 }
 
+impl Add for Pixel {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        let r_sum = (self.r + rhs.r) as u32;
+        let g_sum = (self.g + rhs.g) as u32;
+        let b_sum = (self.b + rhs.b) as u32;
+
+        Pixel {
+            r: cmp::min(255, r_sum) as u8,
+            g: cmp::min(255, g_sum) as u8,
+            b: cmp::min(255, b_sum) as u8,
+
+            padd: 0,
+        }
+    }
+}
+
+impl Mul<f64> for Pixel {
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self {
+        let r = (self.r as f64) * rhs;
+        let g = (self.g as f64) * rhs;
+        let b = (self.b as f64) * rhs;
+
+        Pixel {
+            r: if r > 255.0 {255_u8} else {r as u8},
+            g: if g > 255.0 {255_u8} else {g as u8},
+            b: if b > 255.0 {255_u8} else {b as u8},
+
+            padd: 0,
+        }
+    }
+}
+
+impl Mul<Pixel> for f64 {
+    type Output = Pixel;
+
+    fn mul(self, rhs: Pixel) -> Pixel {
+        rhs * self 
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub
 struct Vec2<T> {
@@ -81,6 +127,95 @@ impl Canva {
             width: width,
             height: height,
         }
+    }
+
+    pub
+    fn draw_triangle(&mut self, a: Vec2<f64>, b: Vec2<f64>, c: Vec2<f64>) {
+
+        let a_center = Self::pos_map_center(a);
+        let b_center = Self::pos_map_center(b);
+        let c_center = Self::pos_map_center(c);
+
+        let color_a = Pixel::red();
+        let color_b = Pixel::green();
+        let color_c = Pixel::blue();
+
+        let f_ab = |x: f64, y:f64| -> f64 {
+            (a_center.y - b_center.y) * x + 
+            (b_center.x - a_center.x) * y +
+            (a_center.x * b_center.y) - 
+            (b_center.x * a_center.y)
+        };
+
+        let f_bc = |x: f64, y:f64| -> f64 {
+            (b_center.y - c_center.y) * x + 
+            (c_center.x - b_center.x) * y +
+            (b_center.x * c_center.y) - 
+            (c_center.x * b_center.y)
+        };
+
+        let f_ca = |x: f64, y:f64| -> f64 {
+            (c_center.y - a_center.y) * x + 
+            (a_center.x - c_center.x) * y +
+            (c_center.x * a_center.y) - 
+            (a_center.x * c_center.y)
+        };
+
+        let min = |x: f64, y: f64, z: f64| -> f64 {
+            let mut ret = f64::INFINITY;
+            vec![x, y, z].iter()
+                .for_each(|v| if *v < ret {ret = *v;});
+
+            ret
+        };
+
+        let max = |x: f64, y: f64, z: f64| -> f64 {
+            let mut ret = -f64::INFINITY;
+            vec![x, y, z].iter()
+                .for_each(|v| if *v > ret {ret = *v;});
+
+            ret
+        };
+
+        let x_min = min(a_center.x, b_center.x, c_center.x) as usize;
+        let y_min = min(a_center.y, b_center.y, c_center.y) as usize;
+
+        let x_max = max(a_center.x, b_center.x, c_center.x) as usize;
+        let y_max = max(a_center.y, b_center.y, c_center.y) as usize;
+
+        let f_alpha = f_bc(a_center.x, a_center.y);
+        let f_beta  = f_ca(b_center.x, b_center.y);
+        let f_gama  = f_ab(c_center.x, c_center.y);
+
+        for y in y_min..y_max {
+            let y_f64 = y as f64;
+            for x in x_min..x_max {
+                let x_f64 = x as f64;
+
+                let alpha: f64 = f_bc(x_f64,y_f64) / f_alpha;
+                let beta:  f64 = f_ca(x_f64,y_f64) / f_beta;
+                let gama:  f64 = f_ab(x_f64,y_f64) / f_gama;
+
+                if alpha >= 0.0 &&
+                    beta >= 0.0 &&
+                    gama >= 0.0 
+                {
+                    if (alpha > 0.0 || f_alpha * f_bc(-1.0, -1.0) > 0.0) &&
+                       (beta > 0.0  || f_beta  * f_ca(-1.0, -1.0) > 0.0) &&
+                       (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
+
+                    {
+                        let color_pixel = (alpha * color_a) +
+                                          (beta  * color_b) +
+                                          (gama  * color_c);
+
+                        self.draw_pixel_coord(x, y, color_pixel);
+                    }
+                }
+            }
+        }
+
+
     }
 
     pub
@@ -199,7 +334,7 @@ impl Canva {
                 _ => (0, 0),
             };
 
-            self.draw_pixel_coord(x as usize, y as usize);
+            self.draw_pixel_coord(x as usize, y as usize, Pixel::white());
 
             let d_cond = match idx {
                 0 => d > 0.0,
@@ -245,7 +380,7 @@ impl Canva {
 
         //println!("first {col_first}\nlast {col_last}");
         for x in col_first..=col_last {
-            self.draw_pixel_coord(x,y as usize);
+            self.draw_pixel_coord(x,y as usize, Pixel::white());
 
             if d > 0.0 {
                 y += -1; // alta
@@ -276,7 +411,7 @@ impl Canva {
         let col_last  = b_center.x as usize;
 
         for x in col_first..=col_last {
-            self.draw_pixel_coord(x,y as usize);
+            self.draw_pixel_coord(x,y as usize, Pixel::white());
 
             if d < 0.0 {
                 y += 1;
@@ -288,9 +423,9 @@ impl Canva {
     }
 
     pub
-    fn draw_dot (&mut self, pos: Vec2<f64>) {
+    fn draw_dot (&mut self, pos: Vec2<f64>, color: Pixel) {
         let pixel_pos = Self::img_map(pos);
-        self.draw_pixel(pixel_pos);
+        self.draw_pixel(pixel_pos, color);
     }
 
     pub 
@@ -320,7 +455,7 @@ impl Canva {
     }
 
     pub
-    fn draw_pixel_coord (&mut self, x: usize, y: usize) {
+    fn draw_pixel_coord (&mut self, x: usize, y: usize, color: Pixel) {
         assert!(self.in_bounds(x, y),
                     "Drawing out of bounds. \
                     Point ({x}, {y}) doesnt fit ({0}, {1})",
@@ -330,12 +465,12 @@ impl Canva {
         //println!("Drawing {x}, {y}");
 
         let y_inv = self.height - y - 1;
-        self.frame[self.width * y_inv + x] = Pixel::white();
+        self.frame[self.width * y_inv + x] = color;
     }
 
     pub
-    fn draw_pixel (&mut self, pos: PixelPos) {
-        self.draw_pixel_coord(pos.x, pos.y);
+    fn draw_pixel (&mut self, pos: PixelPos, color: Pixel) {
+        self.draw_pixel_coord(pos.x, pos.y, color);
     }
 
     fn in_bounds (&self, x: usize, y: usize) -> bool {

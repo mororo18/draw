@@ -1,6 +1,7 @@
 use itertools::Either;
 use std::ops::{Mul, Add};
 use std::cmp;
+use std::cmp::Ordering;
 
 enum Color {
     Red,
@@ -107,6 +108,16 @@ impl<T> Vec2<T> {
     fn new (x: T, y: T) -> Self {Vec2 {x:x, y:y}}
 }
 
+impl Vec2<f64> {
+    pub
+    fn dist (self, arg: Self) -> f64 {
+        let x_sq = (self.x - arg.x).powi(2);
+        let y_sq = (self.y - arg.y).powi(2);
+        
+        (x_sq + y_sq).sqrt()
+    }
+}
+
 type PixelPos = Vec2<usize>;
 
 pub
@@ -127,6 +138,31 @@ impl Canva {
             width: width,
             height: height,
         }
+    }
+
+    pub
+    fn draw_quadrilat(&mut self, a: Vec2<f64>, b: Vec2<f64>, c: Vec2<f64>, d: Vec2<f64>) {
+        let a_center = Self::pos_map_center(a);
+        let b_center = Self::pos_map_center(b);
+        let c_center = Self::pos_map_center(c);
+        let d_center = Self::pos_map_center(d);
+
+        let mut vertex_list = vec![a_center, b_center, c_center, d_center];
+        vertex_list.as_mut_slice()
+                    .sort_by(|a, b| 
+                        if a.x > b.x {Ordering::Less}
+                        else         {Ordering::Greater});
+
+        let vertex_x_min = vertex_list.pop().expect("");
+        vertex_list.as_mut_slice()
+                    .sort_by_key(|v| (v.dist(vertex_x_min) * 100.0) as usize);
+        let vertex_further = vertex_list.pop().expect("");
+
+        let v_a = vertex_list[0];
+        let v_b = vertex_list[1];
+
+        self.draw_triangle(vertex_x_min, v_a, v_b);
+        self.draw_triangle(vertex_further, v_a, v_b);
     }
 
     pub

@@ -1,5 +1,6 @@
 mod draw;
 mod window;
+mod scene;
 
 use window::{
     Window,
@@ -9,6 +10,10 @@ use window::{
 use draw::{
     Canva,
     Vec2,
+};
+
+use scene::{
+    Scene,
 };
 
 use std::time::Instant;
@@ -21,7 +26,8 @@ fn main() {
 
     let mut window_open = true;
 
-    let mut canva = Canva::new(width, height);
+    //let mut canva = Canva::new(width, height);
+    let mut scene = Scene::new(width, height);
 
 
     let mut now = Instant::now();
@@ -39,16 +45,6 @@ fn main() {
             }
         }
 
-        let y_top = 400;
-        let y_bot = 200;
-
-        let x_right = 500;
-        let x_left = 300;
-
-        let a = Vec2::<f64>::new(0.0, 0.0);
-        let b = Vec2::<f64>::new(750.0, 250.0);
-        let c = Vec2::<f64>::new(400.0, 50.0);
-        let center_d = Vec2::<f64>::new(380.0, 300.0);
 
 
         let elapsed = now.elapsed().as_millis() as f64;
@@ -56,10 +52,10 @@ fn main() {
             now = Instant::now();
             println!("{}", 1000.0 / elapsed);
 
-            //canva.draw_triangle(a, b, c);
-            canva.draw_quadrilat(b, center_d, c, a);
+            scene.render();
 
-            win.write_frame_from_slice(canva.as_bytes_slice());
+            let frame_slice = scene.frame_as_bytes_slice();
+            win.write_frame_from_slice(frame_slice);
         }
         /*
         for p in x_left..=x_right {

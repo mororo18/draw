@@ -3,7 +3,9 @@ use std::ops::{Mul, Add};
 use std::cmp;
 use std::cmp::Ordering;
 
+pub
 enum Color {
+    White,
     Red,
     Green,
     Blue,
@@ -138,6 +140,12 @@ impl Canva {
             width: width,
             height: height,
         }
+    }
+
+    pub
+    fn clear(&mut self) {
+        let len: usize = self.width * self.height;
+        self.frame = vec![Pixel::black(); len];
     }
 
     pub
@@ -464,13 +472,21 @@ impl Canva {
         self.draw_pixel(pixel_pos, color);
     }
 
+    pub
+    fn draw_white_dot (&mut self, pos: Vec2<f64>) {
+        let pixel_pos = Self::img_map(pos);
+        self.draw_pixel(pixel_pos, Pixel::white());
+    }
+
     pub 
     fn pos_map_center (pos: Vec2<f64>) -> Vec2<f64> {
         let mut x_center = (pos.x + 0.5).floor();
         let mut y_center = (pos.y + 0.5).floor();
 
         // Debug
-        if x_center < -0.1 || y_center < -0.1 {panic!("posicao invalida")}
+        if x_center < -0.1 || y_center < -0.1 {
+            panic!("posicao invalida ({x_center}, {y_center}) ");
+        }
 
         x_center = if x_center < -0.5 {0.0} else {x_center};
         y_center = if y_center < -0.5 {0.0} else {y_center};

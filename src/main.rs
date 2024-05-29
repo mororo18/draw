@@ -1,6 +1,5 @@
 mod draw;
 mod window;
-mod scene;
 
 use window::{
     Window,
@@ -9,12 +8,11 @@ use window::{
     Key,
 };
 
-use draw::{
+use draw::canva::{
     Canva,
-    Vec2,
 };
 
-use scene::{
+use draw::scene::{
     Scene,
 };
 

@@ -52,6 +52,7 @@ impl Add for Pixel {
         let b_sum = (self.b + rhs.b) as u32;
 
         Pixel {
+            // TODO: verificar razao do overflow aq (__sum > 255)
             r: cmp::min(255, r_sum) as u8,
             g: cmp::min(255, g_sum) as u8,
             b: cmp::min(255, b_sum) as u8,

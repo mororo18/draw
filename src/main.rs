@@ -5,6 +5,8 @@ mod scene;
 use window::{
     Window,
     Event,
+    KeyEvent,
+    Key,
 };
 
 use draw::{
@@ -42,6 +44,16 @@ fn main() {
         for e in events.iter() {
             if *e == Event::CloseWindow {
                 window_open = false;
+            } else
+
+            if *e == Event::KeyEvent(KeyEvent::Press(Key::UpArrow)) {
+                println!("UP");
+                scene.camera_up();
+            } else
+
+            if *e == Event::KeyEvent(KeyEvent::Press(Key::DownArrow)) {
+                println!("Down");
+                scene.camera_down();
             }
         }
 
@@ -50,7 +62,7 @@ fn main() {
         let elapsed = now.elapsed().as_millis() as f64;
         if elapsed > dt_ms {
             now = Instant::now();
-            println!("{}", 1000.0 / elapsed);
+            //println!("{}", 1000.0 / elapsed);
 
             scene.render();
 

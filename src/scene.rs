@@ -6,6 +6,7 @@ use crate::draw::{
 
 use std::ops::{
     Add,
+    Sub,
     Div,
     Mul,
 };
@@ -83,6 +84,12 @@ impl Vec3 {
     }
 
     pub
+    fn dist (&self, arg: Self) -> f64 {
+        let diff = *self - arg;
+        diff.norm()
+    }
+
+    pub
     fn cross(&self, arg: Self) -> Self {
         let a_0 = self.a[0];
         let a_1 = self.a[1];
@@ -156,6 +163,20 @@ impl Add for Vec3 {
             self.a[0] + rhs.a[0],
             self.a[1] + rhs.a[1],
             self.a[2] + rhs.a[2]
+            ],
+        }
+    }
+}
+
+impl Sub for Vec3 {
+    type Output = Self;
+
+    fn sub (self, rhs: Self) -> Self {
+        Self {
+            a: [
+            self.a[0] - rhs.a[0],
+            self.a[1] - rhs.a[1],
+            self.a[2] - rhs.a[2]
             ],
         }
     }
@@ -302,14 +323,14 @@ impl Object {
             ]);
 
         let f_b = Triangle::new([
-                bot + vert_b,
                 bot + vert_c,
+                bot + vert_b,
                 bot + vert_o
             ]);
 
         let f_c = Triangle::new([
-                bot + vert_a,
                 bot + vert_c,
+                bot + vert_a,
                 bot + vert_o
             ]);
 
@@ -332,6 +353,14 @@ impl Camera {
             position: pos,
             direction: dir,
         }
+    }
+
+    pub
+    fn get_pos(&self) -> Vec3 {self.position}
+
+    pub
+    fn set_pos(&mut self, pos: Vec3) {
+        self.position = pos;
     }
 
     pub
@@ -394,16 +423,30 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0., 2., 4.]);
+        let camera_pos = Vec3::new([0., 2., 2.]);
         let camera_dir = Vec3::new([0., -0.5, -1.]);
+        let mut canva = Canva::new(width, height);
+        canva.enable_depth(20.0);
 
         Self {
-            canva:   Canva::new(width, height),
+            canva:   canva,
             width:   width,
             height:  height,
             camera:  Camera::new(camera_pos, camera_dir),
             objects: vec![Object::inv_piramid(Vec3::zeros())],
         }
+    }
+
+    pub
+    fn camera_up(&mut self) {
+        let cam_pos = self.camera.get_pos();
+        self.camera.set_pos(cam_pos + Vec3::new([0., 0.05, 0.]));
+    }
+
+    pub
+    fn camera_down(&mut self) {
+        let cam_pos = self.camera.get_pos();
+        self.camera.set_pos(cam_pos + Vec3::new([0., -0.05, 0.]));
     }
 
     pub
@@ -419,21 +462,23 @@ impl Scene {
         
         let vec_test = Vec3::new([-1.0, -1.0, 0.0]);
 
+        /*
         println!("M_viewpoint {:?}", M_vp);
         println!("vec_pos {:?}", vec_test);
         println!("vec_windowed {:?}", M_vp * vec_test.as_vec4());
+        */
 
         //assert!(false);
 
 
-        let n: f64 = 10.0;
-        let f: f64 = -10.0;
+        let n: f64 = 5.0;
+        let f: f64 = -5.0;
 
-        let r: f64 = 10.0;
-        let l: f64 = -10.0;
+        let r: f64 = 5.0;
+        let l: f64 = -5.0;
 
-        let t: f64 = 10.0;
-        let b: f64 = -10.0;
+        let t: f64 = 5.0;
+        let b: f64 = -5.0;
 
         assert!(n > f);
         assert!(r > l);
@@ -490,6 +535,7 @@ impl Scene {
 
         self.canva.clear();
         self.camera.rotate_origin(1.);
+        let camera_pos = self.camera.get_pos();
 
         let M_cam = self.camera.gen_matrix();
 
@@ -508,10 +554,14 @@ impl Scene {
                 println!("M_vp M_orth * vert {:?}", M_vp * M_orth * tri.points[2]);
                 */
 
-                self.canva.draw_triangle(a, b, c);
-                self.canva.draw_line(a, b);
-                self.canva.draw_line(b, c);
-                self.canva.draw_line(a, c);
+                let a_depth: f32 = camera_pos.dist(tri.points[0]) as _;
+                let b_depth: f32 = camera_pos.dist(tri.points[1]) as _;
+                let c_depth: f32 = camera_pos.dist(tri.points[2]) as _;
+
+                self.canva.draw_triangle_with_depth(a, b, c, a_depth, b_depth, c_depth);
+                //self.canva.draw_line(a, b);
+                //self.canva.draw_line(b, c);
+                //self.canva.draw_line(a, c);
             }
         }
     }

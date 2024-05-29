@@ -20,6 +20,7 @@ use std::time::UNIX_EPOCH;
 use std::time::SystemTime;
 
 #[derive(PartialEq)]
+pub
 enum Key {
     LeftArrow,
     RightArrow,
@@ -30,6 +31,7 @@ enum Key {
 }
 
 #[derive(PartialEq)]
+pub
 enum KeyEvent {
     Press(Key),
     Release(Key),

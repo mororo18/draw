@@ -24,34 +24,21 @@ struct Pixel {
 impl Pixel {
     pub
     fn new (r: u8, g: u8, b: u8) -> Self {
-        Pixel {r:r, g:g, b:b, padd:0}
+        Pixel {r:r, g:g, b:b, padd: 255}
     }
 
     // TODO: criar func "from_hex(cod: str)" e constantes com cores
 
-    pub
-    fn set_red (&mut self, r: u8) {self.r = r;}
+    pub fn set_red   (&mut self, r: u8) {self.r = r;}
+    pub fn set_green (&mut self, g: u8) {self.g = g;}
+    pub fn set_blue  (&mut self, b: u8) {self.b = b;}
+    pub fn set_padd  (&mut self, p: u8) {self.padd = p;}
 
-    pub
-    fn set_green (&mut self, g: u8) {self.g = g;}
-
-    pub
-    fn set_blue (&mut self, b: u8) {self.b = b;}
-
-    pub
-    fn red() -> Self {Pixel::new(255,0,0)}
-
-    pub
-    fn green() -> Self {Pixel::new(0,255,00)}
-
-    pub
-    fn blue() -> Self {Pixel::new(0,0,255)}
-
-    pub
-    fn white() -> Self {Pixel::new(255,255,255)}
-
-    pub
-    fn black() -> Self {Pixel::new(0,0,0)}
+    pub fn red  () -> Self {Pixel::new(255,0,0)}
+    pub fn green() -> Self {Pixel::new(0,255,00)}
+    pub fn blue () -> Self {Pixel::new(0,0,255)}
+    pub fn white() -> Self {Pixel::new(255,255,255)}
+    pub fn black() -> Self {Pixel::new(0,0,0)}
 }
 
 impl Add for Pixel {
@@ -127,6 +114,9 @@ struct Canva {
     frame: Vec<Pixel>,
     width: usize,
     height: usize,
+
+    depth_frame: Vec<f32>,
+    depth_max:  f32,
 }
 
 impl Canva {
@@ -139,13 +129,39 @@ impl Canva {
             frame: frame,
             width: width,
             height: height,
+
+            depth_frame: vec![],
+            depth_max: 0.0,
         }
     }
+
+    pub
+    fn enable_depth(&mut self, depth: f32) {
+        self.depth_frame = vec![depth; self.frame.len()];
+        self.depth_max = depth;
+    }
+
+    pub
+    fn get_pixel_depth(&self, x: usize, y: usize) -> f32{
+        assert!(self.in_bounds(x, y));
+        self.depth_frame[self.width * y + x]
+    }
+
+    pub
+    fn set_pixel_depth(&mut self, x: usize, y: usize, depth: f32) {
+        assert!(self.in_bounds(x, y));
+        self.depth_frame[self.width * y + x] = depth;
+    }
+
 
     pub
     fn clear(&mut self) {
         let len: usize = self.width * self.height;
         self.frame = vec![Pixel::black(); len];
+
+        if self.depth_frame.len() > 0 {
+            self.enable_depth(self.depth_max);
+        }
     }
 
     pub
@@ -254,6 +270,105 @@ impl Canva {
                                           (gama  * color_c);
 
                         self.draw_pixel_coord(x, y, color_pixel);
+                    }
+                }
+            }
+        }
+
+
+    }
+
+    pub
+    fn draw_triangle_with_depth(&mut self, a: Vec2<f64>, 
+                                           b: Vec2<f64>, 
+                                           c: Vec2<f64>,
+                                           a_depth: f32,
+                                           b_depth: f32,
+                                           c_depth: f32)
+    {
+
+        let a_center = Self::pos_map_center(a);
+        let b_center = Self::pos_map_center(b);
+        let c_center = Self::pos_map_center(c);
+
+        let color_a = Pixel::red();
+        let color_b = Pixel::green();
+        let color_c = Pixel::blue();
+
+        let f_ab = |x: f64, y:f64| -> f64 {
+            (a_center.y - b_center.y) * x + 
+            (b_center.x - a_center.x) * y +
+            (a_center.x * b_center.y) - 
+            (b_center.x * a_center.y)
+        };
+
+        let f_bc = |x: f64, y:f64| -> f64 {
+            (b_center.y - c_center.y) * x + 
+            (c_center.x - b_center.x) * y +
+            (b_center.x * c_center.y) - 
+            (c_center.x * b_center.y)
+        };
+
+        let f_ca = |x: f64, y:f64| -> f64 {
+            (c_center.y - a_center.y) * x + 
+            (a_center.x - c_center.x) * y +
+            (c_center.x * a_center.y) - 
+            (a_center.x * c_center.y)
+        };
+
+        let min = |x: f64, y: f64, z: f64| -> f64 {
+            let mut ret = f64::INFINITY;
+            vec![x, y, z].iter()
+                .for_each(|v| if *v < ret {ret = *v;});
+
+            ret
+        };
+
+        let max = |x: f64, y: f64, z: f64| -> f64 {
+            let mut ret = -f64::INFINITY;
+            vec![x, y, z].iter()
+                .for_each(|v| if *v > ret {ret = *v;});
+
+            ret
+        };
+
+        let x_min = min(a_center.x, b_center.x, c_center.x) as usize;
+        let y_min = min(a_center.y, b_center.y, c_center.y) as usize;
+
+        let x_max = max(a_center.x, b_center.x, c_center.x) as usize;
+        let y_max = max(a_center.y, b_center.y, c_center.y) as usize;
+
+        let f_alpha = f_bc(a_center.x, a_center.y);
+        let f_beta  = f_ca(b_center.x, b_center.y);
+        let f_gama  = f_ab(c_center.x, c_center.y);
+
+        for y in y_min..y_max {
+            let y_f64 = y as f64;
+            for x in x_min..x_max {
+                let x_f64 = x as f64;
+
+                let alpha: f64 = f_bc(x_f64,y_f64) / f_alpha;
+                let beta:  f64 = f_ca(x_f64,y_f64) / f_beta;
+                let gama:  f64 = f_ab(x_f64,y_f64) / f_gama;
+
+                if alpha >= 0.0 &&
+                    beta >= 0.0 &&
+                    gama >= 0.0 
+                {
+                    if (alpha > 0.0 || f_alpha * f_bc(-1.0, -1.0) > 0.0) &&
+                       (beta > 0.0  || f_beta  * f_ca(-1.0, -1.0) > 0.0) &&
+                       (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
+
+                    {
+                        let color_pixel = (alpha * color_a) +
+                                          (beta  * color_b) +
+                                          (gama  * color_c);
+
+                        let depth_pixel = (alpha * a_depth as f64) +
+                                          (beta  * b_depth as f64) +
+                                          (gama  * c_depth as f64);
+
+                        self.draw_pixel_coord_with_depth(x, y, color_pixel, depth_pixel as _);
                     }
                 }
             }
@@ -503,6 +618,16 @@ impl Canva {
         PixelPos {
             x: pos_center.x as _,
             y: pos_center.y as _,
+        }
+    }
+
+    pub
+    fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, depth: f32) {
+        assert!(self.depth_frame.len() > 0, "Depth not initialized");
+
+        if depth < self.get_pixel_depth(x, y) {
+            self.draw_pixel_coord(x, y, color);
+            self.set_pixel_depth(x, y, depth);
         }
     }
 

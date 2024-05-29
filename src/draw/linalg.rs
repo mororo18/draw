@@ -6,9 +6,31 @@ use std::ops::{
 };
 
 use crate::draw::canva::{
-    Vec2,
     Color,
 };
+
+#[derive(Debug, Copy, Clone)]
+pub
+struct Vec2 {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl Vec2 {
+    pub
+    fn new (x: f64, y: f64) -> Self {Vec2 {x:x, y:y}}
+}
+
+impl Vec2 {
+    pub
+    fn dist (self, arg: Self) -> f64 {
+        let x_sq = (self.x - arg.x).powi(2);
+        let y_sq = (self.y - arg.y).powi(2);
+        
+        (x_sq + y_sq).sqrt()
+    }
+}
+
 
 #[derive(Debug, Copy, Clone)]
 pub
@@ -28,8 +50,8 @@ impl Vec4 {
     }
 
     pub
-    fn as_vec2(&self) -> Vec2<f64> {
-        Vec2::<f64>::new(self.a[0], self.a[1])
+    fn as_vec2(&self) -> Vec2 {
+        Vec2::new(self.a[0], self.a[1])
     }
 
     pub
@@ -62,8 +84,8 @@ impl Vec3 {
     }
 
     pub
-    fn as_vec2(&self) -> Vec2<f64> {
-        Vec2::<f64>::new(self.a[0], self.a[1])
+    fn as_vec2(&self) -> Vec2 {
+        Vec2::new(self.a[0], self.a[1])
     }
 
     pub

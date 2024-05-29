@@ -3,7 +3,7 @@ use std::ops::{Mul, Add};
 use std::cmp;
 use std::cmp::Ordering;
 
-use crate::draw::alglin::{Vec2};
+use crate::draw::linalg::{Vec2};
 
 pub
 enum Color {

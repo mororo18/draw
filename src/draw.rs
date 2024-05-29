@@ -1,3 +1,3 @@
-pub mod alglin;
+pub mod linalg;
 pub mod scene;
 pub mod canva;

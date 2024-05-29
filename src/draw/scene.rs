@@ -3,7 +3,7 @@ use crate::draw::canva::{
     Color,
 };
 
-use crate::draw::alglin::{
+use crate::draw::linalg::{
     Vec2,
     Vec3,
     Vec4,

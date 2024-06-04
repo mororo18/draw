@@ -131,14 +131,21 @@ impl Vec3 {
     }
 
     pub
-    fn cross(&self, arg: Self) -> Self {
-        let a_0 = self.a[0];
-        let a_1 = self.a[1];
-        let a_2 = self.a[2];
+    fn dot (&self, arg: Self) -> f64 {
+		self.x() * arg.x() +
+		self.y() * arg.y() +
+		self.z() * arg.z()
+    }
 
-        let b_0 = arg.a[0];
-        let b_1 = arg.a[1];
-        let b_2 = arg.a[2];
+    pub
+    fn cross(&self, arg: Self) -> Self {
+        let a_0 = self.x();
+        let a_1 = self.y();
+        let a_2 = self.z();
+
+        let b_0 = arg.x();
+        let b_1 = arg.y();
+        let b_2 = arg.z();
 
         let c_0 = (a_1 * b_2) - (a_2 * b_1);
         let c_1 = (a_2 * b_0) - (a_0 * b_2);
@@ -239,6 +246,21 @@ impl Matrix4 {
     fn zeros () -> Self {
         Self {a: [[0.0; 4]; 4]}
     }
+
+	pub
+	fn transposed(&self) -> Self {
+        let mut cpy = self.clone(); 
+
+        for i in 0..4 {
+            for j in i+1..4 {
+                let tmp = cpy.a[i][j];
+                cpy.a[i][j] = cpy.a[j][i];
+                cpy.a[j][i] = tmp;
+            }
+        }
+
+        cpy
+	}
 
     pub
     fn rotate_x (theta: f64) -> Self {

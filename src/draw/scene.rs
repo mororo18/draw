@@ -92,6 +92,10 @@ impl Object {
 struct Camera {
     position: Vec3,
     direction: Vec3,
+
+    u: Vec3,
+    v: Vec3,
+    w: Vec3,
 }
 
 impl Camera {
@@ -100,6 +104,9 @@ impl Camera {
         Self {
             position: pos,
             direction: dir,
+            u: Vec3::zeros(),
+            v: Vec3::zeros(),
+            w: Vec3::zeros(),
         }
     }
 
@@ -125,7 +132,21 @@ impl Camera {
     }
 
     pub
-    fn gen_matrix(&self) -> Matrix4 {
+    fn get_matrix_base(&self) -> Matrix4 {
+        let u = self.u;
+        let v = self.v;
+        let w = self.w;
+
+        Matrix4::new([
+            [u.x(), u.y(),  u.z(), 0.0],
+            [v.x(), v.y(),  v.z(), 0.0],
+            [w.x(), w.y(),  w.z(), 0.0],
+            [0.0,     0.0,    0.0, 1.0]
+        ])
+    }
+
+    pub
+    fn gen_matrix(&mut self) -> Matrix4 {
         let pos = self.position;
         let g = self.direction;
         let t = Vec3::new([0.,  1.,  0.]);
@@ -137,12 +158,11 @@ impl Camera {
 
         let v = w.cross(u);
 
-        let M_cam_base = Matrix4::new([
-            [u.x(), u.y(),  u.z(), 0.0],
-            [v.x(), v.y(),  v.z(), 0.0],
-            [w.x(), w.y(),  w.z(), 0.0],
-            [0.0,     0.0,    0.0, 1.0]
-        ]);
+        self.u = u;
+        self.v = v;
+        self.w = w;
+
+        let M_cam_base = self.get_matrix_base();
 
         let M_cam_pos = Matrix4::new([
             [1.0,   0.0,    0.0,   -pos.x()],
@@ -171,7 +191,7 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0., 5., 7.]);
+        let camera_pos = Vec3::new([0., 2., 4.]);
         let camera_dir = Vec3::new([0., -0.5, -1.]);
         let mut canva = Canva::new(width, height);
         canva.enable_depth(20.0);
@@ -197,7 +217,7 @@ impl Scene {
         self.camera.set_pos(cam_pos + Vec3::new([0., -0.05, 0.]));
     }
 
-    fn gen_transform_matrix(&self) -> Matrix4 {
+    fn gen_transform_matrix(&mut self) -> Matrix4 {
         let n_x: f64 = self.width as _;
         let n_y: f64 = self.height as _;
 
@@ -231,13 +251,14 @@ impl Scene {
         let M_cam = self.camera.gen_matrix();
 
         let P = Matrix4::new([
-            [    -n,  0.0,    0.0,       0.0],
-            [  0.0,    -n,    0.0,       0.0],
+            [   -n,  0.0,       0.0,      0.0],
+            [  0.0,   -n,       0.0,      0.0],
             [  0.0,  0.0,  -(n + f),  (n * f)],
-            [  0.0,  0.0,    1.0,       0.0]
+            [  0.0,  0.0,       1.0,      0.0]
         ]);
 
-        let M = M_viewport * M_orth * P * M_cam;
+        let M = M_viewport * M_orth * M_cam;
+        //let M = M_viewport * M_orth * P * M_cam;
 
         M
     }
@@ -245,14 +266,102 @@ impl Scene {
     pub
     fn render (&mut self) {
 
-        let M = self.gen_transform_matrix();
 
         self.canva.clear();
         self.camera.rotate_origin(1.);
         let camera_pos = self.camera.get_pos();
 
+        let M = self.gen_transform_matrix();
+        let M_cam = self.camera.get_matrix_base().transposed();
+
+
+        let n: f64 = 5.0;
+        let f: f64 = -5.0;
+
+        let r: f64 = 5.0;
+        let l: f64 = -5.0;
+
+        let t: f64 = 5.0;
+        let b: f64 = -5.0;
+
+        assert!(n > f);
+        assert!(r > l);
+        assert!(t > b);
+
+        // nearest face of the transformed view volume
+        let A = (M_cam * Vec3::new([ r, t, n]).as_vec4()).as_vec3() + camera_pos;      // direita superior frente
+        let B = (M_cam * Vec3::new([ r, b, n]).as_vec4()).as_vec3() + camera_pos;
+        let C = (M_cam * Vec3::new([ l, b, n]).as_vec4()).as_vec3() + camera_pos;
+        let D = (M_cam * Vec3::new([ l, t, n]).as_vec4()).as_vec3() + camera_pos;
+
+        // furtherest face of the transformed view volume
+        let E = (M_cam * Vec3::new([ r, t, f]).as_vec4()).as_vec3() + camera_pos;
+        let F = (M_cam * Vec3::new([ r, b, f]).as_vec4()).as_vec3() + camera_pos;
+        let G = (M_cam * Vec3::new([ l, b, f]).as_vec4()).as_vec3() + camera_pos;
+        let H = (M_cam * Vec3::new([ l, t, f]).as_vec4()).as_vec3() + camera_pos;
+
+        let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
+        //let test_point = (M_cam * Vec3::zeros().as_vec4()).as_vec3() + camera_pos;
+
+        println!("test_point {:?} ", test_point);
+
+
+        fn get_plane_eq (A: Vec3, B: Vec3, C: Vec3, test_point: Vec3) -> impl FnMut(Vec3) -> f64 {
+            let p_vec = B - A;
+            let q_vec = C - B;
+
+            let normal = p_vec.cross(q_vec);
+
+            let k = - normal.dot(A);
+
+            let func = move |point: Vec3| -> f64 {normal.dot(point) + k};
+
+            // a condicao de validez eh que a origem gere um valor positivo,
+            // ou seja, ela esta dentro do volume de visao
+            
+            if func(test_point) < 0.0 {
+                println!("ordem inserida erradaaaa");
+                // tem que ver se isso n vai entrar um looping infinito
+                return get_plane_eq(C, B, A, test_point);
+            } 
+
+            println!("ordem inserida certaaaa");
+            func
+        }
+
+        let mut func_n  = get_plane_eq(A, B, C, test_point);
+        let mut func_f  = get_plane_eq(E, F, G, test_point);
+
+        let mut func_r  = get_plane_eq(E, F, A, test_point);
+        let mut func_l  = get_plane_eq(G, H, D, test_point);
+
+        let mut func_t  = get_plane_eq(E, D, A, test_point);
+        let mut func_b  = get_plane_eq(B, C, F, test_point);
+
+        //let M_cam_base = self.camera.get_matrix_base();
+        let mut clipping = |tri: &Triangle| -> bool {
+            let a = tri.points[0];
+            let b = tri.points[1];
+            let c = tri.points[2];
+
+            func_n(a) <= 0.0 || func_n(b) <= 0.0 || func_n(c) <= 0.0 ||
+            func_f(a) <= 0.0 || func_f(b) <= 0.0 || func_f(c) <= 0.0 ||
+
+            func_r(a) <= 0.0 || func_r(b) <= 0.0 || func_r(c) <= 0.0 ||
+            func_l(a) <= 0.0 || func_l(b) <= 0.0 || func_l(c) <= 0.0 ||
+
+            func_t(a) <= 0.0 || func_t(b) <= 0.0 || func_t(c) <= 0.0 ||
+            func_b(a) <= 0.0 || func_b(b) <= 0.0 || func_b(c) <= 0.0 
+        };
+
+
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
+                if clipping(tri) == true {
+                    println!("clipping");
+                    continue
+                }
+
                 let a_vec4  = M * tri.points[0].as_vec4();
                 let b_vec4  = M * tri.points[1].as_vec4();
                 let c_vec4  = M * tri.points[2].as_vec4();

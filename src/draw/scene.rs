@@ -171,7 +171,7 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0., 3., 4.]);
+        let camera_pos = Vec3::new([0., 5., 7.]);
         let camera_dir = Vec3::new([0., -0.5, -1.]);
         let mut canva = Canva::new(width, height);
         canva.enable_depth(20.0);
@@ -231,9 +231,9 @@ impl Scene {
         let M_cam = self.camera.gen_matrix();
 
         let P = Matrix4::new([
-            [    n,  0.0,    0.0,       0.0],
-            [  0.0,    n,    0.0,       0.0],
-            [  0.0,  0.0,  n + f,  -(n * f)],
+            [    -n,  0.0,    0.0,       0.0],
+            [  0.0,    -n,    0.0,       0.0],
+            [  0.0,  0.0,  -(n + f),  (n * f)],
             [  0.0,  0.0,    1.0,       0.0]
         ]);
 

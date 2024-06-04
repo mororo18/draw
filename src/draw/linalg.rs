@@ -31,6 +31,18 @@ impl Vec2 {
     }
 }
 
+impl Div<f64> for Vec2 {
+    type Output = Self;
+
+    fn div (self, rhs: f64) -> Self {
+        Self {
+			x: self.x / rhs,
+			y: self.y / rhs,
+        }
+    }
+}
+
+
 
 #[derive(Debug, Copy, Clone)]
 pub
@@ -62,6 +74,11 @@ impl Vec4 {
             self.a[2]
         ])
     }
+
+	pub fn get_x(&self) -> f64 {self.a[0]}
+	pub fn get_y(&self) -> f64 {self.a[1]}
+	pub fn get_z(&self) -> f64 {self.a[2]}
+	pub fn get_w(&self) -> f64 {self.a[3]}
 
 }
 

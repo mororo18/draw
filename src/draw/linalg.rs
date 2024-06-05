@@ -125,6 +125,12 @@ impl Vec3 {
     }
 
     pub
+    fn normalized (&self) -> Self {
+       *self / self.norm()
+    }
+
+
+    pub
     fn dist (&self, arg: Self) -> f64 {
         let diff = *self - arg;
         diff.norm()

@@ -26,7 +26,7 @@ struct Pixel {
 impl Pixel {
     pub
     fn new (r: u8, g: u8, b: u8) -> Self {
-        Pixel {r:r, g:g, b:b, padd: 255}
+        Pixel {r:r, g:g, b:b, padd: 0}
     }
 
     // TODO: criar func "from_hex(cod: str)" e constantes com cores

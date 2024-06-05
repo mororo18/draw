@@ -14,14 +14,16 @@ use crate::draw::linalg::{
 struct Triangle {
     points: [Vec3; 3],
     color: Color,
+    label: String,
 }
 
 impl Triangle {
     pub
-    fn new (points: [Vec3; 3]) -> Self {
+    fn new (points: [Vec3; 3], label: & str) -> Self {
         Self {
             points: points,
             color: Color::White,
+            label: String::from(label),
         }
     }
 }
@@ -62,28 +64,37 @@ impl Object {
                 bot + vert_a,
                 bot + vert_b,
                 bot + vert_c
-            ]);
+            ],
+            "basee"
+            );
 
         let f_a = Triangle::new([
                 bot + vert_a,
                 bot + vert_b,
                 bot + vert_o
-            ]);
+            ],
+            "f_A"
+            );
 
         let f_b = Triangle::new([
                 bot + vert_c,
                 bot + vert_b,
                 bot + vert_o
-            ]);
+            ],
+            "f_B"
+            );
 
         let f_c = Triangle::new([
                 bot + vert_c,
                 bot + vert_a,
                 bot + vert_o
-            ]);
+            ],
+            "f_C"
+            );
 
         Self {
             triangles: vec![f_a, f_b, f_c, base],
+            //triangles: vec![base, f_c, f_b, f_a],
         }
     }
 
@@ -112,6 +123,8 @@ impl Camera {
 
     pub
     fn get_pos(&self) -> Vec3 {self.position}
+    pub
+    fn get_direction(&self) -> Vec3 {self.direction}
 
     pub
     fn set_pos(&mut self, pos: Vec3) {
@@ -191,10 +204,11 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0., 2., 4.]);
+        let camera_pos = Vec3::new([0.0, -4.35, 4.0]);
+        //let camera_pos = Vec3::new([0., 2., 4.]);
         let camera_dir = Vec3::new([0., -0.5, -1.]);
         let mut canva = Canva::new(width, height);
-        canva.enable_depth(20.0);
+        canva.enable_depth(40.0);
 
         Self {
             canva:   canva,
@@ -217,6 +231,16 @@ impl Scene {
         self.camera.set_pos(cam_pos + Vec3::new([0., -0.05, 0.]));
     }
 
+    pub
+    fn camera_left(&mut self) {
+        self.camera.rotate_origin(-1.);
+    }
+
+    pub
+    fn camera_right(&mut self) {
+        self.camera.rotate_origin(1.);
+    }
+
     fn gen_transform_matrix(&mut self) -> Matrix4 {
         let n_x: f64 = self.width as _;
         let n_y: f64 = self.height as _;
@@ -228,14 +252,14 @@ impl Scene {
             [      0.0,        0.0,  0.0,              1.0]
         ]);
 
-        let n: f64 = 5.0;
-        let f: f64 = -5.0;
+        let n: f64 = 20.0;
+        let f: f64 = 0.0;
 
-        let r: f64 = 5.0;
-        let l: f64 = -5.0;
+        let r: f64 = 10.0;
+        let l: f64 = -10.0;
 
-        let t: f64 = 5.0;
-        let b: f64 = -5.0;
+        let t: f64 = 10.0;
+        let b: f64 = -10.0;
 
         assert!(n > f);
         assert!(r > l);
@@ -268,21 +292,21 @@ impl Scene {
 
 
         self.canva.clear();
-        self.camera.rotate_origin(1.);
         let camera_pos = self.camera.get_pos();
+        println!("camera position {camera_pos:?}");
 
         let M = self.gen_transform_matrix();
         let M_cam = self.camera.get_matrix_base().transposed();
 
 
-        let n: f64 = 5.0;
-        let f: f64 = -5.0;
+        let n: f64 = 20.0;
+        let f: f64 = 0.0;
 
-        let r: f64 = 5.0;
-        let l: f64 = -5.0;
+        let r: f64 = 10.0;
+        let l: f64 = -10.0;
 
-        let t: f64 = 5.0;
-        let b: f64 = -5.0;
+        let t: f64 = 10.0;
+        let b: f64 = -10.0;
 
         assert!(n > f);
         assert!(r > l);
@@ -320,12 +344,12 @@ impl Scene {
             // ou seja, ela esta dentro do volume de visao
             
             if func(test_point) < 0.0 {
-                println!("ordem inserida erradaaaa");
+                //println!("ordem inserida erradaaaa");
                 // tem que ver se isso n vai entrar um looping infinito
                 return get_plane_eq(C, B, A, test_point);
             } 
 
-            println!("ordem inserida certaaaa");
+            //println!("ordem inserida certaaaa");
             func
         }
 
@@ -357,10 +381,12 @@ impl Scene {
 
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
+                /*
                 if clipping(tri) == true {
                     println!("clipping");
                     continue
                 }
+                */
 
                 let a_vec4  = M * tri.points[0].as_vec4();
                 let b_vec4  = M * tri.points[1].as_vec4();
@@ -374,9 +400,24 @@ impl Scene {
                 let b  = b_vec4.as_vec2();
                 let c  = c_vec4.as_vec2();
 
+                let looking_dir = self.camera.get_direction().normalized();
+                let a_depth: f32 = looking_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                let b_depth: f32 = looking_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                let c_depth: f32 = looking_dir.dot(camera_pos - tri.points[2]).abs() as _;
+
+                /*
                 let a_depth: f32 = camera_pos.dist(tri.points[0]) as _;
                 let b_depth: f32 = camera_pos.dist(tri.points[1]) as _;
                 let c_depth: f32 = camera_pos.dist(tri.points[2]) as _;
+                */
+
+                println!("========= {} ========", tri.label);
+                println!("a {a:?}"); 
+                println!("a_depth {a_depth}");
+                println!("b {b:?}"); 
+                println!("b_depth {b_depth}");
+                println!("c {c:?}"); 
+                println!("c_depth {c_depth}");
 
                 self.canva.draw_triangle_with_depth(a / a_w, 
                                                     b / b_w, 

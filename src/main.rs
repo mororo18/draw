@@ -31,7 +31,8 @@ fn main() {
 
 
     let mut now = Instant::now();
-    let frame_rate: f64 = 60.0;
+    let frame_rate: f64 = 1.0;
+    //let frame_rate: f64 = 60.0;
     let dt_ms = 1000.0 / frame_rate;
 
     // CREATE SCENE = OBJECTS + CAMERA
@@ -52,6 +53,16 @@ fn main() {
             if *e == Event::KeyEvent(KeyEvent::Press(Key::DownArrow)) {
                 println!("Down");
                 scene.camera_down();
+            } else
+
+            if *e == Event::KeyEvent(KeyEvent::Press(Key::LeftArrow)) {
+                println!("Left");
+                scene.camera_left();
+            } else
+
+            if *e == Event::KeyEvent(KeyEvent::Press(Key::RightArrow)) {
+                println!("Right");
+                scene.camera_right();
             }
         }
 

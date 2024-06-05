@@ -31,8 +31,8 @@ fn main() {
 
 
     let mut now = Instant::now();
-    let frame_rate: f64 = 1.0;
-    //let frame_rate: f64 = 60.0;
+    //let frame_rate: f64 = 1.0;
+    let frame_rate: f64 = 60.0;
     let dt_ms = 1000.0 / frame_rate;
 
     // CREATE SCENE = OBJECTS + CAMERA

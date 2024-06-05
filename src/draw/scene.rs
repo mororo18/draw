@@ -217,9 +217,9 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0.0, 0., 4.0]);
+        let camera_pos = Vec3::new([0.0, 2., 4.0]);
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_dir = Vec3::new([0., 0., -1.]);
+        let camera_dir = Vec3::new([0., -0.2, -1.]);
         let mut canva = Canva::new(width, height);
         canva.enable_depth(40.0);
 
@@ -228,7 +228,7 @@ impl Scene {
             width:   width,
             height:  height,
             camera:  Camera::new(camera_pos, camera_dir),
-            objects: vec![Object::inv_piramid(Vec3::zeros())],
+            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 4.5]))],
         }
     }
 
@@ -312,8 +312,8 @@ impl Scene {
         let M_cam = self.camera.get_matrix_base().transposed();
 
 
-        let n: f64 = 20.0;
-        let f: f64 = 0.0;
+        let n: f64 = 0.0;
+        let f: f64 = -20.0;
 
         let r: f64 = 10.0;
         let l: f64 = -10.0;
@@ -337,8 +337,8 @@ impl Scene {
         let G = (M_cam * Vec3::new([ l, b, f]).as_vec4()).as_vec3() + camera_pos;
         let H = (M_cam * Vec3::new([ l, t, f]).as_vec4()).as_vec3() + camera_pos;
 
-        //let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
-        let test_point = (M_cam * Vec3::zeros().as_vec4()).as_vec3() + camera_pos;
+        let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
+        //let test_point = (M_cam * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4()).as_vec3() + camera_pos;
 
         println!("test_point {:?} ", test_point);
 
@@ -375,9 +375,6 @@ impl Scene {
             return func;
         }
 
-        println!("pre overflowww");
-
-
         let mut func_n  = get_plane_eq(A, B, C, test_point);
         let mut func_f  = get_plane_eq(E, F, G, test_point);
 
@@ -391,18 +388,22 @@ impl Scene {
 
         //let M_cam_base = self.camera.get_matrix_base();
         let mut clipping = |tri: &Triangle| -> bool {
-            let a = tri.points[0];
-            let b = tri.points[1];
-            let c = tri.points[2];
+            let mut ret = false;
 
-            func_n(a) <= 0.0 || func_n(b) <= 0.0 || func_n(c) <= 0.0 ||
-            func_f(a) <= 0.0 || func_f(b) <= 0.0 || func_f(c) <= 0.0 ||
+            for point in tri.points.iter() {
+                ret |=
+                func_n(*point) <= 0.0 ||
+                func_f(*point) <= 0.0 ||
 
-            func_r(a) <= 0.0 || func_r(b) <= 0.0 || func_r(c) <= 0.0 ||
-            func_l(a) <= 0.0 || func_l(b) <= 0.0 || func_l(c) <= 0.0 ||
+                func_r(*point) <= 0.0 ||
+                func_l(*point) <= 0.0 ||
 
-            func_t(a) <= 0.0 || func_t(b) <= 0.0 || func_t(c) <= 0.0 ||
-            func_b(a) <= 0.0 || func_b(b) <= 0.0 || func_b(c) <= 0.0 
+                func_t(*point) <= 0.0 ||
+                func_b(*point) <= 0.0
+
+            }
+
+            ret
         };
 
 

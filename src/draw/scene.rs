@@ -41,6 +41,19 @@ impl Object {
     }
 
     pub
+    fn get_center (&self) -> Vec3 {
+        let mut sum = Vec3::zeros();
+
+        for tri in self.triangles.iter() {
+            for p in tri.points.iter() {
+                sum = sum + *p;
+            }
+        }
+
+        sum / (3. * self.triangles.len() as f64)
+    }
+
+    pub
     fn inv_piramid (bot: Vec3) -> Self {
         let height: f64 = 3.0;
         let side = 3.0_f64;
@@ -204,9 +217,9 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0.0, -4.35, 4.0]);
+        let camera_pos = Vec3::new([0.0, 0., 4.0]);
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_dir = Vec3::new([0., -0.5, -1.]);
+        let camera_dir = Vec3::new([0., 0., -1.]);
         let mut canva = Canva::new(width, height);
         canva.enable_depth(40.0);
 
@@ -324,8 +337,8 @@ impl Scene {
         let G = (M_cam * Vec3::new([ l, b, f]).as_vec4()).as_vec3() + camera_pos;
         let H = (M_cam * Vec3::new([ l, t, f]).as_vec4()).as_vec3() + camera_pos;
 
-        let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
-        //let test_point = (M_cam * Vec3::zeros().as_vec4()).as_vec3() + camera_pos;
+        //let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
+        let test_point = (M_cam * Vec3::zeros().as_vec4()).as_vec3() + camera_pos;
 
         println!("test_point {:?} ", test_point);
 
@@ -334,24 +347,36 @@ impl Scene {
             let p_vec = B - A;
             let q_vec = C - B;
 
-            let normal = p_vec.cross(q_vec);
+            let mut normal = p_vec.cross(q_vec);
+            let mut k = - normal.dot(A);
 
-            let k = - normal.dot(A);
-
-            let func = move |point: Vec3| -> f64 {normal.dot(point) + k};
+            let mut test_value = normal.dot(test_point) + k;
 
             // a condicao de validez eh que a origem gere um valor positivo,
             // ou seja, ela esta dentro do volume de visao
             
-            if func(test_point) < 0.0 {
+            if test_value < 0.0 {
                 //println!("ordem inserida erradaaaa");
                 // tem que ver se isso n vai entrar um looping infinito
-                return get_plane_eq(C, B, A, test_point);
-            } 
+                normal = q_vec.cross(p_vec);
+                k = - normal.dot(A);
 
-            //println!("ordem inserida certaaaa");
-            func
+                test_value = normal.dot(test_point) + k;
+
+                if test_value < 0.0 {
+                    println!("ta erradooouuu");
+                    loop {}
+                }
+
+            }
+
+            let func = move |point: Vec3| -> f64 {normal.dot(point) + k};
+
+            return func;
         }
+
+        println!("pre overflowww");
+
 
         let mut func_n  = get_plane_eq(A, B, C, test_point);
         let mut func_f  = get_plane_eq(E, F, G, test_point);
@@ -361,6 +386,8 @@ impl Scene {
 
         let mut func_t  = get_plane_eq(E, D, A, test_point);
         let mut func_b  = get_plane_eq(B, C, F, test_point);
+
+        println!("poss overflowww");
 
         //let M_cam_base = self.camera.get_matrix_base();
         let mut clipping = |tri: &Triangle| -> bool {
@@ -380,13 +407,12 @@ impl Scene {
 
 
         for obj in self.objects.iter() {
+            println!("pirmide pos {:?}", obj.get_center());
             for tri in obj.triangles.iter() {
-                /*
                 if clipping(tri) == true {
                     println!("clipping");
                     continue
                 }
-                */
 
                 let a_vec4  = M * tri.points[0].as_vec4();
                 let b_vec4  = M * tri.points[1].as_vec4();

@@ -117,6 +117,10 @@ struct Camera {
     position: Vec3,
     direction: Vec3,
 
+    // view volume oposite vertexes
+    right_top_near:      Vec3,  // -> {r, t, n}
+    left_bottom_further: Vec3,  // -> {l, b, f}
+
     u: Vec3,
     v: Vec3,
     w: Vec3,
@@ -124,20 +128,32 @@ struct Camera {
 
 impl Camera {
     pub
-    fn new (pos: Vec3, dir: Vec3) -> Self {
+    fn new (pos:                 Vec3, 
+            dir:                 Vec3, 
+            right_top_near:      Vec3, 
+            left_bottom_further: Vec3) -> Self 
+    {
         Self {
             position: pos,
             direction: dir,
+            right_top_near:      right_top_near,  // -> {r, t, n}
+            left_bottom_further: left_bottom_further,  // -> {l, b, f}
             u: Vec3::zeros(),
             v: Vec3::zeros(),
             w: Vec3::zeros(),
         }
     }
 
-    pub
-    fn get_pos(&self) -> Vec3 {self.position}
-    pub
-    fn get_direction(&self) -> Vec3 {self.direction}
+    pub fn get_pos       (&self) -> Vec3 {self.position}
+    pub fn get_direction (&self) -> Vec3 {self.direction}
+
+    pub fn get_rightmost_visible  (&self) -> f64 {self.right_top_near.x()}
+    pub fn get_topmost_visible    (&self) -> f64 {self.right_top_near.y()}
+    pub fn get_nearest_visible    (&self) -> f64 {self.right_top_near.z()}
+
+    pub fn get_leftmost_visible   (&self) -> f64 {self.left_bottom_further.x()}
+    pub fn get_bottommost_visible (&self) -> f64 {self.left_bottom_further.y()}
+    pub fn get_furtherest_visible (&self) -> f64 {self.left_bottom_further.z()}
 
     pub
     fn set_pos(&mut self, pos: Vec3) {
@@ -217,9 +233,30 @@ impl Scene {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-        let camera_pos = Vec3::new([0.0, 2., 4.0]);
         //let camera_pos = Vec3::new([0., 2., 4.]);
+        let camera_pos = Vec3::new([0.0, 2., 4.0]);
         let camera_dir = Vec3::new([0., -0.2, -1.]);
+
+        let n: f64 = 0.0;      // nearest
+        let f: f64 = -20.0;       // furtherest
+
+        let r: f64 = 10.0;      // right-most
+        let l: f64 = -10.0;     // left-most
+
+        let t: f64 = 10.0;      // top-most
+        let b: f64 = -10.0;     // bottom-most
+
+        assert!(n > f);
+        assert!(r > l);
+        assert!(t > b);
+
+
+        // nearest face of the view volume
+        let right_top_near      = Vec3::new([ r, t, n]);
+        let left_bottom_further = Vec3::new([ l, b, f]); 
+        let camera = Camera::new(camera_pos, camera_dir, right_top_near, left_bottom_further);
+
+
         let mut canva = Canva::new(width, height);
         canva.enable_depth(40.0);
 
@@ -227,7 +264,7 @@ impl Scene {
             canva:   canva,
             width:   width,
             height:  height,
-            camera:  Camera::new(camera_pos, camera_dir),
+            camera:  camera,
             objects: vec![Object::inv_piramid(Vec3::new([0., 0., 4.5]))],
         }
     }
@@ -258,25 +295,21 @@ impl Scene {
         let n_x: f64 = self.width as _;
         let n_y: f64 = self.height as _;
 
+        let n = self.camera.get_nearest_visible();
+        let f = self.camera.get_furtherest_visible();
+
+        let r = self.camera.get_rightmost_visible();
+        let l = self.camera.get_leftmost_visible();
+
+        let t = self.camera.get_topmost_visible();
+        let b = self.camera.get_bottommost_visible();
+
         let M_viewport = Matrix4::new([
             [n_x / 2.0,        0.0,  0.0,  (n_x-1.0) / 2.0],
             [      0.0,  n_y / 2.0,  0.0,  (n_y-1.0) / 2.0],
             [      0.0,        0.0,  1.0,              0.0],
             [      0.0,        0.0,  0.0,              1.0]
         ]);
-
-        let n: f64 = 20.0;
-        let f: f64 = 0.0;
-
-        let r: f64 = 10.0;
-        let l: f64 = -10.0;
-
-        let t: f64 = 10.0;
-        let b: f64 = -10.0;
-
-        assert!(n > f);
-        assert!(r > l);
-        assert!(t > b);
 
         let M_orth = Matrix4::new([
             [2.0 / (r-l),          0.0,          0.0,  -(r+l) / (r-l)],
@@ -312,14 +345,14 @@ impl Scene {
         let M_cam = self.camera.get_matrix_base().transposed();
 
 
-        let n: f64 = 0.0;
-        let f: f64 = -20.0;
+        let n = self.camera.get_nearest_visible();
+        let f = self.camera.get_furtherest_visible();
 
-        let r: f64 = 10.0;
-        let l: f64 = -10.0;
+        let r = self.camera.get_rightmost_visible();
+        let l = self.camera.get_leftmost_visible();
 
-        let t: f64 = 10.0;
-        let b: f64 = -10.0;
+        let t = self.camera.get_topmost_visible();
+        let b = self.camera.get_bottommost_visible();
 
         assert!(n > f);
         assert!(r > l);
@@ -337,8 +370,8 @@ impl Scene {
         let G = (M_cam * Vec3::new([ l, b, f]).as_vec4()).as_vec3() + camera_pos;
         let H = (M_cam * Vec3::new([ l, t, f]).as_vec4()).as_vec3() + camera_pos;
 
-        let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
-        //let test_point = (M_cam * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4()).as_vec3() + camera_pos;
+        //let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
+        let test_point = (M_cam * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4()).as_vec3() + camera_pos;
 
         println!("test_point {:?} ", test_point);
 
@@ -384,10 +417,8 @@ impl Scene {
         let mut func_t  = get_plane_eq(E, D, A, test_point);
         let mut func_b  = get_plane_eq(B, C, F, test_point);
 
-        println!("poss overflowww");
-
         //let M_cam_base = self.camera.get_matrix_base();
-        let mut clipping = |tri: &Triangle| -> bool {
+        let mut clipping = |tri: &Triangle| -> bool { //-> Option<(Vec3, Vec3, Vec3)> {
             let mut ret = false;
 
             for point in tri.points.iter() {
@@ -399,7 +430,7 @@ impl Scene {
                 func_l(*point) <= 0.0 ||
 
                 func_t(*point) <= 0.0 ||
-                func_b(*point) <= 0.0
+                func_b(*point) <= 0.0;
 
             }
 
@@ -427,10 +458,11 @@ impl Scene {
                 let b  = b_vec4.as_vec2();
                 let c  = c_vec4.as_vec2();
 
-                let looking_dir = self.camera.get_direction().normalized();
-                let a_depth: f32 = looking_dir.dot(camera_pos - tri.points[0]).abs() as _;
-                let b_depth: f32 = looking_dir.dot(camera_pos - tri.points[1]).abs() as _;
-                let c_depth: f32 = looking_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                // vis'ao ortogonal
+                let camera_dir = self.camera.get_direction().normalized();
+                let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
 
                 /*
                 let a_depth: f32 = camera_pos.dist(tri.points[0]) as _;

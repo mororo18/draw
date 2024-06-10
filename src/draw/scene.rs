@@ -117,7 +117,9 @@ struct Camera {
     position: Vec3,
     direction: Vec3,
 
-    // view volume oposite vertexes
+    // TODO: mudar esse conceito aq para janela 
+    // (window view - right, let, top, bottom) ja que agora a visao
+    // em perpectiva parece funcionar
     right_top_near:      Vec3,  // -> {r, t, n}
     left_bottom_further: Vec3,  // -> {l, b, f}
 
@@ -174,7 +176,7 @@ impl Camera {
     }
 
     pub
-    fn get_matrix_base(&self) -> Matrix4 {
+    fn get_matrix_basis(&self) -> Matrix4 {
         let u = self.u;
         let v = self.v;
         let w = self.w;
@@ -204,7 +206,7 @@ impl Camera {
         self.v = v;
         self.w = w;
 
-        let M_cam_base = self.get_matrix_base();
+        let M_cam_basis = self.get_matrix_basis();
 
         let M_cam_pos = Matrix4::new([
             [1.0,   0.0,    0.0,   -pos.x()],
@@ -213,7 +215,7 @@ impl Camera {
             [0.0,   0.0,    0.0,        1.0]
         ]);
 
-        let M_cam = M_cam_base * M_cam_pos;
+        let M_cam = M_cam_basis * M_cam_pos;
 
         M_cam
     }
@@ -234,11 +236,11 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0.0, 2., 4.0]);
-        let camera_dir = Vec3::new([0., -0.2, -1.]);
+        let camera_pos = Vec3::new([15.0, 0., 5.0]);
+        let camera_dir = Vec3::new([-1., 0.0, 0.0]);
 
-        let n: f64 = 0.0;      // nearest
-        let f: f64 = -20.0;       // furtherest
+        let n: f64 = -10.0;      // nearest
+        let f: f64 = n - 100.0;       // furtherest
 
         let r: f64 = 10.0;      // right-most
         let l: f64 = -10.0;     // left-most
@@ -246,6 +248,7 @@ impl Scene {
         let t: f64 = 10.0;      // top-most
         let b: f64 = -10.0;     // bottom-most
 
+        assert!(n < 0.0);
         assert!(n > f);
         assert!(r > l);
         assert!(t > b);
@@ -265,7 +268,7 @@ impl Scene {
             width:   width,
             height:  height,
             camera:  camera,
-            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 4.5]))],
+            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 4.0]))],
         }
     }
 
@@ -321,14 +324,14 @@ impl Scene {
         let M_cam = self.camera.gen_matrix();
 
         let P = Matrix4::new([
-            [   -n,  0.0,       0.0,      0.0],
-            [  0.0,   -n,       0.0,      0.0],
-            [  0.0,  0.0,  -(n + f),  (n * f)],
-            [  0.0,  0.0,       1.0,      0.0]
+            [   n,  0.0,       0.0,      0.0],
+            [  0.0,   n,       0.0,      0.0],
+            [  0.0,  0.0,  (n + f),  -(n * f)],
+            [  0.0,  0.0,      1.0,      0.0]
         ]);
 
-        let M = M_viewport * M_orth * M_cam;
-        //let M = M_viewport * M_orth * P * M_cam;
+        //let M = M_viewport * M_orth * M_cam;
+        let M = M_viewport * (M_orth * P) * M_cam;
 
         M
     }
@@ -336,14 +339,15 @@ impl Scene {
     pub
     fn render (&mut self) {
 
-
         self.canva.clear();
-        let camera_pos = self.camera.get_pos();
-        println!("camera position {camera_pos:?}");
 
+        // TODO: atualmente essa funcao  gen_transform_matrix()
+        // precisa ser chamada antes de Camera::get_matrix_basis()
+        // tem que resolver isso ai patrao
         let M = self.gen_transform_matrix();
-        let M_cam = self.camera.get_matrix_base().transposed();
 
+        let cam_basis_matrix =  self.camera.get_matrix_basis().transposed();
+        let camera_pos = self.camera.get_pos();
 
         let n = self.camera.get_nearest_visible();
         let f = self.camera.get_furtherest_visible();
@@ -354,24 +358,79 @@ impl Scene {
         let t = self.camera.get_topmost_visible();
         let b = self.camera.get_bottommost_visible();
 
-        assert!(n > f);
-        assert!(r > l);
-        assert!(t > b);
+        let P = Matrix4::new([
+            [   n,  0.0,       0.0,      0.0],
+            [  0.0,   n,       0.0,      0.0],
+            [  0.0,  0.0,  (n + f),  -(n * f)],
+            [  0.0,  0.0,      1.0,      0.0]
+        ]);
+
+        let A_cam = Vec3::new([ r, t, n]).as_vec4();
+        let B_cam = Vec3::new([ r, b, n]).as_vec4();      
+        let C_cam = Vec3::new([ l, b, n]).as_vec4();     
+        let D_cam = Vec3::new([ l, t, n]).as_vec4();     
+
+        // window view
+        let A_vec4 = cam_basis_matrix * A_cam;      // direita superior frente
+        let B_vec4 = cam_basis_matrix * B_cam;
+        let C_vec4 = cam_basis_matrix * C_cam;
+        let D_vec4 = cam_basis_matrix * D_cam;
+
+        // z = f
+        // x = (l + r) / 2.
+        // y = (f * t) / n
+        let tfp_cam = Vec3::new([
+            (l + r) / 2., 
+            (f * t) / n, 
+            f
+        ]);
+        let tfp_vec4: Vec4 = cam_basis_matrix * tfp_cam.as_vec4();
+        let top_further_point = tfp_vec4.vec3_over_w() + camera_pos;
+
+
+        // z = f
+        // x = (l + r) / 2.
+        // y = (f * b) / n
+        let bfp_cam = Vec3::new([
+            (l + r) / 2., 
+            (f * b) / n, 
+            f
+        ]);
+        let bfp_vec4: Vec4 = cam_basis_matrix * bfp_cam.as_vec4();
+        let bottom_further_point = bfp_vec4.vec3_over_w() + camera_pos;
+
+        // z = f
+        // x = (f * r) / n
+        // y = (b + t) / 2.
+        let rfp_cam = Vec3::new([
+            (f * r) / n, 
+            (b + t) / 2., 
+            f
+        ]);
+        let rfp_vec4: Vec4 = cam_basis_matrix * rfp_cam.as_vec4();
+        let right_further_point = rfp_vec4.vec3_over_w() + camera_pos;
+
+        // z = f
+        // x = (f * l) / n
+        // y = (b + t) / 2.
+        let lfp_cam = Vec3::new([
+            (f * l) / n, 
+            (b + t) / 2., 
+            f
+        ]);
+        let lfp_vec4: Vec4 = cam_basis_matrix * lfp_cam.as_vec4();
+        let left_further_point = lfp_vec4.vec3_over_w() + camera_pos;
+
 
         // nearest face of the transformed view volume
-        let A = (M_cam * Vec3::new([ r, t, n]).as_vec4()).as_vec3() + camera_pos;      // direita superior frente
-        let B = (M_cam * Vec3::new([ r, b, n]).as_vec4()).as_vec3() + camera_pos;
-        let C = (M_cam * Vec3::new([ l, b, n]).as_vec4()).as_vec3() + camera_pos;
-        let D = (M_cam * Vec3::new([ l, t, n]).as_vec4()).as_vec3() + camera_pos;
-
-        // furtherest face of the transformed view volume
-        let E = (M_cam * Vec3::new([ r, t, f]).as_vec4()).as_vec3() + camera_pos;
-        let F = (M_cam * Vec3::new([ r, b, f]).as_vec4()).as_vec3() + camera_pos;
-        let G = (M_cam * Vec3::new([ l, b, f]).as_vec4()).as_vec3() + camera_pos;
-        let H = (M_cam * Vec3::new([ l, t, f]).as_vec4()).as_vec3() + camera_pos;
+        let A = A_vec4.as_vec3() / A_vec4.get_w() + camera_pos;      // direita superior frente
+        let B = B_vec4.as_vec3() / B_vec4.get_w() + camera_pos;      
+        let C = C_vec4.as_vec3() / C_vec4.get_w() + camera_pos;     
+        let D = D_vec4.as_vec3() / D_vec4.get_w() + camera_pos;     
 
         //let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
-        let test_point = (M_cam * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4()).as_vec3() + camera_pos;
+        let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
+        let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
 
         println!("test_point {:?} ", test_point);
 
@@ -409,21 +468,21 @@ impl Scene {
         }
 
         let mut func_n  = get_plane_eq(A, B, C, test_point);
-        let mut func_f  = get_plane_eq(E, F, G, test_point);
+        //let mut func_f  = get_plane_eq(E, F, G, test_point);
 
-        let mut func_r  = get_plane_eq(E, F, A, test_point);
-        let mut func_l  = get_plane_eq(G, H, D, test_point);
+        //let mut func_r  = get_plane_eq(E, F, A, test_point);
+        //let mut func_l  = get_plane_eq(G, H, D, test_point);
 
-        let mut func_t  = get_plane_eq(E, D, A, test_point);
-        let mut func_b  = get_plane_eq(B, C, F, test_point);
+        //let mut func_t  = get_plane_eq(E, D, A, test_point);
+        //let mut func_b  = get_plane_eq(B, C, F, test_point);
 
-        //let M_cam_base = self.camera.get_matrix_base();
+        //let M_cam_basis = self.camera.get_matrix_basis();
         let mut clipping = |tri: &Triangle| -> bool { //-> Option<(Vec3, Vec3, Vec3)> {
             let mut ret = false;
 
             for point in tri.points.iter() {
                 ret |=
-                func_n(*point) <= 0.0 ||
+                func_n(*point) <= 0.0 /*||
                 func_f(*point) <= 0.0 ||
 
                 func_r(*point) <= 0.0 ||
@@ -431,12 +490,12 @@ impl Scene {
 
                 func_t(*point) <= 0.0 ||
                 func_b(*point) <= 0.0;
+                                      */
 
             }
 
             ret
         };
-
 
         for obj in self.objects.iter() {
             println!("pirmide pos {:?}", obj.get_center());
@@ -470,6 +529,7 @@ impl Scene {
                 let c_depth: f32 = camera_pos.dist(tri.points[2]) as _;
                 */
 
+                /*
                 println!("========= {} ========", tri.label);
                 println!("a {a:?}"); 
                 println!("a_depth {a_depth}");
@@ -477,6 +537,7 @@ impl Scene {
                 println!("b_depth {b_depth}");
                 println!("c {c:?}"); 
                 println!("c_depth {c_depth}");
+                */
 
                 self.canva.draw_triangle_with_depth(a / a_w, 
                                                     b / b_w, 
@@ -485,9 +546,79 @@ impl Scene {
                                                     b_depth, 
                                                     c_depth);
 
-                //self.canva.draw_line(a, b);
-                //self.canva.draw_line(b, c);
-                //self.canva.draw_line(a, c);
+                // TODO: desenhar linhas do campo de visao
+                {
+
+
+
+                    /*
+                    let e_vec4 = M * E.as_vec4();
+                    let f_vec4 = M * F.as_vec4();
+                    let g_vec4 = M * G.as_vec4();
+                    let h_vec4 = M * H.as_vec4();
+                    */
+
+                    let w_ = self.width as f64 - 1.0;
+                    let h_ = self.height as f64 - 1.0;
+                    
+                    let a = Vec2::new(w_, h_);
+                    let b = Vec2::new(w_, 0.0);
+                    let c = Vec2::new(0.0, 0.0);
+                    let d = Vec2::new(0.0, h_);
+
+                    /*
+                    let e = e_vec4.as_vec2() / e_vec4.get_w();
+                    let f = f_vec4.as_vec2() / f_vec4.get_w();
+                    let g = g_vec4.as_vec2() / g_vec4.get_w();
+                    let h = h_vec4.as_vec2() / h_vec4.get_w();
+                    */
+
+
+                    self.canva.draw_line(b, c);
+                    self.canva.draw_line(d, c);
+                    self.canva.draw_line(b, a);
+                    self.canva.draw_line(d, a);
+
+                    /*
+                    self.canva.draw_line(e, f);
+                    self.canva.draw_line(g, f);
+                    self.canva.draw_line(g, h);
+                    self.canva.draw_line(e, h);
+
+                    self.canva.draw_line(a, e);
+                    self.canva.draw_line(b, f);
+                    self.canva.draw_line(c, g);
+                    self.canva.draw_line(d, h);
+                    */
+
+                    let center = Vec2::new(w_ / 2., h_ / 2.) ;
+
+                    let tfp_vec4 = M * top_further_point.as_vec4();
+                    let tfp = tfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, -3.);
+
+                    let bfp_vec4 = M * bottom_further_point.as_vec4();
+                    let bfp = bfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, 3.);
+
+                    let rfp_vec4 = M * right_further_point.as_vec4();
+                    let rfp = rfp_vec4.vec3_over_w().as_vec2() + Vec2::new(-30.0, 0.);
+
+                    let lfp_vec4 = M * left_further_point.as_vec4();
+                    let lfp = lfp_vec4.vec3_over_w().as_vec2() + Vec2::new(30.0, 0.);
+
+                    self.canva.draw_line(tfp, center);
+                    self.canva.draw_line(bfp, center);
+                    self.canva.draw_line(rfp, center);
+                    self.canva.draw_line(lfp, center);
+
+                }
+                
+                /*
+                self.canva.draw_line(a, b);
+                self.canva.draw_line(a, b);
+                self.canva.draw_line(a, b);
+                self.canva.draw_line(a, b);
+                self.canva.draw_line(a, b);
+                */
 
             }
         }

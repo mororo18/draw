@@ -31,6 +31,25 @@ impl Vec2 {
     }
 }
 
+impl Add for Vec2 {
+    type Output = Self;
+
+    fn add (self, rhs: Self) -> Self {
+        Vec2::new(
+            self.x + rhs.x,
+            self.y + rhs.y,
+        )
+    }
+}
+
+impl Sub for Vec2 {
+    type Output = Self;
+
+    fn sub (self, rhs: Self) -> Self {
+        self + Vec2::new( -rhs.x, -rhs.y)
+    }
+}
+
 impl Div<f64> for Vec2 {
     type Output = Self;
 
@@ -73,6 +92,11 @@ impl Vec4 {
             self.a[1],
             self.a[2]
         ])
+    }
+
+    pub
+    fn vec3_over_w(&self) -> Vec3 {
+        self.as_vec3() / self.get_w()
     }
 
 	pub fn get_x(&self) -> f64 {self.a[0]}

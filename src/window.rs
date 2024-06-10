@@ -318,12 +318,17 @@ impl Window {
                     //let e: *mut xlib::XConfigureEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XConfigureEvent>();
 
                     unsafe {
-                        self.width = (*e).width as _;
-                        self.height = (*e).height as _;
-                    }
+                        if self.width != (*e).width as _ ||
+                            self.height != (*e).height as _ 
+                        {
+                            self.width = (*e).width as _;
+                            self.height = (*e).height as _;
 
-                    size_change = true;
-                    events.push(Event::RedimWindow);
+                            size_change = true;
+                            events.push(Event::RedimWindow);
+
+                        }
+                    }
 
                 },
 
@@ -374,7 +379,7 @@ impl Window {
 
             ////loop {}
 
-            println!("w {} \n h {}", self.width, self.height);
+            println!("{} x {}", self.width, self.height);
             self.window_buffer_size = self.width * self.height * self.pixel_bytes;
             let layout = Layout::array::<i8>(self.window_buffer_size as usize).expect("layout deu merda");
             self.mem = unsafe{alloc(layout)};

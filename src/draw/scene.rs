@@ -468,13 +468,20 @@ impl Scene {
         }
 
         let mut func_n  = get_plane_eq(A, B, C, test_point);
-        //let mut func_f  = get_plane_eq(E, F, G, test_point);
+        let mut func_f  = get_plane_eq(left_further_point, 
+                                       right_further_point, 
+                                       top_further_point, 
+                                       test_point);
 
-        //let mut func_r  = get_plane_eq(E, F, A, test_point);
-        //let mut func_l  = get_plane_eq(G, H, D, test_point);
+        let mut func_r  = get_plane_eq(right_further_point, 
+                                        A, B, test_point);
+        let mut func_l  = get_plane_eq(left_further_point, 
+                                        C, D, test_point);
 
-        //let mut func_t  = get_plane_eq(E, D, A, test_point);
-        //let mut func_b  = get_plane_eq(B, C, F, test_point);
+        let mut func_t  = get_plane_eq(top_further_point, 
+                                        D, A, test_point);
+        let mut func_b  = get_plane_eq(bottom_further_point, 
+                                        C, B, test_point);
 
         //let M_cam_basis = self.camera.get_matrix_basis();
         let mut clipping = |tri: &Triangle| -> bool { //-> Option<(Vec3, Vec3, Vec3)> {
@@ -482,7 +489,7 @@ impl Scene {
 
             for point in tri.points.iter() {
                 ret |=
-                func_n(*point) <= 0.0 /*||
+                func_n(*point) <= 0.0 ||
                 func_f(*point) <= 0.0 ||
 
                 func_r(*point) <= 0.0 ||
@@ -490,7 +497,6 @@ impl Scene {
 
                 func_t(*point) <= 0.0 ||
                 func_b(*point) <= 0.0;
-                                      */
 
             }
 

@@ -271,6 +271,11 @@ impl ViewPlane {
     fn func(&self, point: Vec3) -> f64 {
         self.normal.dot(point) + self.k
     }
+
+    pub
+    fn normal (&self) -> Vec3 {
+        self.normal
+    }
 }
 
 pub
@@ -594,15 +599,70 @@ impl Scene {
             }
 
             if outside.len() == 1 {
-                return Vec::new();
+                let in_a: Vec3 = inside[0];
+                let in_b: Vec3 = inside[1];
+
+                let (point_idx_a, out_a) = outside[0];
+
+                let plane_a = &view_planes[point_idx_a];
+
+                //  resolvendo para t onde p pertence ao plano
+                //  p = in + t * (out - in)
+
+                let t_a = plane_a.func(in_a) /
+                          plane_a.normal().dot(in_a - out_a);
+                let new_point_a: Vec3 = in_a + (out_a - in_a) * t_a;
+
+
+                let t_b = plane_a.func(in_b) /
+                          plane_a.normal().dot(in_b - out_a);
+                let new_point_b: Vec3 = in_b + (out_a - in_b) * t_b;
+
+                let new_triangle_a = Triangle::new([
+                        in_a, 
+                        new_point_a,
+                        new_point_b],
+                        ""
+                    );
+
+                let new_triangle_b = Triangle::new([
+                        in_a, 
+                        in_b,
+                        new_point_b],
+                        ""
+                    );
+
+                return Vec::from([new_triangle_a, new_triangle_b]);
             } else if outside.len() == 2 {
+                let in_a: Vec3 = inside[0];
 
-                let (p_idx, _) = outside[0];
-                let plane = &view_planes[p_idx];
+                let (point_idx_a, out_a) = outside[0];
+                let (point_idx_b, out_b) = outside[1];
 
-                let t_a = plane;
+                assert!(point_idx_a == point_idx_b,"N'ao implementado ainda");
+                let plane_a = &view_planes[point_idx_a];
+                let plane_b = &view_planes[point_idx_b];
 
-                return Vec::new();
+                //  resolvendo para t onde p pertence ao plano
+                //  p = in + t * (out - in)
+
+                let t_a = plane_a.func(in_a) /
+                          plane_a.normal().dot(in_a - out_a);
+                let new_point_a: Vec3 = in_a + (out_a - in_a) * t_a;
+
+
+                let t_b = plane_b.func(in_a) /
+                          plane_b.normal().dot(in_a - out_b);
+                let new_point_b: Vec3 = in_a + (out_b - in_a) * t_b;
+
+                let new_triangle = Triangle::new([
+                        in_a, 
+                        new_point_a,
+                        new_point_b],
+                        ""
+                    );
+
+                return Vec::from([new_triangle]);
             }
 
             panic!("quandt de triangulos incorreta");
@@ -647,11 +707,11 @@ impl Scene {
 
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
-                for cliped_tri in clipping(tri, &mut func_planes).iter() {
+                for clipped_tri in clipping(tri, &mut func_planes).iter() {
 
-                    let a_vec4  = M * cliped_tri.points[0].as_vec4();
-                    let b_vec4  = M * cliped_tri.points[1].as_vec4();
-                    let c_vec4  = M * cliped_tri.points[2].as_vec4();
+                    let a_vec4  = M * clipped_tri.points[0].as_vec4();
+                    let b_vec4  = M * clipped_tri.points[1].as_vec4();
+                    let c_vec4  = M * clipped_tri.points[2].as_vec4();
 
                     let a_w = a_vec4.get_w();
                     let b_w = b_vec4.get_w();
@@ -662,11 +722,16 @@ impl Scene {
                     let c  = c_vec4.as_vec2();
 
                     // vis'ao ortogonal
+                    /*
                     let camera_dir = self.camera.get_direction().normalized();
                     let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
                     let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
                     let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                    */
 
+                    let a_depth: f32 = (camera_pos - clipped_tri.points[0]).norm() as _;
+                    let b_depth: f32 = (camera_pos - clipped_tri.points[1]).norm() as _;
+                    let c_depth: f32 = (camera_pos - clipped_tri.points[2]).norm() as _;
                     self.canva.draw_triangle_with_depth(a / a_w, 
                         b / b_w, 
                         c / c_w, 

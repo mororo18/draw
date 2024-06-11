@@ -11,6 +11,7 @@ use crate::draw::linalg::{
 };
 
 
+#[derive(Clone)]
 struct Triangle {
     points: [Vec3; 3],
     color: Color,
@@ -221,6 +222,57 @@ impl Camera {
     }
 }
 
+struct ViewPlane {
+    points: [Vec3; 3],
+    normal: Vec3,
+    k: f64,
+}
+
+impl ViewPlane {
+    pub
+    fn new (points: [Vec3; 3], positive_point_dir: Vec3) -> Self {
+        let A = points[0];
+        let B = points[1];
+        let C = points[2];
+
+        let p_vec = B - A;
+        let q_vec = C - B;
+
+        let mut normal = p_vec.cross(q_vec);
+        let mut k = - normal.dot(A);
+
+        let mut test_value = normal.dot(positive_point_dir) + k;
+
+        // a condicao de validez eh que a origem gere um valor positivo,
+        // ou seja, ela esta dentro do volume de visao
+
+        if test_value < 0.0 {
+            //println!("ordem inserida erradaaaa");
+            // tem que ver se isso n vai entrar um looping infinito
+            normal = q_vec.cross(p_vec);
+            k = - normal.dot(A);
+
+            test_value = normal.dot(positive_point_dir) + k;
+
+            if test_value < 0.0 {
+                panic!("ta erradooouuu");
+            }
+
+        }
+
+        Self {
+            points: points,
+            normal: normal,
+            k: k,
+        }
+    }
+
+    pub
+    fn func(&self, point: Vec3) -> f64 {
+        self.normal.dot(point) + self.k
+    }
+}
+
 pub
 struct Scene {
     canva: Canva,
@@ -428,14 +480,12 @@ impl Scene {
         let C = C_vec4.as_vec3() / C_vec4.get_w() + camera_pos;     
         let D = D_vec4.as_vec3() / D_vec4.get_w() + camera_pos;     
 
-        //let test_point = (A + B + C + D + E + F + G + H) / 8.0;;
-        let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
-        let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
-
-        println!("test_point {:?} ", test_point);
+        let test_point = (A + bottom_further_point) / 2.0;;
+        //let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
+        //let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
 
 
-        fn get_plane_eq (A: Vec3, B: Vec3, C: Vec3, test_point: Vec3) -> impl FnMut(Vec3) -> f64 {
+        fn get_plane_eq (A: Vec3, B: Vec3, C: Vec3, test_point: Vec3) -> (Box< dyn FnMut(Vec3) -> f64 >, Vec3)  {
             let p_vec = B - A;
             let q_vec = C - B;
 
@@ -462,11 +512,14 @@ impl Scene {
 
             }
 
-            let func = move |point: Vec3| -> f64 {normal.dot(point) + k};
+            let normal_cpy = normal.clone();
 
-            return func;
+            let func = Box::new( move |point: Vec3| -> f64 {normal.dot(point) + k} );
+
+            return (func, normal_cpy);
         }
 
+        /*
         let mut func_n  = get_plane_eq(A, B, C, test_point);
         let mut func_f  = get_plane_eq(left_further_point, 
                                        right_further_point, 
@@ -482,150 +535,146 @@ impl Scene {
                                         D, A, test_point);
         let mut func_b  = get_plane_eq(bottom_further_point, 
                                         C, B, test_point);
+        */
 
+        let mut func_planes = [
+            ViewPlane::new([A, B, C], test_point),
+            ViewPlane::new([left_further_point, 
+                            right_further_point, 
+                            top_further_point],
+                            test_point),
+
+            ViewPlane::new([right_further_point, A, B],
+                            test_point),
+            ViewPlane::new([left_further_point, C, D],
+                            test_point),
+
+            ViewPlane::new([top_further_point, D, A],
+                            test_point),
+            ViewPlane::new([bottom_further_point, C, B],
+                            test_point)
+        ];
         //let M_cam_basis = self.camera.get_matrix_basis();
-        let mut clipping = |tri: &Triangle| -> bool { //-> Option<(Vec3, Vec3, Vec3)> {
-            let mut ret = false;
+                                                        // array de tuplas (eq do plano e o vetor
+                                                        // normal)
+        fn clipping(tri: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
+        {
+            let mut vertex_out = false;
+            let mut plane_out: usize = 0;
 
-            for point in tri.points.iter() {
-                ret |=
-                func_n(*point) <= 0.0 ||
-                func_f(*point) <= 0.0 ||
+            let mut inside:  Vec<Vec3> = vec![];
+            let mut outside: Vec<(usize, Vec3)> = vec![];
 
-                func_r(*point) <= 0.0 ||
-                func_l(*point) <= 0.0 ||
+            for point in tri.points.iter(){
 
-                func_t(*point) <= 0.0 ||
-                func_b(*point) <= 0.0;
+                for (idx, plane) in view_planes.iter().enumerate() {
+                    //ret |= (*func)(*point) <= 0.;
+
+                    if plane.func(*point) <= 0.0 {
+                        vertex_out = true;
+                        plane_out = idx;
+                    }
+                }
+
+
+                if vertex_out == true {
+                    outside.push((plane_out, *point));
+                } else {
+                    inside.push(*point);
+                }
+
+                vertex_out = false;
 
             }
 
-            ret
+            if outside.len() == 0 {
+                return Vec::from([tri.clone()]);
+            } else if outside.len() == 3 {
+                return Vec::new();
+            }
+
+            if outside.len() == 1 {
+                return Vec::new();
+            } else if outside.len() == 2 {
+
+                let (p_idx, _) = outside[0];
+                let plane = &view_planes[p_idx];
+
+                let t_a = plane;
+
+                return Vec::new();
+            }
+
+            panic!("quandt de triangulos incorreta");
+            
         };
 
+        {
+
+            let w_ = self.width as f64 - 1.0;
+            let h_ = self.height as f64 - 1.0;
+
+            let a = Vec2::new(w_, h_);
+            let b = Vec2::new(w_, 0.0);
+            let c = Vec2::new(0.0, 0.0);
+            let d = Vec2::new(0.0, h_);
+
+            self.canva.draw_line(b, c);
+            self.canva.draw_line(d, c);
+            self.canva.draw_line(b, a);
+            self.canva.draw_line(d, a);
+
+            let center = Vec2::new(w_ / 2., h_ / 2.) ;
+
+            let tfp_vec4 = M * top_further_point.as_vec4();
+            let tfp = tfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, -3.);
+
+            let bfp_vec4 = M * bottom_further_point.as_vec4();
+            let bfp = bfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, 3.);
+
+            let rfp_vec4 = M * right_further_point.as_vec4();
+            let rfp = rfp_vec4.vec3_over_w().as_vec2() + Vec2::new(-30.0, 0.);
+
+            let lfp_vec4 = M * left_further_point.as_vec4();
+            let lfp = lfp_vec4.vec3_over_w().as_vec2() + Vec2::new(30.0, 0.);
+
+            self.canva.draw_line(tfp, center);
+            self.canva.draw_line(bfp, center);
+            self.canva.draw_line(rfp, center);
+            self.canva.draw_line(lfp, center);
+
+        }
+
         for obj in self.objects.iter() {
-            println!("pirmide pos {:?}", obj.get_center());
             for tri in obj.triangles.iter() {
-                if clipping(tri) == true {
-                    println!("clipping");
-                    continue
-                }
+                for cliped_tri in clipping(tri, &mut func_planes).iter() {
 
-                let a_vec4  = M * tri.points[0].as_vec4();
-                let b_vec4  = M * tri.points[1].as_vec4();
-                let c_vec4  = M * tri.points[2].as_vec4();
+                    let a_vec4  = M * cliped_tri.points[0].as_vec4();
+                    let b_vec4  = M * cliped_tri.points[1].as_vec4();
+                    let c_vec4  = M * cliped_tri.points[2].as_vec4();
 
-                let a_w = a_vec4.get_w();
-                let b_w = b_vec4.get_w();
-                let c_w = c_vec4.get_w();
+                    let a_w = a_vec4.get_w();
+                    let b_w = b_vec4.get_w();
+                    let c_w = c_vec4.get_w();
 
-                let a  = a_vec4.as_vec2();
-                let b  = b_vec4.as_vec2();
-                let c  = c_vec4.as_vec2();
+                    let a  = a_vec4.as_vec2();
+                    let b  = b_vec4.as_vec2();
+                    let c  = c_vec4.as_vec2();
 
-                // vis'ao ortogonal
-                let camera_dir = self.camera.get_direction().normalized();
-                let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
-                let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
-                let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                    // vis'ao ortogonal
+                    let camera_dir = self.camera.get_direction().normalized();
+                    let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                    let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                    let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
 
-                /*
-                let a_depth: f32 = camera_pos.dist(tri.points[0]) as _;
-                let b_depth: f32 = camera_pos.dist(tri.points[1]) as _;
-                let c_depth: f32 = camera_pos.dist(tri.points[2]) as _;
-                */
-
-                /*
-                println!("========= {} ========", tri.label);
-                println!("a {a:?}"); 
-                println!("a_depth {a_depth}");
-                println!("b {b:?}"); 
-                println!("b_depth {b_depth}");
-                println!("c {c:?}"); 
-                println!("c_depth {c_depth}");
-                */
-
-                self.canva.draw_triangle_with_depth(a / a_w, 
-                                                    b / b_w, 
-                                                    c / c_w, 
-                                                    a_depth, 
-                                                    b_depth, 
-                                                    c_depth);
-
-                // TODO: desenhar linhas do campo de visao
-                {
-
-
-
-                    /*
-                    let e_vec4 = M * E.as_vec4();
-                    let f_vec4 = M * F.as_vec4();
-                    let g_vec4 = M * G.as_vec4();
-                    let h_vec4 = M * H.as_vec4();
-                    */
-
-                    let w_ = self.width as f64 - 1.0;
-                    let h_ = self.height as f64 - 1.0;
-                    
-                    let a = Vec2::new(w_, h_);
-                    let b = Vec2::new(w_, 0.0);
-                    let c = Vec2::new(0.0, 0.0);
-                    let d = Vec2::new(0.0, h_);
-
-                    /*
-                    let e = e_vec4.as_vec2() / e_vec4.get_w();
-                    let f = f_vec4.as_vec2() / f_vec4.get_w();
-                    let g = g_vec4.as_vec2() / g_vec4.get_w();
-                    let h = h_vec4.as_vec2() / h_vec4.get_w();
-                    */
-
-
-                    self.canva.draw_line(b, c);
-                    self.canva.draw_line(d, c);
-                    self.canva.draw_line(b, a);
-                    self.canva.draw_line(d, a);
-
-                    /*
-                    self.canva.draw_line(e, f);
-                    self.canva.draw_line(g, f);
-                    self.canva.draw_line(g, h);
-                    self.canva.draw_line(e, h);
-
-                    self.canva.draw_line(a, e);
-                    self.canva.draw_line(b, f);
-                    self.canva.draw_line(c, g);
-                    self.canva.draw_line(d, h);
-                    */
-
-                    let center = Vec2::new(w_ / 2., h_ / 2.) ;
-
-                    let tfp_vec4 = M * top_further_point.as_vec4();
-                    let tfp = tfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, -3.);
-
-                    let bfp_vec4 = M * bottom_further_point.as_vec4();
-                    let bfp = bfp_vec4.vec3_over_w().as_vec2() + Vec2::new(0.0, 3.);
-
-                    let rfp_vec4 = M * right_further_point.as_vec4();
-                    let rfp = rfp_vec4.vec3_over_w().as_vec2() + Vec2::new(-30.0, 0.);
-
-                    let lfp_vec4 = M * left_further_point.as_vec4();
-                    let lfp = lfp_vec4.vec3_over_w().as_vec2() + Vec2::new(30.0, 0.);
-
-                    self.canva.draw_line(tfp, center);
-                    self.canva.draw_line(bfp, center);
-                    self.canva.draw_line(rfp, center);
-                    self.canva.draw_line(lfp, center);
+                    self.canva.draw_triangle_with_depth(a / a_w, 
+                        b / b_w, 
+                        c / c_w, 
+                        a_depth, 
+                        b_depth, 
+                        c_depth);
 
                 }
-                
-                /*
-                self.canva.draw_line(a, b);
-                self.canva.draw_line(a, b);
-                self.canva.draw_line(a, b);
-                self.canva.draw_line(a, b);
-                self.canva.draw_line(a, b);
-                */
-
             }
         }
     }

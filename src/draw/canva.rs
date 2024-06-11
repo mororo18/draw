@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 
 use crate::draw::linalg::{Vec2};
 
+#[derive(Clone)]
 pub
 enum Color {
     White,

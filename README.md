@@ -1,7 +1,7 @@
 # draw
 
 everything from scratch
-### dependency
+### dependencies
 ```console
 $ sudo apt install cargo
 $ sudo apt install libx11-dev

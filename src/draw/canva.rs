@@ -5,13 +5,28 @@ use std::cmp::Ordering;
 
 use crate::draw::linalg::{Vec2};
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub
 enum Color {
-    White,
+    White, 
+    Black,
+
     Red,
     Green,
     Blue,
+}
+
+impl Color {
+    fn as_pixel(&self) -> Pixel {
+        match self {
+            Color::White => Pixel::white(),
+            Color::Black => Pixel::black(),
+            Color::Red   => Pixel::red(),
+            Color::Green => Pixel::green(),
+            Color::Blue  => Pixel::blue(),
+        }
+    }
+
 }
 
 #[derive(Clone, Copy)]
@@ -267,6 +282,9 @@ impl Canva {
     fn draw_triangle_with_depth(&mut self, a: Vec2, 
                                            b: Vec2, 
                                            c: Vec2,
+                                           a_color: Color,
+                                           b_color: Color,
+                                           c_color: Color,
                                            a_depth: f32,
                                            b_depth: f32,
                                            c_depth: f32)
@@ -276,9 +294,9 @@ impl Canva {
         let b_center = Self::pos_map_center(b);
         let c_center = Self::pos_map_center(c);
 
-        let color_a = Pixel::red();
-        let color_b = Pixel::green();
-        let color_c = Pixel::blue();
+        let a_pixel_color = a_color.as_pixel();
+        let b_pixel_color = b_color.as_pixel();
+        let c_pixel_color = c_color.as_pixel();
 
         let f_ab = |x: f64, y:f64| -> f64 {
             (a_center.y - b_center.y) * x + 
@@ -345,15 +363,15 @@ impl Canva {
                        (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
 
                     {
-                        let color_pixel = (alpha * color_a) +
-                                          (beta  * color_b) +
-                                          (gama  * color_c);
+                        let pixel_color = (alpha * a_pixel_color) +
+                                          (beta  * b_pixel_color) +
+                                          (gama  * c_pixel_color);
 
-                        let depth_pixel = (alpha * a_depth as f64) +
+                        let pixel_depth = (alpha * a_depth as f64) +
                                           (beta  * b_depth as f64) +
                                           (gama  * c_depth as f64);
 
-                        self.draw_pixel_coord_with_depth(x, y, color_pixel, depth_pixel as _);
+                        self.draw_pixel_coord_with_depth(x, y, pixel_color, pixel_depth as _);
                     }
                 }
             }

@@ -11,7 +11,7 @@ use crate::draw::linalg::{
 };
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Triangle {
     points: [Vec3; 3],
     color: Color,
@@ -20,10 +20,10 @@ struct Triangle {
 
 impl Triangle {
     pub
-    fn new (points: [Vec3; 3], label: & str) -> Self {
+    fn new (points: [Vec3; 3], color: Color, label: & str) -> Self {
         Self {
             points: points,
-            color: Color::White,
+            color: color,
             label: String::from(label),
         }
     }
@@ -79,6 +79,7 @@ impl Object {
                 bot + vert_b,
                 bot + vert_c
             ],
+            Color::White,
             "basee"
             );
 
@@ -87,6 +88,7 @@ impl Object {
                 bot + vert_b,
                 bot + vert_o
             ],
+            Color::Blue,
             "f_A"
             );
 
@@ -95,6 +97,7 @@ impl Object {
                 bot + vert_b,
                 bot + vert_o
             ],
+            Color::Red,
             "f_B"
             );
 
@@ -103,6 +106,7 @@ impl Object {
                 bot + vert_a,
                 bot + vert_o
             ],
+            Color::Green,
             "f_C"
             );
 
@@ -293,8 +297,8 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([15.0, 0., 5.0]);
-        let camera_dir = Vec3::new([-1., 0.0, 0.0]);
+        let camera_pos = Vec3::new([0.0, 5., 14.0]);
+        let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let n: f64 = -10.0;      // nearest
         let f: f64 = n - 100.0;       // furtherest
@@ -325,7 +329,7 @@ impl Scene {
             width:   width,
             height:  height,
             camera:  camera,
-            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 4.0]))],
+            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 5.2]))],
         }
     }
 
@@ -485,44 +489,10 @@ impl Scene {
         let C = C_vec4.as_vec3() / C_vec4.get_w() + camera_pos;     
         let D = D_vec4.as_vec3() / D_vec4.get_w() + camera_pos;     
 
-        let test_point = (A + bottom_further_point) / 2.0;;
+        let visible_point = (A + bottom_further_point) / 2.0;;
         //let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
         //let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
 
-
-        fn get_plane_eq (A: Vec3, B: Vec3, C: Vec3, test_point: Vec3) -> (Box< dyn FnMut(Vec3) -> f64 >, Vec3)  {
-            let p_vec = B - A;
-            let q_vec = C - B;
-
-            let mut normal = p_vec.cross(q_vec);
-            let mut k = - normal.dot(A);
-
-            let mut test_value = normal.dot(test_point) + k;
-
-            // a condicao de validez eh que a origem gere um valor positivo,
-            // ou seja, ela esta dentro do volume de visao
-            
-            if test_value < 0.0 {
-                //println!("ordem inserida erradaaaa");
-                // tem que ver se isso n vai entrar um looping infinito
-                normal = q_vec.cross(p_vec);
-                k = - normal.dot(A);
-
-                test_value = normal.dot(test_point) + k;
-
-                if test_value < 0.0 {
-                    println!("ta erradooouuu");
-                    loop {}
-                }
-
-            }
-
-            let normal_cpy = normal.clone();
-
-            let func = Box::new( move |point: Vec3| -> f64 {normal.dot(point) + k} );
-
-            return (func, normal_cpy);
-        }
 
         /*
         let mut func_n  = get_plane_eq(A, B, C, test_point);
@@ -543,27 +513,128 @@ impl Scene {
         */
 
         let mut func_planes = [
-            ViewPlane::new([A, B, C], test_point),
+            ViewPlane::new([A, B, C], visible_point),
             ViewPlane::new([left_further_point, 
                             right_further_point, 
                             top_further_point],
-                            test_point),
+                            visible_point),
 
             ViewPlane::new([right_further_point, A, B],
-                            test_point),
+                            visible_point),
             ViewPlane::new([left_further_point, C, D],
-                            test_point),
+                            visible_point),
 
             ViewPlane::new([top_further_point, D, A],
-                            test_point),
+                            visible_point),
             ViewPlane::new([bottom_further_point, C, B],
-                            test_point)
+                            visible_point)
         ];
         //let M_cam_basis = self.camera.get_matrix_basis();
                                                         // array de tuplas (eq do plano e o vetor
                                                         // normal)
-        fn clipping(tri: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
+        fn clipping(primitive: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
         {
+            use std::mem::swap;
+
+            let mut tri_pool:  Vec<Triangle> = Vec::from([primitive.clone()]);
+            let mut ret_triangle:  Vec<Triangle> = Vec::new();
+
+            for (idx, plane) in view_planes.iter().enumerate() {
+                let mut new_tri_pool:  Vec<Triangle> = Vec::new();
+
+                for tri in tri_pool.iter() {
+
+                    let mut a_point = tri.points[0];
+                    let mut b_point = tri.points[1];
+                    let mut c_point = tri.points[2];
+
+                    let mut f_a = plane.func(a_point);
+                    let mut f_b = plane.func(b_point);
+                    let mut f_c = plane.func(c_point);
+
+                    if f_a > 0.0 && 
+                       f_b > 0.0 && 
+                       f_c > 0.0 
+                    {
+                        new_tri_pool.push(tri.clone());
+                        continue;
+                    } else
+                    if f_a <= 0.0 && 
+                       f_b <= 0.0 && 
+                       f_c <= 0.0 
+                    {
+                        continue;
+                    }
+
+                    if f_a * f_c >= 0.0 {
+                        swap(&mut f_b,     &mut f_c);
+                        swap(&mut b_point, &mut c_point);
+
+                        swap(&mut f_a,     &mut f_b);
+                        swap(&mut a_point, &mut b_point);
+                    } else if f_b * f_c >= 0.0 {
+                        swap(&mut f_a,     &mut f_c);
+                        swap(&mut a_point, &mut c_point);
+
+                        swap(&mut f_a,     &mut f_b);
+                        swap(&mut a_point, &mut b_point);
+                    }
+
+                    //  resolvendo para t onde p pertence ao plano
+                    //  p = in + t * (out - in)
+
+                    let t_a = plane.func(a_point) /
+                        plane.normal().dot(a_point - c_point);
+                    let new_point_a: Vec3 = a_point + (c_point - a_point) * t_a;
+
+
+                    let t_b = plane.func(b_point) /
+                        plane.normal().dot(b_point - c_point);
+                    let new_point_b: Vec3 = b_point + (c_point - b_point) * t_b;
+
+
+                    if f_c <= 0.0 {
+                        let new_triangle_a = Triangle::new([
+                            a_point, 
+                            new_point_a,
+                            new_point_b],
+                            tri.color,
+                            ""
+                        );
+
+                        let new_triangle_b = Triangle::new([
+                            a_point, 
+                            b_point,
+                            new_point_b],
+                            tri.color,
+                            ""
+                        );
+
+                        new_tri_pool.extend([new_triangle_a, new_triangle_b]);
+                    } else {
+                        let new_triangle_c = Triangle::new([
+                            c_point, 
+                            new_point_a,
+                            new_point_b],
+                            tri.color,
+                            ""
+                        );
+
+                        new_tri_pool.extend([new_triangle_c]);
+
+                    }
+
+                }
+
+                tri_pool = new_tri_pool;
+
+            }
+            //println!("{:#?}", to_be_clipped);
+
+            return tri_pool;
+
+
+            /*
             let mut vertex_out = false;
             let mut plane_out: usize = 0;
 
@@ -622,6 +693,7 @@ impl Scene {
                         in_a, 
                         new_point_a,
                         new_point_b],
+                        tri.color,
                         ""
                     );
 
@@ -629,6 +701,7 @@ impl Scene {
                         in_a, 
                         in_b,
                         new_point_b],
+                        tri.color,
                         ""
                     );
 
@@ -659,17 +732,18 @@ impl Scene {
                         in_a, 
                         new_point_a,
                         new_point_b],
+                        tri.color,
                         ""
                     );
 
                 return Vec::from([new_triangle]);
             }
+            */
 
-            panic!("quandt de triangulos incorreta");
-            
+
         };
 
-        {
+        if false {
 
             let w_ = self.width as f64 - 1.0;
             let h_ = self.height as f64 - 1.0;
@@ -732,12 +806,19 @@ impl Scene {
                     let a_depth: f32 = (camera_pos - clipped_tri.points[0]).norm() as _;
                     let b_depth: f32 = (camera_pos - clipped_tri.points[1]).norm() as _;
                     let c_depth: f32 = (camera_pos - clipped_tri.points[2]).norm() as _;
-                    self.canva.draw_triangle_with_depth(a / a_w, 
+
+                    let clipped_tri_color = tri.color;
+                    self.canva.draw_triangle_with_depth(
+                        a / a_w, 
                         b / b_w, 
                         c / c_w, 
+                        clipped_tri_color,
+                        clipped_tri_color,
+                        clipped_tri_color,
                         a_depth, 
                         b_depth, 
-                        c_depth);
+                        c_depth
+                        );
 
                 }
             }

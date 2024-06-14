@@ -32,16 +32,10 @@ enum Key {
 
 #[derive(PartialEq)]
 pub
-enum KeyEvent {
-    Press(Key),
-    Release(Key),
-}
-
-#[derive(PartialEq)]
-pub
 enum Event {
     CloseWindow,
-    KeyEvent(KeyEvent),
+    KeyPress(Key),
+    KeyRelease(Key),
     RedimWindow,
 }
 
@@ -344,7 +338,7 @@ impl Window {
                         if (*e).keycode == kcode_down   {key_press = Key::DownArrow;}
                     }
 
-                    events.push(Event::KeyEvent(KeyEvent::Press(key_press)));
+                    events.push(Event::KeyPress(key_press));
                 },
 
                 xlib::KeyRelease => {
@@ -360,7 +354,7 @@ impl Window {
                         if (*e).keycode == kcode_down   {key_press = Key::DownArrow;}
                     }
 
-                    events.push(Event::KeyEvent(KeyEvent::Release(key_press)));
+                    events.push(Event::KeyRelease(key_press));
                 },
 
                 xlib::ReparentNotify => println!("ReparentNotify"),

@@ -4,7 +4,6 @@ mod window;
 use window::{
     Window,
     Event,
-    KeyEvent,
     Key,
 };
 
@@ -41,29 +40,43 @@ fn main() {
         let events: Vec<Event> = win.handle();
 
         for e in events.iter() {
-            if *e == Event::CloseWindow {
-                window_open = false;
-            } else
 
-            if *e == Event::KeyEvent(KeyEvent::Press(Key::UpArrow)) {
-                println!("UP");
-                scene.camera_up();
-            } else
+            match e {
+                Event::CloseWindow => {
+                    window_open = false;
+                },
 
-            if *e == Event::KeyEvent(KeyEvent::Press(Key::DownArrow)) {
-                println!("Down");
-                scene.camera_down();
-            } else
+                Event::KeyPress(key) => {
+                    print!("KeyPress ");
+                    match key {
+                        Key::UpArrow => {
+                            println!("Up");
+                            scene.camera_up();
+                        },
+                        Key::DownArrow => {
+                            println!("Down");
+                            scene.camera_down();
+                        },
+                        Key::LeftArrow => {
+                            println!("Left");
+                            scene.camera_left();
+                        },
+                        Key::RightArrow => {
+                            println!("Right");
+                            scene.camera_right();
+                        },
 
-            if *e == Event::KeyEvent(KeyEvent::Press(Key::LeftArrow)) {
-                println!("Left");
-                scene.camera_left();
-            } else
+                        _ => {},
+                    };
+                },
 
-            if *e == Event::KeyEvent(KeyEvent::Press(Key::RightArrow)) {
-                println!("Right");
-                scene.camera_right();
-            }
+                Event::KeyRelease(key) => {
+                    key;
+                },
+
+                _ => {},
+            };
+
         }
 
 

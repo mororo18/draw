@@ -80,7 +80,7 @@ impl Object {
                 bot + vert_c
             ],
             Color::White,
-            "basee"
+            "white basee"
             );
 
         let f_a = Triangle::new([
@@ -89,7 +89,7 @@ impl Object {
                 bot + vert_o
             ],
             Color::Blue,
-            "f_A"
+            "Blue f_A"
             );
 
         let f_b = Triangle::new([
@@ -98,7 +98,7 @@ impl Object {
                 bot + vert_o
             ],
             Color::Red,
-            "f_B"
+            "Red f_B"
             );
 
         let f_c = Triangle::new([
@@ -107,7 +107,7 @@ impl Object {
                 bot + vert_o
             ],
             Color::Green,
-            "f_C"
+            "Green f_C"
             );
 
         Self {
@@ -230,11 +230,12 @@ struct ViewPlane {
     points: [Vec3; 3],
     normal: Vec3,
     k: f64,
+    label: String,
 }
 
 impl ViewPlane {
     pub
-    fn new (points: [Vec3; 3], positive_point_dir: Vec3) -> Self {
+    fn new (points: [Vec3; 3], positive_point_dir: Vec3, label: &str) -> Self {
         let A = points[0];
         let B = points[1];
         let C = points[2];
@@ -268,6 +269,7 @@ impl ViewPlane {
             points: points,
             normal: normal,
             k: k,
+            label: String::from(label),
         }
     }
 
@@ -297,7 +299,7 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0.0, 5., 14.0]);
+        let camera_pos = Vec3::new([9.7, 5., 16.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let n: f64 = -10.0;      // nearest
@@ -306,8 +308,8 @@ impl Scene {
         let r: f64 = 10.0;      // right-most
         let l: f64 = -10.0;     // left-most
 
-        let t: f64 = 10.0;      // top-most
-        let b: f64 = -10.0;     // bottom-most
+        let t: f64 = 6.0;      // top-most
+        let b: f64 = -6.0;     // bottom-most
 
         assert!(n < 0.0);
         assert!(n > f);
@@ -347,12 +349,16 @@ impl Scene {
 
     pub
     fn camera_left(&mut self) {
-        self.camera.rotate_origin(-1.);
+        //self.camera.rotate_origin(-1.);
+        let cam_pos = self.camera.get_pos();
+        self.camera.set_pos(cam_pos + Vec3::new([0.05, 0., 0.]));
     }
 
     pub
     fn camera_right(&mut self) {
-        self.camera.rotate_origin(1.);
+        //self.camera.rotate_origin(1.);
+        let cam_pos = self.camera.get_pos();
+        self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
     }
 
     fn gen_transform_matrix(&mut self) -> Matrix4 {
@@ -449,12 +455,14 @@ impl Scene {
         let top_further_point = tfp_vec4.vec3_over_w() + camera_pos;
 
 
+        // TODO: aplicar essa logica aq p o restante
+        let x_center = (l + r) / 2.;
         // z = f
         // x = (l + r) / 2.
         // y = (f * b) / n
         let bfp_cam = Vec3::new([
-            (l + r) / 2., 
-            (f * b) / n, 
+            x_center, 
+            x_center + (f * (b-x_center)) / n, 
             f
         ]);
         let bfp_vec4: Vec4 = cam_basis_matrix * bfp_cam.as_vec4();
@@ -489,7 +497,23 @@ impl Scene {
         let C = C_vec4.as_vec3() / C_vec4.get_w() + camera_pos;     
         let D = D_vec4.as_vec3() / D_vec4.get_w() + camera_pos;     
 
-        let visible_point = (A + bottom_further_point) / 2.0;;
+        let visible_point = (A + bottom_further_point) / 2.0;
+
+        let bf = M * bottom_further_point.as_vec4();
+        let tf = M * top_further_point.as_vec4();
+
+        let bf_vec2 = bf.as_vec2() / bf.get_w();
+        let tf_vec2 = tf.as_vec2() / tf.get_w();
+        println!("{bf_vec2:?}");
+        println!("{tf_vec2:?}");
+        self.canva.draw_line(
+            bf_vec2 + Vec2::new(0., 1.),
+            tf_vec2 + Vec2::new(0., -1.)          
+            );
+
+        let vp = M * visible_point.as_vec4();
+        self.canva.draw_white_dot(vp.as_vec2() / vp.get_w());
+
         //let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
         //let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
 
@@ -513,21 +537,21 @@ impl Scene {
         */
 
         let mut func_planes = [
-            ViewPlane::new([A, B, C], visible_point),
+            ViewPlane::new([A, B, C], visible_point, "perto"),
             ViewPlane::new([left_further_point, 
                             right_further_point, 
                             top_further_point],
-                            visible_point),
+                            visible_point, "longe"),
 
             ViewPlane::new([right_further_point, A, B],
-                            visible_point),
+                            visible_point, "direita"),
             ViewPlane::new([left_further_point, C, D],
-                            visible_point),
+                            visible_point, "esquerda"),
 
             ViewPlane::new([top_further_point, D, A],
-                            visible_point),
+                            visible_point, "topo"),
             ViewPlane::new([bottom_further_point, C, B],
-                            visible_point)
+                            visible_point, "piso")
         ];
         //let M_cam_basis = self.camera.get_matrix_basis();
                                                         // array de tuplas (eq do plano e o vetor
@@ -535,6 +559,8 @@ impl Scene {
         fn clipping(primitive: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
         {
             use std::mem::swap;
+
+            println!("tri original {} {:#?}\n", primitive.label, primitive);
 
             let mut tri_pool:  Vec<Triangle> = Vec::from([primitive.clone()]);
             let mut ret_triangle:  Vec<Triangle> = Vec::new();
@@ -557,14 +583,18 @@ impl Scene {
                        f_c > 0.0 
                     {
                         new_tri_pool.push(tri.clone());
+                        println!("ta dentroo");
                         continue;
                     } else
                     if f_a <= 0.0 && 
                        f_b <= 0.0 && 
                        f_c <= 0.0 
                     {
+                        println!("ta fora");
                         continue;
                     }
+
+                    println!("clipaloei--- no  {}", plane.label);
 
                     if f_a * f_c >= 0.0 {
                         swap(&mut f_b,     &mut f_c);
@@ -599,7 +629,7 @@ impl Scene {
                             new_point_a,
                             new_point_b],
                             tri.color,
-                            ""
+                            "neww a"
                         );
 
                         let new_triangle_b = Triangle::new([
@@ -607,7 +637,7 @@ impl Scene {
                             b_point,
                             new_point_b],
                             tri.color,
-                            ""
+                            "neww b"
                         );
 
                         new_tri_pool.extend([new_triangle_a, new_triangle_b]);
@@ -617,7 +647,7 @@ impl Scene {
                             new_point_a,
                             new_point_b],
                             tri.color,
-                            ""
+                            "neww c"
                         );
 
                         new_tri_pool.extend([new_triangle_c]);
@@ -626,10 +656,12 @@ impl Scene {
 
                 }
 
+                println!("tri_pool {:#?}\n", tri_pool);
+                println!("new_tri_pool {:#?}\n", new_tri_pool);
                 tri_pool = new_tri_pool;
 
             }
-            //println!("{:#?}", to_be_clipped);
+            println!("tri_pool {} {:#?}\n\n", primitive.label, tri_pool);
 
             return tri_pool;
 
@@ -781,6 +813,8 @@ impl Scene {
 
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
+                println!(" === clippando {} === ", tri.label);
+                println!("camera pos {camera_pos:?}");
                 for clipped_tri in clipping(tri, &mut func_planes).iter() {
 
                     let a_vec4  = M * clipped_tri.points[0].as_vec4();

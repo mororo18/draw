@@ -17,6 +17,7 @@ enum Color {
 }
 
 impl Color {
+    pub
     fn as_pixel(&self) -> Pixel {
         match self {
             Color::White => Pixel::white(),
@@ -598,8 +599,9 @@ impl Canva {
 
     pub 
     fn pos_map_center (pos: Vec2) -> Vec2 {
-        let mut x_center = (pos.x + 0.5).floor();
-        let mut y_center = (pos.y + 0.5).floor();
+        // TODO: esse casting gambiarrento
+        let mut x_center = (pos.x as f32 as f64 + 0.5).floor();
+        let mut y_center = (pos.y as f32 as f64 + 0.5).floor();
 
         // Debug
         if x_center < -0.1 || y_center < -0.1 {

@@ -10,7 +10,7 @@ use x11::keysym::*;
 use std::os::raw::*; 
 use std::ptr;
 use std::mem::MaybeUninit;
-use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
+use std::alloc::{alloc, alloc_zeroed, dealloc, handle_alloc_error, Layout};
 
 use std::ffi::CString;
 
@@ -376,7 +376,7 @@ impl Window {
             println!("{} x {}", self.width, self.height);
             self.window_buffer_size = self.width * self.height * self.pixel_bytes;
             let layout = Layout::array::<i8>(self.window_buffer_size as usize).expect("layout deu merda");
-            self.mem = unsafe{alloc(layout)};
+            self.mem = unsafe{alloc_zeroed(layout)};
 
             self.window_buffer = unsafe{xlib::XCreateImage(self.display, 
                 self.visinfo.visual, 

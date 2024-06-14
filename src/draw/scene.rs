@@ -8,6 +8,7 @@ use crate::draw::linalg::{
     Vec3,
     Vec4,
     Matrix4,
+    EPS,
 };
 
 
@@ -51,16 +52,16 @@ impl Object {
             }
         }
 
-        sum / (3. * self.triangles.len() as f64)
+        sum / (3. * self.triangles.len() as f32)
     }
 
     pub
     fn inv_piramid (bot: Vec3) -> Self {
-        let height: f64 = 3.0;
-        let side = 3.0_f64;
-        let l = (side / 2.0) * (2.0 / f64::sqrt(3.0));
+        let height: f32 = 3.0;
+        let side = 3.0_f32;
+        let l = (side / 2.0) * (2.0 / f32::sqrt(3.0));
 
-        let c_x = 0.0_f64;
+        let c_x = 0.0_f32;
         let c_z = l;
 
         let a_x = (side / 2.0);
@@ -154,13 +155,13 @@ impl Camera {
     pub fn get_pos       (&self) -> Vec3 {self.position}
     pub fn get_direction (&self) -> Vec3 {self.direction}
 
-    pub fn get_rightmost_visible  (&self) -> f64 {self.right_top_near.x()}
-    pub fn get_topmost_visible    (&self) -> f64 {self.right_top_near.y()}
-    pub fn get_nearest_visible    (&self) -> f64 {self.right_top_near.z()}
+    pub fn get_rightmost_visible  (&self) -> f32 {self.right_top_near.x()}
+    pub fn get_topmost_visible    (&self) -> f32 {self.right_top_near.y()}
+    pub fn get_nearest_visible    (&self) -> f32 {self.right_top_near.z()}
 
-    pub fn get_leftmost_visible   (&self) -> f64 {self.left_bottom_further.x()}
-    pub fn get_bottommost_visible (&self) -> f64 {self.left_bottom_further.y()}
-    pub fn get_furtherest_visible (&self) -> f64 {self.left_bottom_further.z()}
+    pub fn get_leftmost_visible   (&self) -> f32 {self.left_bottom_further.x()}
+    pub fn get_bottommost_visible (&self) -> f32 {self.left_bottom_further.y()}
+    pub fn get_furtherest_visible (&self) -> f32 {self.left_bottom_further.z()}
 
     pub
     fn set_pos(&mut self, pos: Vec3) {
@@ -168,7 +169,7 @@ impl Camera {
     }
 
     pub
-    fn rotate_origin(&mut self, theta: f64) {
+    fn rotate_origin(&mut self, theta: f32) {
 
         let new_pos = Matrix4::rotate_y(theta.to_radians()) * 
                         self.position.as_vec4();
@@ -229,7 +230,7 @@ impl Camera {
 struct ViewPlane {
     points: [Vec3; 3],
     normal: Vec3,
-    k: f64,
+    k: f32,
     label: String,
 }
 
@@ -274,8 +275,12 @@ impl ViewPlane {
     }
 
     pub
-    fn func(&self, point: Vec3) -> f64 {
-        self.normal.dot(point) + self.k
+    fn func(&self, point: Vec3) -> f32 {
+        // esse 0.5 subtraindo serve para que os triangulos sejam
+        // clipados um pouquinho antes do plano real, de modo que
+        // n'ao exista chance de calcular coordenadas invalidas
+        // apos as transformacoes devido 'a imprecisao do float
+        self.normal.dot(point) + self.k - 0.5
     }
 
     pub
@@ -299,17 +304,17 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([9.7, 5., 16.0]);
+        let camera_pos = Vec3::new([-9.7, 5., 16.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
-        let n: f64 = -10.0;      // nearest
-        let f: f64 = n - 100.0;       // furtherest
+        let n: f32 = -10.0;      // nearest
+        let f: f32 = n - 100.0;       // furtherest
 
-        let r: f64 = 10.0;      // right-most
-        let l: f64 = -10.0;     // left-most
+        let r: f32 = 10.0;      // right-most
+        let l: f32 = -10.0;     // left-most
 
-        let t: f64 = 6.0;      // top-most
-        let b: f64 = -6.0;     // bottom-most
+        let t: f32 = 6.0;      // top-most
+        let b: f32 = -6.0;     // bottom-most
 
         assert!(n < 0.0);
         assert!(n > f);
@@ -362,8 +367,8 @@ impl Scene {
     }
 
     fn gen_transform_matrix(&mut self) -> Matrix4 {
-        let n_x: f64 = self.width as _;
-        let n_y: f64 = self.height as _;
+        let n_x: f32 = self.width as _;
+        let n_y: f32 = self.height as _;
 
         let n = self.camera.get_nearest_visible();
         let f = self.camera.get_furtherest_visible();
@@ -506,11 +511,13 @@ impl Scene {
         let tf_vec2 = tf.as_vec2() / tf.get_w();
         println!("{bf_vec2:?}");
         println!("{tf_vec2:?}");
+        /*
         self.canva.draw_line(
-            bf_vec2 + Vec2::new(0., 1.),
-            tf_vec2 + Vec2::new(0., -1.)          
+            bf_vec2 ,
+            tf_vec2 //+ Vec2::new(0., -f32::EPSILON)          
             );
 
+        */
         let vp = M * visible_point.as_vec4();
         self.canva.draw_white_dot(vp.as_vec2() / vp.get_w());
 
@@ -614,12 +621,12 @@ impl Scene {
                     //  p = in + t * (out - in)
 
                     let t_a = plane.func(a_point) /
-                        plane.normal().dot(a_point - c_point);
+                        plane.normal().dot(a_point - c_point) - EPS;
                     let new_point_a: Vec3 = a_point + (c_point - a_point) * t_a;
 
 
                     let t_b = plane.func(b_point) /
-                        plane.normal().dot(b_point - c_point);
+                        plane.normal().dot(b_point - c_point) - EPS;
                     let new_point_b: Vec3 = b_point + (c_point - b_point) * t_b;
 
 
@@ -777,8 +784,8 @@ impl Scene {
 
         if false {
 
-            let w_ = self.width as f64 - 1.0;
-            let h_ = self.height as f64 - 1.0;
+            let w_ = self.width  as f32 - 1.0;
+            let h_ = self.height as f32 - 1.0;
 
             let a = Vec2::new(w_, h_);
             let b = Vec2::new(w_, 0.0);

@@ -79,13 +79,13 @@ impl Add for Pixel {
     }
 }
 
-impl Mul<f64> for Pixel {
+impl Mul<f32> for Pixel {
     type Output = Self;
 
-    fn mul(self, rhs: f64) -> Self {
-        let r = (self.r as f64) * rhs;
-        let g = (self.g as f64) * rhs;
-        let b = (self.b as f64) * rhs;
+    fn mul(self, rhs: f32) -> Self {
+        let r = (self.r as f32) * rhs;
+        let g = (self.g as f32) * rhs;
+        let b = (self.b as f32) * rhs;
 
         Pixel {
             r: if r > 255.0 {255_u8} else {r as u8},
@@ -97,7 +97,7 @@ impl Mul<f64> for Pixel {
     }
 }
 
-impl Mul<Pixel> for f64 {
+impl Mul<Pixel> for f32 {
     type Output = Pixel;
 
     fn mul(self, rhs: Pixel) -> Pixel {
@@ -167,10 +167,10 @@ impl Canva {
 
     pub
     fn draw_quadrilat(&mut self, a: Vec2, b: Vec2, c: Vec2, d: Vec2) {
-        let a_center = Self::pos_map_center(a);
-        let b_center = Self::pos_map_center(b);
-        let c_center = Self::pos_map_center(c);
-        let d_center = Self::pos_map_center(d);
+        let a_center = self.pos_map_center(a);
+        let b_center = self.pos_map_center(b);
+        let c_center = self.pos_map_center(c);
+        let d_center = self.pos_map_center(d);
 
         let mut vertex_list = vec![a_center, b_center, c_center, d_center];
         vertex_list.as_mut_slice()
@@ -193,45 +193,45 @@ impl Canva {
     pub
     fn draw_triangle(&mut self, a: Vec2, b: Vec2, c: Vec2) {
 
-        let a_center = Self::pos_map_center(a);
-        let b_center = Self::pos_map_center(b);
-        let c_center = Self::pos_map_center(c);
+        let a_center = self.pos_map_center(a);
+        let b_center = self.pos_map_center(b);
+        let c_center = self.pos_map_center(c);
 
         let color_a = Pixel::red();
         let color_b = Pixel::green();
         let color_c = Pixel::blue();
 
-        let f_ab = |x: f64, y:f64| -> f64 {
+        let f_ab = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
             (a_center.x * b_center.y) - 
             (b_center.x * a_center.y)
         };
 
-        let f_bc = |x: f64, y:f64| -> f64 {
+        let f_bc = |x: f32, y:f32| -> f32 {
             (b_center.y - c_center.y) * x + 
             (c_center.x - b_center.x) * y +
             (b_center.x * c_center.y) - 
             (c_center.x * b_center.y)
         };
 
-        let f_ca = |x: f64, y:f64| -> f64 {
+        let f_ca = |x: f32, y:f32| -> f32 {
             (c_center.y - a_center.y) * x + 
             (a_center.x - c_center.x) * y +
             (c_center.x * a_center.y) - 
             (a_center.x * c_center.y)
         };
 
-        let min = |x: f64, y: f64, z: f64| -> f64 {
-            let mut ret = f64::INFINITY;
+        let min = |x: f32, y: f32, z: f32| -> f32 {
+            let mut ret = f32::INFINITY;
             vec![x, y, z].iter()
                 .for_each(|v| if *v < ret {ret = *v;});
 
             ret
         };
 
-        let max = |x: f64, y: f64, z: f64| -> f64 {
-            let mut ret = -f64::INFINITY;
+        let max = |x: f32, y: f32, z: f32| -> f32 {
+            let mut ret = -f32::INFINITY;
             vec![x, y, z].iter()
                 .for_each(|v| if *v > ret {ret = *v;});
 
@@ -249,13 +249,13 @@ impl Canva {
         let f_gama  = f_ab(c_center.x, c_center.y);
 
         for y in y_min..y_max {
-            let y_f64 = y as f64;
+            let y_f32 = y as f32;
             for x in x_min..x_max {
-                let x_f64 = x as f64;
+                let x_f32 = x as f32;
 
-                let alpha: f64 = f_bc(x_f64,y_f64) / f_alpha;
-                let beta:  f64 = f_ca(x_f64,y_f64) / f_beta;
-                let gama:  f64 = f_ab(x_f64,y_f64) / f_gama;
+                let alpha: f32 = f_bc(x_f32,y_f32) / f_alpha;
+                let beta:  f32 = f_ca(x_f32,y_f32) / f_beta;
+                let gama:  f32 = f_ab(x_f32,y_f32) / f_gama;
 
                 if alpha >= 0.0 &&
                     beta >= 0.0 &&
@@ -291,45 +291,45 @@ impl Canva {
                                            c_depth: f32)
     {
 
-        let a_center = Self::pos_map_center(a);
-        let b_center = Self::pos_map_center(b);
-        let c_center = Self::pos_map_center(c);
+        let a_center = self.pos_map_center(a);
+        let b_center = self.pos_map_center(b);
+        let c_center = self.pos_map_center(c);
 
         let a_pixel_color = a_color.as_pixel();
         let b_pixel_color = b_color.as_pixel();
         let c_pixel_color = c_color.as_pixel();
 
-        let f_ab = |x: f64, y:f64| -> f64 {
+        let f_ab = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
             (a_center.x * b_center.y) - 
             (b_center.x * a_center.y)
         };
 
-        let f_bc = |x: f64, y:f64| -> f64 {
+        let f_bc = |x: f32, y:f32| -> f32 {
             (b_center.y - c_center.y) * x + 
             (c_center.x - b_center.x) * y +
             (b_center.x * c_center.y) - 
             (c_center.x * b_center.y)
         };
 
-        let f_ca = |x: f64, y:f64| -> f64 {
+        let f_ca = |x: f32, y:f32| -> f32 {
             (c_center.y - a_center.y) * x + 
             (a_center.x - c_center.x) * y +
             (c_center.x * a_center.y) - 
             (a_center.x * c_center.y)
         };
 
-        let min = |x: f64, y: f64, z: f64| -> f64 {
-            let mut ret = f64::INFINITY;
+        let min = |x: f32, y: f32, z: f32| -> f32 {
+            let mut ret = f32::INFINITY;
             vec![x, y, z].iter()
                 .for_each(|v| if *v < ret {ret = *v;});
 
             ret
         };
 
-        let max = |x: f64, y: f64, z: f64| -> f64 {
-            let mut ret = -f64::INFINITY;
+        let max = |x: f32, y: f32, z: f32| -> f32 {
+            let mut ret = -f32::INFINITY;
             vec![x, y, z].iter()
                 .for_each(|v| if *v > ret {ret = *v;});
 
@@ -347,13 +347,13 @@ impl Canva {
         let f_gama  = f_ab(c_center.x, c_center.y);
 
         for y in y_min..y_max {
-            let y_f64 = y as f64;
+            let y_f32 = y as f32;
             for x in x_min..x_max {
-                let x_f64 = x as f64;
+                let x_f32 = x as f32;
 
-                let alpha: f64 = f_bc(x_f64,y_f64) / f_alpha;
-                let beta:  f64 = f_ca(x_f64,y_f64) / f_beta;
-                let gama:  f64 = f_ab(x_f64,y_f64) / f_gama;
+                let alpha: f32 = f_bc(x_f32,y_f32) / f_alpha;
+                let beta:  f32 = f_ca(x_f32,y_f32) / f_beta;
+                let gama:  f32 = f_ab(x_f32,y_f32) / f_gama;
 
                 if alpha >= 0.0 &&
                     beta >= 0.0 &&
@@ -368,9 +368,9 @@ impl Canva {
                                           (beta  * b_pixel_color) +
                                           (gama  * c_pixel_color);
 
-                        let pixel_depth = (alpha * a_depth as f64) +
-                                          (beta  * b_depth as f64) +
-                                          (gama  * c_depth as f64);
+                        let pixel_depth = (alpha * a_depth) +
+                                          (beta  * b_depth) +
+                                          (gama  * c_depth);
 
                         self.draw_pixel_coord_with_depth(x, y, pixel_color, pixel_depth as _);
                     }
@@ -383,8 +383,8 @@ impl Canva {
 
     pub
     fn draw_line(&mut self, a: Vec2, b: Vec2) {
-        let a_center = Self::pos_map_center(a);
-        let b_center = Self::pos_map_center(b);
+        let a_center = self.pos_map_center(a);
+        let b_center = self.pos_map_center(b);
 
         let m = (b_center.y - a_center.y) / (b_center.x - a_center.x);
 
@@ -417,14 +417,14 @@ impl Canva {
                 false => (_b_center, _a_center),
             };
 
-        let midpoint_x: [f64; 4] = [
+        let midpoint_x: [f32; 4] = [
             0.5,
             1.0,
             1.0,
             0.5,
         ];
 
-        let midpoint_y: [f64; 4] = [
+        let midpoint_y: [f32; 4] = [
             1.0,
             0.5,
            -0.5,
@@ -446,7 +446,7 @@ impl Canva {
             b_center.y as usize
         ];
 
-        let f = |x: f64, y:f64| -> f64 {
+        let f = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
             (a_center.x * b_center.y) - 
@@ -528,7 +528,7 @@ impl Canva {
         //assert!(a_center.x < b_center.x, "uso incorreto");
         //assert!(a_center.y > b_center.y, "uso incorreto");
 
-        let f = |x: f64, y:f64| -> f64 {
+        let f = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
             (a_center.x * b_center.y) - 
@@ -559,7 +559,7 @@ impl Canva {
         //assert!(a_center.x < b_center.x, "uso incorreto");
         //assert!(a_center.y < b_center.y, "uso incorreto");
 
-        let f = |x: f64, y:f64| -> f64 {
+        let f = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
             (b_center.x - a_center.x) * y +
             (a_center.x * b_center.y) - 
@@ -587,30 +587,31 @@ impl Canva {
 
     pub
     fn draw_dot (&mut self, pos: Vec2, color: Pixel) {
-        let pixel_pos = Self::img_map(pos);
+        let pixel_pos = self.img_map(pos);
         self.draw_pixel(pixel_pos, color);
     }
 
     pub
     fn draw_white_dot (&mut self, pos: Vec2) {
-        let pixel_pos = Self::img_map(pos);
+        let pixel_pos = self.img_map(pos);
         self.draw_pixel(pixel_pos, Pixel::white());
     }
 
     pub 
-    fn pos_map_center (pos: Vec2) -> Vec2 {
-        // TODO: esse casting gambiarrento
-        let mut x_center = (pos.x as f32 as f64 + 0.5).floor();
-        let mut y_center = (pos.y as f32 as f64 + 0.5).floor();
+    fn pos_map_center (&self, pos: Vec2) -> Vec2 {
+        let w_f32 = self.width  as f32 - 1.0;
+        let h_f32 = self.height as f32 - 1.0;
+
+        let mut x_center = (pos.x + 0.5).floor();
+        let mut y_center = (pos.y + 0.5).floor();
 
         // Debug
-        if x_center < -0.1 || y_center < -0.1 {
-            panic!("posicao invalida ({x_center}, {y_center}) ");
-        }
+        assert!(
+            x_center >= 0.0 && x_center <= w_f32 &&
+            y_center >= 0.0 && y_center <= h_f32, 
+            "posicao invalida ({x_center}, {y_center}) "
+        );
 
-        x_center = if x_center < -0.5 {0.0} else {x_center};
-        y_center = if y_center < -0.5 {0.0} else {y_center};
-        
         Vec2 {
             x: x_center,
             y: y_center,
@@ -618,8 +619,8 @@ impl Canva {
     }
 
     pub
-    fn img_map (pos: Vec2) -> PixelPos {
-        let pos_center = Self::pos_map_center(pos);
+    fn img_map (&self, pos: Vec2) -> PixelPos {
+        let pos_center = self.pos_map_center(pos);
         PixelPos {
             x: pos_center.x as _,
             y: pos_center.y as _,

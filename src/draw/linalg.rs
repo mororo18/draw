@@ -9,21 +9,23 @@ use crate::draw::canva::{
     Color,
 };
 
+pub const EPS: f32 = 0.0000001;
+
 #[derive(Debug, Copy, Clone)]
 pub
 struct Vec2 {
-    pub x: f64,
-    pub y: f64,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Vec2 {
     pub
-    fn new (x: f64, y: f64) -> Self {Vec2 {x:x, y:y}}
+    fn new (x: f32, y: f32) -> Self {Vec2 {x:x, y:y}}
 }
 
 impl Vec2 {
     pub
-    fn dist (self, arg: Self) -> f64 {
+    fn dist (self, arg: Self) -> f32 {
         let x_sq = (self.x - arg.x).powi(2);
         let y_sq = (self.y - arg.y).powi(2);
         
@@ -50,10 +52,10 @@ impl Sub for Vec2 {
     }
 }
 
-impl Div<f64> for Vec2 {
+impl Div<f32> for Vec2 {
     type Output = Self;
 
-    fn div (self, rhs: f64) -> Self {
+    fn div (self, rhs: f32) -> Self {
         Self {
 			x: self.x / rhs,
 			y: self.y / rhs,
@@ -66,12 +68,12 @@ impl Div<f64> for Vec2 {
 #[derive(Debug, Copy, Clone)]
 pub
 struct Vec4 {
-    a: [f64; 4],
+    a: [f32; 4],
 }
 
 impl Vec4 {
     pub
-    fn new (data: [f64; 4]) -> Self {
+    fn new (data: [f32; 4]) -> Self {
         Self {a: data}
     }
 
@@ -99,10 +101,10 @@ impl Vec4 {
         self.as_vec3() / self.get_w()
     }
 
-	pub fn get_x(&self) -> f64 {self.a[0]}
-	pub fn get_y(&self) -> f64 {self.a[1]}
-	pub fn get_z(&self) -> f64 {self.a[2]}
-	pub fn get_w(&self) -> f64 {self.a[3]}
+	pub fn get_x(&self) -> f32 {self.a[0]}
+	pub fn get_y(&self) -> f32 {self.a[1]}
+	pub fn get_z(&self) -> f32 {self.a[2]}
+	pub fn get_w(&self) -> f32 {self.a[3]}
 
 }
 
@@ -110,12 +112,12 @@ impl Vec4 {
 #[derive(Debug, Copy, Clone)]
 pub
 struct Vec3 {
-    a: [f64; 3],
+    a: [f32; 3],
 }
 
 impl Vec3 {
     pub
-    fn new (data: [f64; 3]) -> Self {
+    fn new (data: [f32; 3]) -> Self {
         Self {a: data}
     }
 
@@ -140,7 +142,7 @@ impl Vec3 {
     }
 
     pub
-    fn norm (&self) -> f64 {
+    fn norm (&self) -> f32 {
         let sum = self.a[0].powi(2) +
                   self.a[1].powi(2) +
                   self.a[2].powi(2);
@@ -155,13 +157,13 @@ impl Vec3 {
 
 
     pub
-    fn dist (&self, arg: Self) -> f64 {
+    fn dist (&self, arg: Self) -> f32 {
         let diff = *self - arg;
         diff.norm()
     }
 
     pub
-    fn dot (&self, arg: Self) -> f64 {
+    fn dot (&self, arg: Self) -> f32 {
 		self.x() * arg.x() +
 		self.y() * arg.y() +
 		self.z() * arg.z()
@@ -184,9 +186,9 @@ impl Vec3 {
         Self::new([c_0, c_1, c_2])
     }
 
-    pub fn x (&self) -> f64 {self.a[0]}
-    pub fn y (&self) -> f64 {self.a[1]}
-    pub fn z (&self) -> f64 {self.a[2]}
+    pub fn x (&self) -> f32 {self.a[0]}
+    pub fn y (&self) -> f32 {self.a[1]}
+    pub fn z (&self) -> f32 {self.a[2]}
 
 }
 impl Add for Vec4 {
@@ -204,10 +206,10 @@ impl Add for Vec4 {
     }
 }
 
-impl Mul<f64> for Vec3 {
+impl Mul<f32> for Vec3 {
     type Output = Self;
 
-    fn mul (self, rhs: f64) -> Self {
+    fn mul (self, rhs: f32) -> Self {
         Self {
             a: [
             self.a[0] * rhs,
@@ -218,10 +220,10 @@ impl Mul<f64> for Vec3 {
     }
 }
 
-impl Div<f64> for Vec3 {
+impl Div<f32> for Vec3 {
     type Output = Self;
 
-    fn div (self, rhs: f64) -> Self {
+    fn div (self, rhs: f32) -> Self {
         Self {
             a: [
             self.a[0] / rhs,
@@ -263,12 +265,12 @@ impl Sub for Vec3 {
 #[derive(Debug, Copy, Clone)]
 pub
 struct Matrix4 {
-    a: [[f64; 4]; 4],
+    a: [[f32; 4]; 4],
 }
 
 impl Matrix4 {
     pub
-    fn new (data: [[f64; 4]; 4]) -> Self {
+    fn new (data: [[f32; 4]; 4]) -> Self {
         Self {a: data}
     }
 
@@ -293,7 +295,7 @@ impl Matrix4 {
 	}
 
     pub
-    fn rotate_x (theta: f64) -> Self {
+    fn rotate_x (theta: f32) -> Self {
         let sin = theta.sin();
         let cos = theta.cos();
 
@@ -306,7 +308,7 @@ impl Matrix4 {
     }
 
     pub
-    fn rotate_y (theta: f64) -> Self {
+    fn rotate_y (theta: f32) -> Self {
         let sin = theta.sin();
         let cos = theta.cos();
 
@@ -319,7 +321,7 @@ impl Matrix4 {
     }
 
     pub
-    fn rotate_z (theta: f64) -> Self {
+    fn rotate_z (theta: f32) -> Self {
         let sin = theta.sin();
         let cos = theta.cos();
 

@@ -31,8 +31,8 @@ fn main() {
 
 
     let mut now = Instant::now();
-    //let frame_rate: f64 = 1.0;
-    let frame_rate: f64 = 60.0;
+    //let frame_rate: f32 = 1.0;
+    let frame_rate: f32 = 60.0;
     let dt_ms = 1000.0 / frame_rate;
 
     // CREATE SCENE = OBJECTS + CAMERA
@@ -68,7 +68,7 @@ fn main() {
 
 
 
-        let elapsed = now.elapsed().as_millis() as f64;
+        let elapsed = now.elapsed().as_millis() as f32;
         if elapsed > dt_ms {
             now = Instant::now();
             //println!("{}", 1000.0 / elapsed);
@@ -81,33 +81,33 @@ fn main() {
         }
         /*
         for p in x_left..=x_right {
-            let side = Vec2::<f64>::new(p as f64, y_top as f64);
+            let side = Vec2::<f32>::new(p as f32, y_top as f32);
             canva.draw_line(center_a, side);
         }
 
         for p in (y_bot..=y_top).rev() {
-            let side = Vec2::<f64>::new(x_right as f64, p as f64);
+            let side = Vec2::<f32>::new(x_right as f32, p as f32);
             canva.draw_line(center_b, side);
         }
 
         for p in (x_left..=x_right).rev() {
-            let side = Vec2::<f64>::new(p as f64, y_bot as f64);
+            let side = Vec2::<f32>::new(p as f32, y_bot as f32);
             canva.draw_line(center_c, side);
         }
 
         for p in y_bot..=y_top {
-            let side = Vec2::<f64>::new(x_left as f64, p as f64);
+            let side = Vec2::<f32>::new(x_left as f32, p as f32);
             canva.draw_line(center_d, side);
         }
         */
 
 
-        //let b = Vec2::<f64>::new(0.0, 400.0);
+        //let b = Vec2::<f32>::new(0.0, 400.0);
         //println!("{:?}", a);
         //canva.draw_line(j, k);
         //canva.draw_line(i, j);
-      //let c = Vec2::<f64>::new(0.0, 1.0);
-      //let d = Vec2::<f64>::new(799.0, 199.0);
+      //let c = Vec2::<f32>::new(0.0, 1.0);
+      //let d = Vec2::<f32>::new(799.0, 199.0);
       //canva.draw_line(d, c);
     }
 

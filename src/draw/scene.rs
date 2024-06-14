@@ -304,7 +304,7 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([-9.7, 5., 16.0]);
+        let camera_pos = Vec3::new([0., 5., 16.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let n: f32 = -10.0;      // nearest
@@ -313,8 +313,8 @@ impl Scene {
         let r: f32 = 10.0;      // right-most
         let l: f32 = -10.0;     // left-most
 
-        let t: f32 = 6.0;      // top-most
-        let b: f32 = -6.0;     // bottom-most
+        let t: f32 = 10.0;      // top-most
+        let b: f32 = -10.0;     // bottom-most
 
         assert!(n < 0.0);
         assert!(n > f);
@@ -361,9 +361,9 @@ impl Scene {
 
     pub
     fn camera_right(&mut self) {
-        //self.camera.rotate_origin(1.);
-        let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
+        self.camera.rotate_origin(1.);
+        //let cam_pos = self.camera.get_pos();
+        //self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
     }
 
     fn gen_transform_matrix(&mut self) -> Matrix4 {
@@ -504,45 +504,6 @@ impl Scene {
 
         let visible_point = (A + bottom_further_point) / 2.0;
 
-        let bf = M * bottom_further_point.as_vec4();
-        let tf = M * top_further_point.as_vec4();
-
-        let bf_vec2 = bf.as_vec2() / bf.get_w();
-        let tf_vec2 = tf.as_vec2() / tf.get_w();
-        println!("{bf_vec2:?}");
-        println!("{tf_vec2:?}");
-        /*
-        self.canva.draw_line(
-            bf_vec2 ,
-            tf_vec2 //+ Vec2::new(0., -f32::EPSILON)          
-            );
-
-        */
-        let vp = M * visible_point.as_vec4();
-        self.canva.draw_white_dot(vp.as_vec2() / vp.get_w());
-
-        //let test_point_vec4 = cam_basis_matrix * Vec3::new([(r+l)/2., (t+b)/2., (n+f)/2.]).as_vec4();
-        //let test_point = (test_point_vec4).as_vec3() / test_point_vec4.get_w() + camera_pos;
-
-
-        /*
-        let mut func_n  = get_plane_eq(A, B, C, test_point);
-        let mut func_f  = get_plane_eq(left_further_point, 
-                                       right_further_point, 
-                                       top_further_point, 
-                                       test_point);
-
-        let mut func_r  = get_plane_eq(right_further_point, 
-                                        A, B, test_point);
-        let mut func_l  = get_plane_eq(left_further_point, 
-                                        C, D, test_point);
-
-        let mut func_t  = get_plane_eq(top_further_point, 
-                                        D, A, test_point);
-        let mut func_b  = get_plane_eq(bottom_further_point, 
-                                        C, B, test_point);
-        */
-
         let mut func_planes = [
             ViewPlane::new([A, B, C], visible_point, "perto"),
             ViewPlane::new([left_further_point, 
@@ -560,14 +521,10 @@ impl Scene {
             ViewPlane::new([bottom_further_point, C, B],
                             visible_point, "piso")
         ];
-        //let M_cam_basis = self.camera.get_matrix_basis();
-                                                        // array de tuplas (eq do plano e o vetor
-                                                        // normal)
+
         fn clipping(primitive: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
         {
             use std::mem::swap;
-
-            println!("tri original {} {:#?}\n", primitive.label, primitive);
 
             let mut tri_pool:  Vec<Triangle> = Vec::from([primitive.clone()]);
             let mut ret_triangle:  Vec<Triangle> = Vec::new();
@@ -590,18 +547,15 @@ impl Scene {
                        f_c > 0.0 
                     {
                         new_tri_pool.push(tri.clone());
-                        println!("ta dentroo");
                         continue;
                     } else
                     if f_a <= 0.0 && 
                        f_b <= 0.0 && 
                        f_c <= 0.0 
                     {
-                        println!("ta fora");
                         continue;
                     }
 
-                    println!("clipaloei--- no  {}", plane.label);
 
                     if f_a * f_c >= 0.0 {
                         swap(&mut f_b,     &mut f_c);
@@ -663,122 +617,11 @@ impl Scene {
 
                 }
 
-                println!("tri_pool {:#?}\n", tri_pool);
-                println!("new_tri_pool {:#?}\n", new_tri_pool);
                 tri_pool = new_tri_pool;
 
             }
-            println!("tri_pool {} {:#?}\n\n", primitive.label, tri_pool);
 
             return tri_pool;
-
-
-            /*
-            let mut vertex_out = false;
-            let mut plane_out: usize = 0;
-
-            let mut inside:  Vec<Vec3> = vec![];
-            let mut outside: Vec<(usize, Vec3)> = vec![];
-
-            for point in tri.points.iter(){
-
-                for (idx, plane) in view_planes.iter().enumerate() {
-                    //ret |= (*func)(*point) <= 0.;
-
-                    if plane.func(*point) <= 0.0 {
-                        vertex_out = true;
-                        plane_out = idx;
-                    }
-                }
-
-
-                if vertex_out == true {
-                    outside.push((plane_out, *point));
-                } else {
-                    inside.push(*point);
-                }
-
-                vertex_out = false;
-
-            }
-
-            if outside.len() == 0 {
-                return Vec::from([tri.clone()]);
-            } else if outside.len() == 3 {
-                return Vec::new();
-            }
-
-            if outside.len() == 1 {
-                let in_a: Vec3 = inside[0];
-                let in_b: Vec3 = inside[1];
-
-                let (point_idx_a, out_a) = outside[0];
-
-                let plane_a = &view_planes[point_idx_a];
-
-                //  resolvendo para t onde p pertence ao plano
-                //  p = in + t * (out - in)
-
-                let t_a = plane_a.func(in_a) /
-                          plane_a.normal().dot(in_a - out_a);
-                let new_point_a: Vec3 = in_a + (out_a - in_a) * t_a;
-
-
-                let t_b = plane_a.func(in_b) /
-                          plane_a.normal().dot(in_b - out_a);
-                let new_point_b: Vec3 = in_b + (out_a - in_b) * t_b;
-
-                let new_triangle_a = Triangle::new([
-                        in_a, 
-                        new_point_a,
-                        new_point_b],
-                        tri.color,
-                        ""
-                    );
-
-                let new_triangle_b = Triangle::new([
-                        in_a, 
-                        in_b,
-                        new_point_b],
-                        tri.color,
-                        ""
-                    );
-
-                return Vec::from([new_triangle_a, new_triangle_b]);
-            } else if outside.len() == 2 {
-                let in_a: Vec3 = inside[0];
-
-                let (point_idx_a, out_a) = outside[0];
-                let (point_idx_b, out_b) = outside[1];
-
-                assert!(point_idx_a == point_idx_b,"N'ao implementado ainda");
-                let plane_a = &view_planes[point_idx_a];
-                let plane_b = &view_planes[point_idx_b];
-
-                //  resolvendo para t onde p pertence ao plano
-                //  p = in + t * (out - in)
-
-                let t_a = plane_a.func(in_a) /
-                          plane_a.normal().dot(in_a - out_a);
-                let new_point_a: Vec3 = in_a + (out_a - in_a) * t_a;
-
-
-                let t_b = plane_b.func(in_a) /
-                          plane_b.normal().dot(in_a - out_b);
-                let new_point_b: Vec3 = in_a + (out_b - in_a) * t_b;
-
-                let new_triangle = Triangle::new([
-                        in_a, 
-                        new_point_a,
-                        new_point_b],
-                        tri.color,
-                        ""
-                    );
-
-                return Vec::from([new_triangle]);
-            }
-            */
-
 
         };
 
@@ -820,8 +663,6 @@ impl Scene {
 
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
-                println!(" === clippando {} === ", tri.label);
-                println!("camera pos {camera_pos:?}");
                 for clipped_tri in clipping(tri, &mut func_planes).iter() {
 
                     let a_vec4  = M * clipped_tri.points[0].as_vec4();

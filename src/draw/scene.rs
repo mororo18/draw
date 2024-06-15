@@ -28,8 +28,32 @@ impl Triangle {
             label: String::from(label),
         }
     }
+
+    pub
+    fn clip_against_planes(&self, view_planes: &[ViewPlane]) -> Vec<Self> 
+    {
+        let mut tri_pool:  Vec<Self> = Vec::from([self.clone()]);
+
+        for plane in view_planes.iter() {
+            let mut new_tri_pool:  Vec<Self> = Vec::new();
+
+            for tri in tri_pool.iter() {
+                let clipped_triangles = plane.clip(tri.clone());
+                new_tri_pool.extend(clipped_triangles);
+            }
+
+            tri_pool = new_tri_pool;
+        }
+
+        return tri_pool;
+
+    }
+
+
+
 }
 
+pub
 struct Object {
     triangles: Vec<Triangle>,
 }
@@ -53,6 +77,87 @@ impl Object {
         }
 
         sum / (3. * self.triangles.len() as f32)
+    }
+
+    pub
+    fn load_from_file(filename: &str) -> Self {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::path::Path;
+
+        let path = Path::new(filename);
+
+        let file = File::open(&path).expect("Unable to open file");
+        let reader = BufReader::new(file);
+
+        let mut vertices: Vec<Vec3> = Vec::new();
+        let mut normals: Vec<Vec3> = Vec::new();
+
+        let mut faces: Vec<Triangle> = Vec::new();
+
+        for line in reader.lines() {
+            println!("{}", line.as_ref().unwrap().clone());
+            let line = line.expect("Unable to read line");
+            let parts: Vec<&str> = line.split_whitespace().collect();
+
+            if parts.is_empty() {
+                continue;
+            }
+
+            match parts[0] {
+                "v" => {
+                    println!("{:?}", parts);
+                    // Vertex
+                    let x: f32 = parts[1].parse().expect("Invalid vertex x coordinate");
+                    let y: f32 = parts[2].parse().expect("Invalid vertex y coordinate");
+                    let z: f32 = parts[3].parse().expect("Invalid vertex z coordinate");
+                    vertices.push(Vec3::new([x, y, z]));
+                },
+                "vn" => {
+                    // Normal
+                    let x: f32 = parts[1].parse().expect("Invalid normal x coordinate");
+                    let y: f32 = parts[2].parse().expect("Invalid normal y coordinate");
+                    let z: f32 = parts[3].parse().expect("Invalid normal z coordinate");
+                    normals.push(Vec3::new([x, y, z]));
+                },
+                "f" => {
+                    let mut vertex_list: Vec<Vec3> = vec![];
+
+                    for part in &parts[1..] {
+
+                        let indices: Vec<&str> = part.split('/').collect();
+                        let vertex_idx: usize = indices[0].parse().expect("Deu ruimm");
+                        let associeted_vertex: Vec3 = vertices[vertex_idx - 1];
+
+                        vertex_list.push(associeted_vertex);
+
+                        // indice da textura
+                        if indices.len() == 3 && indices[1].is_empty() == false {
+                            let texture_index: usize = indices[1].parse().expect("Invalid texture index");
+                            //face_normals.push(texture_index - 1); // OBJ indices start at 1
+                        }
+
+                        // indice do vetor normal
+                        if indices.len() == 3 && indices[2].is_empty() == false {
+                            let normal_index: usize = indices[2].parse().expect("Invalid normal index");
+                            //face_normals.push(normal_index - 1); // OBJ indices start at 1
+                        }
+
+
+                    }
+
+                    let new_face = Triangle::new(
+                        vertex_list.as_slice().try_into().unwrap(),
+                        Color::White,
+                        ""
+                    );
+                    faces.push(new_face);
+                },
+                _ => {},
+            }
+        }
+
+        Self::new(faces)
     }
 
     pub
@@ -197,7 +302,7 @@ impl Camera {
         }
     }
 
-    pub fn get_pos    (&self) -> Vec3 {self.position}
+    pub fn get_pos       (&self) -> Vec3 {self.position}
     pub fn get_direction (&self) -> Vec3 {self.direction}
 
     pub fn get_window (&self) -> CameraWindow {self.window_view.clone()}
@@ -582,7 +687,7 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([13., 5., 16.0]);
+        let camera_pos = Vec3::new([0., 5., 18.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let ratio = (width as f32) / (height as f32);
@@ -591,13 +696,14 @@ impl Scene {
 
         let mut canva = Canva::new(width, height);
         canva.enable_depth(40.0);
+        let obj = Object::load_from_file("donut.obj");
 
         Self {
             canva:   canva,
             width:   width,
             height:  height,
             camera:  camera,
-            objects: vec![Object::inv_piramid(Vec3::new([0., 0., 5.2]))],
+            objects: vec![obj],
         }
     }
 
@@ -675,38 +781,16 @@ impl Scene {
 
         self.canva.clear();
 
-        // TODO: atualmente essa funcao  gen_transform_matrix()
-        // precisa ser chamada antes de Camera::get_matrix_basis()
-        // tem que resolver isso ai patrao
         let matrix_transf = self.gen_transformation_matrix();
 
         let camera_pos = self.camera.get_pos();
 
-        let mut func_planes = self.camera.gen_view_planes();
-
-        fn clipping(primitive: &Triangle, view_planes: &[ViewPlane]) -> Vec<Triangle> 
-        {
-            let mut tri_pool:  Vec<Triangle> = Vec::from([primitive.clone()]);
-
-            for plane in view_planes.iter() {
-                let mut new_tri_pool:  Vec<Triangle> = Vec::new();
-
-                for tri in tri_pool.iter() {
-                    let clipped_triangles = plane.clip(tri.clone());
-                    new_tri_pool.extend(clipped_triangles);
-                }
-
-                tri_pool = new_tri_pool;
-
-            }
-
-            return tri_pool;
-
-        }
+        let func_planes = self.camera.gen_view_planes();
 
         for obj in self.objects.iter() {
             for tri in obj.triangles.iter() {
-                for clipped_tri in clipping(tri, &mut func_planes).iter() {
+                let clipped_triangles = tri.clip_against_planes(&func_planes);
+                for clipped_tri in clipped_triangles.iter() {
 
                     let a_vec4  = matrix_transf * clipped_tri.points[0].as_vec4();
                     let b_vec4  = matrix_transf * clipped_tri.points[1].as_vec4();

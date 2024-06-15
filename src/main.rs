@@ -9,6 +9,7 @@ use window::{
 
 use draw::scene::{
     Scene,
+    Object,
 };
 
 use std::time::Instant;
@@ -80,7 +81,7 @@ fn main() {
         let elapsed = now.elapsed().as_millis() as f32;
         if elapsed > dt_ms {
             now = Instant::now();
-            //println!("{}", 1000.0 / elapsed);
+            println!("{}", 1000.0 / elapsed);
             scene.camera_right();
 
             scene.render();

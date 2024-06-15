@@ -7,10 +7,6 @@ use window::{
     Key,
 };
 
-use draw::canva::{
-    Canva,
-};
-
 use draw::scene::{
     Scene,
 };

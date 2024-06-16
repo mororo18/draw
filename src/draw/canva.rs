@@ -248,9 +248,9 @@ impl Canva {
         let f_beta  = f_ca(b_center.x, b_center.y);
         let f_gama  = f_ab(c_center.x, c_center.y);
 
-        for y in y_min..y_max {
+        for y in y_min..=y_max {
             let y_f32 = y as f32;
-            for x in x_min..x_max {
+            for x in x_min..=x_max {
                 let x_f32 = x as f32;
 
                 let alpha: f32 = f_bc(x_f32,y_f32) / f_alpha;
@@ -346,9 +346,9 @@ impl Canva {
         let f_beta  = f_ca(b_center.x, b_center.y);
         let f_gama  = f_ab(c_center.x, c_center.y);
 
-        for y in y_min..y_max {
+        for y in y_min..=y_max {
             let y_f32 = y as f32;
-            for x in x_min..x_max {
+            for x in x_min..=x_max {
                 let x_f32 = x as f32;
 
                 let alpha: f32 = f_bc(x_f32,y_f32) / f_alpha;

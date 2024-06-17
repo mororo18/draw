@@ -63,7 +63,7 @@ fn main() {
                             scene.camera_right();
                         },
 
-                        _ => {},
+                        _ => {println!("Unknow")},
                     };
                 },
 
@@ -82,7 +82,7 @@ fn main() {
         if elapsed > dt_ms {
             now = Instant::now();
             println!("{}", 1000.0 / elapsed);
-            scene.camera_right();
+            //scene.camera_right();
 
             scene.render();
 

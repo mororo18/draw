@@ -14,6 +14,8 @@ enum Color {
     Red,
     Green,
     Blue,
+
+    Grey
 }
 
 impl Color {
@@ -25,6 +27,7 @@ impl Color {
             Color::Red   => Pixel::red(),
             Color::Green => Pixel::green(),
             Color::Blue  => Pixel::blue(),
+            Color::Grey  => Pixel::new(128, 128, 128),
         }
     }
 
@@ -286,6 +289,9 @@ impl Canva {
                                            a_color: Color,
                                            b_color: Color,
                                            c_color: Color,
+                                           a_color_coef: f32,
+                                           b_color_coef: f32,
+                                           c_color_coef: f32,
                                            a_depth: f32,
                                            b_depth: f32,
                                            c_depth: f32)
@@ -295,9 +301,9 @@ impl Canva {
         let b_center = self.pos_map_center(b);
         let c_center = self.pos_map_center(c);
 
-        let a_pixel_color = a_color.as_pixel();
-        let b_pixel_color = b_color.as_pixel();
-        let c_pixel_color = c_color.as_pixel();
+        let a_pixel_color = a_color.as_pixel() * a_color_coef;
+        let b_pixel_color = b_color.as_pixel() * b_color_coef;
+        let c_pixel_color = c_color.as_pixel() * c_color_coef;
 
         let f_ab = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 

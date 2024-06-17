@@ -15,6 +15,7 @@ use crate::draw::linalg::{
 #[derive(Clone, Debug)]
 struct Triangle {
     points: [Vec3; 3],
+    normal: Vec3,
     color: Color,
     label: String,
 }
@@ -25,8 +26,23 @@ impl Triangle {
         Self {
             points: points,
             color: color,
+            normal: Vec3::zeros(),
             label: String::from(label),
         }
+    }
+    
+    pub
+    fn calc_normal(tri: Self) -> Vec3 {
+        let a = tri.points[0];
+        let b = tri.points[1];
+        let c = tri.points[2];
+
+        let p = b - a;
+        let q = c - b;
+
+        let normal = p.cross(q);
+
+        normal
     }
 
     pub
@@ -53,19 +69,80 @@ impl Triangle {
 
 }
 
+type IndexedTriangle = [usize; 3];
+
+pub
+struct IndexedMesh {
+    triangles: Vec<IndexedTriangle>,
+    vertices: Vec<Vec3>,
+    vertices_normals: Vec<Vec3>,
+}
+
+impl IndexedMesh {
+    pub
+    fn new (tri_vec: Vec<IndexedTriangle>, vert_vec: Vec<Vec3>) -> Self {
+        let normals = vec![Vec3::zeros(); vert_vec.len()];
+
+        let mut ret = Self {
+            triangles: tri_vec.clone(),
+            vertices: vert_vec,
+            vertices_normals: normals,
+        };
+
+        for indexed_tri in tri_vec.iter() {
+            let tri = ret.triangle_from_indexed(*indexed_tri);
+            let normal = Triangle::calc_normal(tri);
+
+            for vert_idx in indexed_tri {
+                //let v_norm = vert_normals[vert_idx];
+                ret.vertices_normals[*vert_idx] = ret.vertices_normals[*vert_idx] + normal;
+            }
+        }
+
+        for normal in ret.vertices_normals.iter_mut() {
+            *normal = normal.normalized();
+        }
+
+        return ret;
+    }
+
+    pub
+    fn triangle_from_indexed (&self, indexed_tri: IndexedTriangle) -> Triangle {
+        let a_idx = indexed_tri[0];
+        let b_idx = indexed_tri[1];
+        let c_idx = indexed_tri[2];
+
+        let a_vert = self.vertices[a_idx];
+        let b_vert = self.vertices[b_idx];
+        let c_vert = self.vertices[c_idx];
+
+        Triangle::new(
+            [
+                a_vert,
+                b_vert,
+                c_vert
+            ],
+            Color::White,
+            ""
+        )
+    }
+}
+
 pub
 struct Object {
-    triangles: Vec<Triangle>,
+    mesh: IndexedMesh,
+    //triangles: Vec<Triangle>,
 }
 
 impl Object {
     pub
-    fn new (triangles: Vec<Triangle>) -> Self {
+    fn new (mesh: IndexedMesh) -> Self {
         Self {
-            triangles: triangles,
+            mesh: mesh,
         }
     }
 
+    /*
     pub
     fn get_center (&self) -> Vec3 {
         let mut sum = Vec3::zeros();
@@ -78,6 +155,7 @@ impl Object {
 
         sum / (3. * self.triangles.len() as f32)
     }
+    */
 
     pub
     fn load_from_file(filename: &str) -> Self {
@@ -93,7 +171,8 @@ impl Object {
         let mut vertices: Vec<Vec3> = Vec::new();
         let mut normals: Vec<Vec3> = Vec::new();
 
-        let mut faces: Vec<Triangle> = Vec::new();
+        let mut faces: Vec<IndexedTriangle> = Vec::new();
+        //let mut faces: Vec<Triangle> = Vec::new();
 
         for line in reader.lines() {
             println!("{}", line.as_ref().unwrap().clone());
@@ -121,15 +200,17 @@ impl Object {
                     normals.push(Vec3::new([x, y, z]));
                 },
                 "f" => {
-                    let mut vertex_list: Vec<Vec3> = vec![];
+                    let mut vertex_idx_list: Vec<usize> = vec![];
+                    //let mut vertex_list: Vec<Vec3> = vec![];
 
                     for part in &parts[1..] {
 
                         let indices: Vec<&str> = part.split('/').collect();
                         let vertex_idx: usize = indices[0].parse().expect("Deu ruimm");
-                        let associeted_vertex: Vec3 = vertices[vertex_idx - 1];
+                        //let associeted_vertex: Vec3 = vertices[vertex_idx - 1];
 
-                        vertex_list.push(associeted_vertex);
+                        vertex_idx_list.push(vertex_idx - 1);
+                        //vertex_list.push(associeted_vertex);
 
                         // indice da textura
                         if indices.len() == 3 && indices[1].is_empty() == false {
@@ -146,20 +227,24 @@ impl Object {
 
                     }
 
+                    /*
                     let new_face = Triangle::new(
                         vertex_list.as_slice().try_into().unwrap(),
                         Color::White,
                         ""
                     );
-                    faces.push(new_face);
+                    */
+                    faces.push(vertex_idx_list.try_into().unwrap());
                 },
                 _ => {},
             }
         }
 
-        Self::new(faces)
+        let mesh = IndexedMesh::new(faces, vertices);
+        Self::new(mesh)
     }
 
+        /*
     pub
     fn inv_piramid (bot: Vec3) -> Self {
         let height: f32 = 3.0;
@@ -221,6 +306,7 @@ impl Object {
             //triangles: vec![base, f_c, f_b, f_a],
         }
     }
+        */
 
 }
 
@@ -680,6 +766,8 @@ struct Scene {
     camera: Camera,
     // objetos
     objects: Vec<Object>,
+
+    light_source: Vec3,
 }
 
 impl Scene {
@@ -687,8 +775,10 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0., 5., 18.0]);
+        let camera_pos = Vec3::new([0., 5., 23.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
+
+        let light_source = Vec3::new([0., 10., 5.]);
 
         let ratio = (width as f32) / (height as f32);
         let camera = Camera::new(camera_pos, camera_dir, ratio);
@@ -696,6 +786,7 @@ impl Scene {
 
         let mut canva = Canva::new(width, height);
         canva.enable_depth(40.0);
+        //let obj = Object::inv_piramid(Vec3::zeros());
         let obj = Object::load_from_file("donut.obj");
 
         Self {
@@ -704,33 +795,49 @@ impl Scene {
             height:  height,
             camera:  camera,
             objects: vec![obj],
+
+            light_source: light_source,
         }
     }
 
     pub
     fn camera_up(&mut self) {
         let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([0., 0.05, 0.]));
+        self.camera.set_pos(cam_pos + Vec3::new([0., 0.5, 0.]));
     }
 
     pub
     fn camera_down(&mut self) {
         let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([0., -0.05, 0.]));
+        self.camera.set_pos(cam_pos + Vec3::new([0., -0.5, 0.]));
     }
 
     pub
     fn camera_left(&mut self) {
-        //self.camera.rotate_origin(-1.);
-        let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([0.05, 0., 0.]));
+        let theta: f32 = -4.0;
+        self.camera.rotate_origin(theta);
+
+        //let cam_pos = self.camera.get_pos();
+        //self.camera.set_pos(cam_pos + Vec3::new([0.05, 0., 0.]));
+
+        let new_light = Matrix4::rotate_y(-theta.to_radians()) * 
+                        self.light_source.as_vec4();
+
+        self.light_source = new_light.as_vec3();
     }
 
     pub
     fn camera_right(&mut self) {
-        self.camera.rotate_origin(1.);
+        let theta: f32 = 4.0;
+        self.camera.rotate_origin(theta);
+
         //let cam_pos = self.camera.get_pos();
         //self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
+
+        let new_light = Matrix4::rotate_y(-theta.to_radians()) * 
+                        self.light_source.as_vec4();
+
+        self.light_source = new_light.as_vec3();
     }
 
     fn gen_transformation_matrix(&mut self) -> Matrix4 {
@@ -787,8 +894,40 @@ impl Scene {
 
         let func_planes = self.camera.gen_view_planes();
 
+        fn cmp_max (a: f32, b: f32) -> f32 {
+            if a > b {return a;}
+            else     {return b;}
+        }
+
         for obj in self.objects.iter() {
-            for tri in obj.triangles.iter() {
+            for indexed_tri in obj.mesh.triangles.iter() {
+                let tri = obj.mesh.triangle_from_indexed(*indexed_tri);
+
+
+                // shadding test
+
+                let a_idx = indexed_tri[0];
+                let b_idx = indexed_tri[1];
+                let c_idx = indexed_tri[2];
+
+                let a_vertex = obj.mesh.vertices[a_idx];
+                let b_vertex = obj.mesh.vertices[b_idx];
+                let c_vertex = obj.mesh.vertices[c_idx];
+
+                let a_normal = obj.mesh.vertices_normals[a_idx];
+                let b_normal = obj.mesh.vertices_normals[b_idx];
+                let c_normal = obj.mesh.vertices_normals[c_idx];
+
+                let a_light = (a_vertex - self.light_source).normalized();
+                let b_light = (b_vertex - self.light_source).normalized();
+                let c_light = (c_vertex - self.light_source).normalized();
+
+                let light_coef = 0.7;
+
+                let a_color_coef = light_coef * (1.0 - cmp_max(0.0 , a_light.dot(a_normal)));
+                let b_color_coef = light_coef * (1.0 - cmp_max(0.0 , b_light.dot(b_normal)));
+                let c_color_coef = light_coef * (1.0 - cmp_max(0.0 , c_light.dot(c_normal)));
+
                 let clipped_triangles = tri.clip_against_planes(&func_planes);
                 for clipped_tri in clipped_triangles.iter() {
 
@@ -816,14 +955,28 @@ impl Scene {
                     let b_depth: f32 = (camera_pos - clipped_tri.points[1]).norm() as _;
                     let c_depth: f32 = (camera_pos - clipped_tri.points[2]).norm() as _;
 
+
+                    /*
+                    println!("triangle ");
+                    println!("{:?}", a / a_w); 
+                    println!("{:?}", b / b_w); 
+                    println!("{:?}", c / c_w); 
+                    */
+
                     let clipped_tri_color = tri.color;
                     self.canva.draw_triangle_with_depth(
                         a / a_w, 
                         b / b_w, 
                         c / c_w, 
-                        clipped_tri_color,
-                        clipped_tri_color,
-                        clipped_tri_color,
+
+                        Color::White,
+                        Color::White,
+                        Color::White,
+
+                        a_color_coef,
+                        b_color_coef,
+                        c_color_coef,
+
                         a_depth, 
                         b_depth, 
                         c_depth

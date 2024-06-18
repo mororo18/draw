@@ -1,6 +1,7 @@
 use crate::draw::canva::{
     Canva,
     Color,
+    VertexAttributes,
 };
 
 use crate::draw::linalg::{
@@ -65,6 +66,15 @@ impl Triangle {
 
     }
 
+    pub
+    fn get_center(&self) -> Vec3 {
+        let mut sum = Vec3::zeros();
+        for vertex in self.points.iter() {
+            sum = sum + *vertex;
+        }
+
+        sum / 3.0
+    }
 
 
 }
@@ -820,10 +830,10 @@ impl Scene {
         //let cam_pos = self.camera.get_pos();
         //self.camera.set_pos(cam_pos + Vec3::new([0.05, 0., 0.]));
 
-        let new_light = Matrix4::rotate_y(-theta.to_radians()) * 
+        let new_light = Matrix4::rotate_y(theta.to_radians()) * 
                         self.light_source.as_vec4();
 
-        self.light_source = new_light.as_vec3();
+        //self.light_source = new_light.as_vec3();
     }
 
     pub
@@ -834,10 +844,10 @@ impl Scene {
         //let cam_pos = self.camera.get_pos();
         //self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
 
-        let new_light = Matrix4::rotate_y(-theta.to_radians()) * 
+        let new_light = Matrix4::rotate_y(theta.to_radians()) * 
                         self.light_source.as_vec4();
 
-        self.light_source = new_light.as_vec3();
+        //self.light_source = new_light.as_vec3();
     }
 
     fn gen_transformation_matrix(&mut self) -> Matrix4 {
@@ -903,30 +913,68 @@ impl Scene {
             for indexed_tri in obj.mesh.triangles.iter() {
                 let tri = obj.mesh.triangle_from_indexed(*indexed_tri);
 
+                let tri_normal = Triangle::calc_normal(tri.clone());
 
-                // shadding test
+                let mut a_color_coef;
+                let mut b_color_coef;
+                let mut c_color_coef;
 
                 let a_idx = indexed_tri[0];
                 let b_idx = indexed_tri[1];
                 let c_idx = indexed_tri[2];
 
+                let a_normal = obj.mesh.vertices_normals[a_idx].normalized();
+                let b_normal = obj.mesh.vertices_normals[b_idx].normalized();
+                let c_normal = obj.mesh.vertices_normals[c_idx].normalized();
+
                 let a_vertex = obj.mesh.vertices[a_idx];
                 let b_vertex = obj.mesh.vertices[b_idx];
                 let c_vertex = obj.mesh.vertices[c_idx];
-
-                let a_normal = obj.mesh.vertices_normals[a_idx];
-                let b_normal = obj.mesh.vertices_normals[b_idx];
-                let c_normal = obj.mesh.vertices_normals[c_idx];
 
                 let a_light = (a_vertex - self.light_source).normalized();
                 let b_light = (b_vertex - self.light_source).normalized();
                 let c_light = (c_vertex - self.light_source).normalized();
 
-                let light_coef = 0.7;
+                let a_eye = (a_vertex - camera_pos).normalized();
+                let b_eye = (b_vertex - camera_pos).normalized();
+                let c_eye = (c_vertex - camera_pos).normalized();
 
-                let a_color_coef = light_coef * (1.0 - cmp_max(0.0 , a_light.dot(a_normal)));
-                let b_color_coef = light_coef * (1.0 - cmp_max(0.0 , b_light.dot(b_normal)));
-                let c_color_coef = light_coef * (1.0 - cmp_max(0.0 , c_light.dot(c_normal)));
+                if false {
+                    // gouraud shadding test
+
+                    let a_idx = indexed_tri[0];
+                    let b_idx = indexed_tri[1];
+                    let c_idx = indexed_tri[2];
+
+                    let a_vertex = obj.mesh.vertices[a_idx];
+                    let b_vertex = obj.mesh.vertices[b_idx];
+                    let c_vertex = obj.mesh.vertices[c_idx];
+
+                    //let a_normal = obj.mesh.vertices_normals[a_idx].normalized();
+                    //let b_normal = obj.mesh.vertices_normals[b_idx].normalized();
+                    //let c_normal = obj.mesh.vertices_normals[c_idx].normalized();
+
+                    let a_normal = tri_normal;
+                    let b_normal = tri_normal;
+                    let c_normal = tri_normal;
+
+                    let a_light = (tri.get_center() - self.light_source).normalized();
+                    let b_light = (tri.get_center() - self.light_source).normalized();
+                    let c_light = (tri.get_center() - self.light_source).normalized();
+
+                    let light_intensity = 0.5;
+                    let reflectance = 0.3;
+                    let ambient = 0.5;
+
+                    a_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  a_light.dot(a_normal))) );
+                    b_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  b_light.dot(b_normal))) );
+                    c_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  c_light.dot(c_normal))) );
+                } else {
+
+                    a_color_coef = 1.0;
+                    b_color_coef = 1.0;
+                    c_color_coef = 1.0;
+                }
 
                 let clipped_triangles = tri.clip_against_planes(&func_planes);
                 for clipped_tri in clipped_triangles.iter() {
@@ -956,6 +1004,28 @@ impl Scene {
                     let c_depth: f32 = (camera_pos - clipped_tri.points[2]).norm() as _;
 
 
+                    let a_attr = VertexAttributes::new(
+                        Color::Green,
+                        a_depth,
+                        a_normal,
+                        a_light,
+                        a_eye,
+                    );
+                    let b_attr = VertexAttributes::new(
+                        Color::Green,
+                        b_depth,
+                        b_normal,
+                        b_light,
+                        b_eye,
+                    );
+                    let c_attr = VertexAttributes::new(
+                        Color::Green,
+                        c_depth,
+                        c_normal,
+                        c_light,
+                        c_eye,
+                    );
+
                     /*
                     println!("triangle ");
                     println!("{:?}", a / a_w); 
@@ -964,22 +1034,14 @@ impl Scene {
                     */
 
                     let clipped_tri_color = tri.color;
-                    self.canva.draw_triangle_with_depth(
+                    self.canva.draw_triangle_with_attributes(
                         a / a_w, 
                         b / b_w, 
                         c / c_w, 
 
-                        Color::White,
-                        Color::White,
-                        Color::White,
-
-                        a_color_coef,
-                        b_color_coef,
-                        c_color_coef,
-
-                        a_depth, 
-                        b_depth, 
-                        c_depth
+                        a_attr,
+                        b_attr,
+                        c_attr,
                         );
 
                 }

@@ -3,7 +3,10 @@ use std::ops::{Mul, Add};
 use std::cmp;
 use std::cmp::Ordering;
 
-use crate::draw::linalg::{Vec2};
+use crate::draw::linalg::{
+    Vec2,
+    Vec3,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub
@@ -114,6 +117,34 @@ struct PixelPos {
 }
 
 pub
+struct VertexAttributes {
+    depth:  f32,
+    color:  Color,
+    normal: Vec3,
+    light:  Vec3,
+    eye:    Vec3,
+}
+
+impl VertexAttributes {
+    pub
+    fn new (color:  Color,
+            depth:  f32,
+            normal: Vec3,
+            light:  Vec3,
+            eye:    Vec3) -> Self 
+    {
+        Self {
+            color:  color,
+            normal: normal,
+            light:  light,
+            eye:    eye,
+            depth:  depth,
+        }
+    }
+
+}
+
+pub
 struct Canva {
     frame: Vec<Pixel>,
     width: usize,
@@ -194,11 +225,11 @@ impl Canva {
     }
 
     pub
-    fn draw_triangle(&mut self, a: Vec2, b: Vec2, c: Vec2) {
+    fn draw_triangle(&mut self, a_vertex: Vec2, b_vertex: Vec2, c_vertex: Vec2) {
 
-        let a_center = self.pos_map_center(a);
-        let b_center = self.pos_map_center(b);
-        let c_center = self.pos_map_center(c);
+        let a_center = self.pos_map_center(a_vertex);
+        let b_center = self.pos_map_center(b_vertex);
+        let c_center = self.pos_map_center(c_vertex);
 
         let color_a = Pixel::red();
         let color_b = Pixel::green();
@@ -283,27 +314,26 @@ impl Canva {
     }
 
     pub
-    fn draw_triangle_with_depth(&mut self, a: Vec2, 
-                                           b: Vec2, 
-                                           c: Vec2,
-                                           a_color: Color,
-                                           b_color: Color,
-                                           c_color: Color,
-                                           a_color_coef: f32,
-                                           b_color_coef: f32,
-                                           c_color_coef: f32,
-                                           a_depth: f32,
-                                           b_depth: f32,
-                                           c_depth: f32)
+    fn draw_triangle_with_attributes(&mut self, a_vertex: Vec2, 
+                                           b_vertex: Vec2, 
+                                           c_vertex: Vec2,
+
+                                           a_attr: VertexAttributes,
+                                           b_attr: VertexAttributes,
+                                           c_attr: VertexAttributes)
     {
 
-        let a_center = self.pos_map_center(a);
-        let b_center = self.pos_map_center(b);
-        let c_center = self.pos_map_center(c);
+        let a_center = self.pos_map_center(a_vertex);
+        let b_center = self.pos_map_center(b_vertex);
+        let c_center = self.pos_map_center(c_vertex);
 
-        let a_pixel_color = a_color.as_pixel() * a_color_coef;
-        let b_pixel_color = b_color.as_pixel() * b_color_coef;
-        let c_pixel_color = c_color.as_pixel() * c_color_coef;
+        let a_pixel_color = a_attr.color.as_pixel();
+        let b_pixel_color = b_attr.color.as_pixel();
+        let c_pixel_color = c_attr.color.as_pixel();
+
+        let a_depth = a_attr.depth;
+        let b_depth = b_attr.depth;
+        let c_depth = c_attr.depth;
 
         let f_ab = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
@@ -370,19 +400,60 @@ impl Canva {
                        (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
 
                     {
-                        let pixel_color = (alpha * a_pixel_color) +
-                                          (beta  * b_pixel_color) +
-                                          (gama  * c_pixel_color);
+                        fn h_compute(light: Vec3, eye: Vec3) -> Vec3 {
+                            let sum = light + eye;
+                            sum.normalized()
+                        }
+
+                        fn cmp_max (a: f32, b: f32) -> f32 {
+                            if a > b {return a;}
+                            else     {return b;}
+                        }
+
 
                         let pixel_depth = (alpha * a_depth) +
                                           (beta  * b_depth) +
                                           (gama  * c_depth);
 
-                        self.draw_pixel_coord_with_depth(x, y, pixel_color, pixel_depth as _);
+                        let pixel_color = (alpha * a_pixel_color) +
+                                          (beta  * b_pixel_color) +
+                                          (gama  * c_pixel_color);
+
+                        // phong shadding ??
+
+                        let pixel_normal = (a_attr.normal * alpha) +
+                                           (b_attr.normal * beta) +
+                                           (c_attr.normal * gama);
+
+                        let pixel_light = (a_attr.light * alpha) +
+                                          (b_attr.light * beta) +
+                                          (c_attr.light * gama);
+
+                        let pixel_eye = (a_attr.eye * alpha) +
+                                        (b_attr.eye * beta) +
+                                        (c_attr.eye * gama);
+
+                        let pixel_halfway = h_compute(pixel_light, pixel_eye);
+
+                        let power = 8;
+
+
+                        let c_l = 0.8;
+                        let c_r = 0.3;
+                        let c_a = 0.1;
+                        let c_p = 1.0 - c_r;
+
+                        assert!(c_l + c_a <= 1.0);
+
+                        let color_coef = c_r * (c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )
+                                        + c_p * c_l * (pixel_halfway.dot(pixel_normal).powi(power));
+
+                        self.draw_pixel_coord_with_depth(x, y, pixel_color * color_coef, pixel_depth);
                     }
                 }
             }
         }
+
 
 
     }

@@ -6,7 +6,46 @@ use std::cmp::Ordering;
 use crate::draw::linalg::{
     Vec2,
     Vec3,
+    Vec4,
 };
+
+use core::arch::x86_64::{
+    __rdtscp,
+};
+
+struct MicroBench {
+    start: u64,
+}
+
+impl MicroBench {
+    fn now() -> Self {
+
+        let stamp = Self::read_tsc();
+
+         Self {
+             start: stamp,
+         }
+    }
+
+    fn elapsed(&self) -> u64 {
+        let now = Self::read_tsc();
+        return now - self.start;
+    }
+
+
+    fn read_tsc() -> u64 {
+
+         let mut clock: u64 = 0;
+
+         unsafe {
+             let mut tmp: u32 = 0;
+             let ptr = std::ptr::from_ref(&tmp);
+             clock = __rdtscp(ptr as *mut u32);
+         };
+
+         return clock;
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub
@@ -46,13 +85,23 @@ struct Pixel {
     padd: u8,
 }
 
+// TODO: criar func "from_hex(cod: str)" e constantes com cores
 impl Pixel {
     pub
     fn new (r: u8, g: u8, b: u8) -> Self {
         Pixel {r:r, g:g, b:b, padd: 0}
     }
 
-    // TODO: criar func "from_hex(cod: str)" e constantes com cores
+    pub
+    fn as_vec4(&self) -> Vec4 {
+        Vec4::new([
+            self.b as f32,
+            self.g as f32,
+            self.r as f32,
+            self.padd as f32
+        ])
+    }
+
 
     pub fn set_red   (&mut self, r: u8) {self.r = r;}
     pub fn set_green (&mut self, g: u8) {self.g = g;}
@@ -70,15 +119,14 @@ impl Add for Pixel {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        let r_sum = (self.r + rhs.r) as u32;
-        let g_sum = (self.g + rhs.g) as u32;
-        let b_sum = (self.b + rhs.b) as u32;
+        let r_sum = self.r + rhs.r;
+        let g_sum = self.g + rhs.g;
+        let b_sum = self.b + rhs.b;
 
         Pixel {
-            // TODO: verificar razao do overflow aq (__sum > 255)
-            r: cmp::min(255, r_sum) as u8,
-            g: cmp::min(255, g_sum) as u8,
-            b: cmp::min(255, b_sum) as u8,
+            r: r_sum,
+            g: g_sum,
+            b: b_sum,
 
             padd: 0,
         }
@@ -89,15 +137,14 @@ impl Mul<f32> for Pixel {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self {
-        let r = (self.r as f32) * rhs;
-        let g = (self.g as f32) * rhs;
-        let b = (self.b as f32) * rhs;
+        let r = ((self.r as f32) * rhs) as u8;
+        let g = ((self.g as f32) * rhs) as u8;
+        let b = ((self.b as f32) * rhs) as u8;
 
         Pixel {
-            r: if r > 255.0 {255_u8} else {r as u8},
-            g: if g > 255.0 {255_u8} else {g as u8},
-            b: if b > 255.0 {255_u8} else {b as u8},
-
+            r: r,
+            g: g,
+            b: b,
             padd: 0,
         }
     }
@@ -178,14 +225,14 @@ impl Canva {
 
     pub
     fn get_pixel_depth(&self, x: usize, y: usize) -> f32{
-        assert!(self.in_bounds(x, y));
-        self.depth_frame[self.width * y + x]
+        debug_assert!(self.in_bounds(x, y));
+        unsafe{*self.depth_frame.get_unchecked(self.width * y + x)}
     }
 
     pub
     fn set_pixel_depth(&mut self, x: usize, y: usize, depth: f32) {
-        assert!(self.in_bounds(x, y));
-        self.depth_frame[self.width * y + x] = depth;
+        debug_assert!(self.in_bounds(x, y));
+        unsafe{*self.depth_frame.get_unchecked_mut(self.width * y + x) = depth;}
     }
 
 
@@ -282,6 +329,10 @@ impl Canva {
         let f_beta  = f_ca(b_center.x, b_center.y);
         let f_gama  = f_ab(c_center.x, c_center.y);
 
+        let f_alpha_outside = f_bc(-1.0, -1.0);
+        let f_beta_outside  = f_ca(-1.0, -1.0);
+        let f_gama_outside  = f_ab(-1.0, -1.0);
+
         for y in y_min..=y_max {
             let y_f32 = y as f32;
             for x in x_min..=x_max {
@@ -295,9 +346,9 @@ impl Canva {
                     beta >= 0.0 &&
                     gama >= 0.0 
                 {
-                    if (alpha > 0.0 || f_alpha * f_bc(-1.0, -1.0) > 0.0) &&
-                       (beta > 0.0  || f_beta  * f_ca(-1.0, -1.0) > 0.0) &&
-                       (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
+                    if (alpha > 0.0 || f_alpha * f_alpha_outside > 0.0) &&
+                       (beta > 0.0  || f_beta  * f_beta_outside > 0.0) &&
+                       (gama > 0.0  || f_gama  * f_gama_outside > 0.0)
 
                     {
                         let color_pixel = (alpha * color_a) +
@@ -382,6 +433,14 @@ impl Canva {
         let f_beta  = f_ca(b_center.x, b_center.y);
         let f_gama  = f_ab(c_center.x, c_center.y);
 
+        let f_alpha_outside = f_bc(-1.0, -1.0);
+        let f_beta_outside  = f_ca(-1.0, -1.0);
+        let f_gama_outside  = f_ab(-1.0, -1.0);
+
+
+        let mut clock_sum: u64 = 0;
+        let mut counter: u64 = 0;
+
         for y in y_min..=y_max {
             let y_f32 = y as f32;
             for x in x_min..=x_max {
@@ -395,11 +454,16 @@ impl Canva {
                     beta >= 0.0 &&
                     gama >= 0.0 
                 {
-                    if (alpha > 0.0 || f_alpha * f_bc(-1.0, -1.0) > 0.0) &&
-                       (beta > 0.0  || f_beta  * f_ca(-1.0, -1.0) > 0.0) &&
-                       (gama > 0.0  || f_gama  * f_ab(-1.0, -1.0) > 0.0)
+                    if (alpha > 0.0 || f_alpha * f_alpha_outside > 0.0) &&
+                       (beta > 0.0  || f_beta  * f_beta_outside > 0.0) &&
+                       (gama > 0.0  || f_gama  * f_gama_outside > 0.0)
 
                     {
+
+
+
+
+
                         fn h_compute(light: Vec3, eye: Vec3) -> Vec3 {
                             let sum = light + eye;
                             sum.normalized()
@@ -443,12 +507,15 @@ impl Canva {
                         let c_a = 0.1;
                         let c_p = 1.0 - c_r;
 
-                        assert!(c_l + c_a <= 1.0);
+                        debug_assert!(c_l + c_a <= 1.0);
 
                         let color_coef = c_r * (c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )
                                         + c_p * c_l * (pixel_halfway.dot(pixel_normal).powi(power));
 
+
+
                         self.draw_pixel_coord_with_depth(x, y, pixel_color * color_coef, pixel_depth);
+
                     }
                 }
             }
@@ -602,8 +669,8 @@ impl Canva {
     // m \in (-1, 0]
     fn midpoint_draw_two(&mut self, a_center: Vec2, b_center: Vec2) {
 
-        //assert!(a_center.x < b_center.x, "uso incorreto");
-        //assert!(a_center.y > b_center.y, "uso incorreto");
+        //debug_assert!(a_center.x < b_center.x, "uso incorreto");
+        //debug_assert!(a_center.y > b_center.y, "uso incorreto");
 
         let f = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
@@ -633,8 +700,8 @@ impl Canva {
 
     fn midpoint_draw_one(&mut self, a_center: Vec2, b_center: Vec2) {
 
-        //assert!(a_center.x < b_center.x, "uso incorreto");
-        //assert!(a_center.y < b_center.y, "uso incorreto");
+        //debug_assert!(a_center.x < b_center.x, "uso incorreto");
+        //debug_assert!(a_center.y < b_center.y, "uso incorreto");
 
         let f = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
@@ -683,7 +750,7 @@ impl Canva {
         let mut y_center = (pos.y + 0.5).floor();
 
         // Debug
-        assert!(
+        debug_assert!(
             x_center >= 0.0 && x_center <= w_f32 &&
             y_center >= 0.0 && y_center <= h_f32, 
             "posicao invalida ({x_center}, {y_center}) "
@@ -706,7 +773,7 @@ impl Canva {
 
     pub
     fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, depth: f32) {
-        assert!(self.depth_frame.len() > 0, "Depth not initialized");
+        debug_assert!(self.depth_frame.len() > 0, "Depth not initialized");
 
         if depth < self.get_pixel_depth(x, y) {
             self.draw_pixel_coord(x, y, color);
@@ -716,7 +783,7 @@ impl Canva {
 
     pub
     fn draw_pixel_coord (&mut self, x: usize, y: usize, color: Pixel) {
-        assert!(self.in_bounds(x, y),
+        debug_assert!(self.in_bounds(x, y),
                     "Drawing out of bounds. \
                     Point ({x}, {y}) doesnt fit ({0}, {1})",
                     self.width, self.height
@@ -725,7 +792,8 @@ impl Canva {
         //println!("Drawing {x}, {y}");
 
         let y_inv = self.height - y - 1;
-        self.frame[self.width * y_inv + x] = color;
+        unsafe{*self.frame.get_unchecked_mut(self.width * y_inv + x) = color;}
+        //self.frame[self.width * y_inv + x] = color;
     }
 
     pub

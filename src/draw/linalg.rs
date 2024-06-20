@@ -108,6 +108,43 @@ impl Vec4 {
 
 }
 
+impl Add for Vec4 {
+    type Output = Self;
+
+    fn add (self, rhs: Self) -> Self {
+        Self {
+            a: [
+            self.a[0] + rhs.a[0],
+            self.a[1] + rhs.a[1],
+            self.a[2] + rhs.a[2],
+            self.a[3] + rhs.a[3]
+            ],
+        }
+    }
+}
+
+impl Mul<f32> for Vec4 {
+    type Output = Self;
+
+    fn mul (self, rhs: f32) -> Self {
+        Self {
+            a: [
+            self.a[0] * rhs,
+            self.a[1] * rhs,
+            self.a[2] * rhs,
+            self.a[2] * rhs
+            ],
+        }
+    }
+}
+
+impl Mul<Vec4> for f32 {
+    type Output = Vec4;
+
+    fn mul (self, rhs: Vec4) -> Vec4 {
+        rhs * self
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub
@@ -190,20 +227,6 @@ impl Vec3 {
     pub fn y (&self) -> f32 {self.a[1]}
     pub fn z (&self) -> f32 {self.a[2]}
 
-}
-impl Add for Vec4 {
-    type Output = Self;
-
-    fn add (self, rhs: Self) -> Self {
-        Self {
-            a: [
-            self.a[0] + rhs.a[0],
-            self.a[1] + rhs.a[1],
-            self.a[2] + rhs.a[2],
-            self.a[3] + rhs.a[3]
-            ],
-        }
-    }
 }
 
 impl Mul<f32> for Vec3 {

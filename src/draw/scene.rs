@@ -85,31 +85,43 @@ pub
 struct IndexedMesh {
     triangles: Vec<IndexedTriangle>,
     vertices: Vec<Vec3>,
-    vertices_normals: Vec<Vec3>,
+
+    normals_triangles: Vec<IndexedTriangle>,
+    normals_vertices: Vec<Vec3>,
+
+    texture_triangles: Vec<IndexedTriangle>,
+    texture_vertices: Vec<Vec3>,
 }
 
 impl IndexedMesh {
     pub
     fn new (tri_vec: Vec<IndexedTriangle>, vert_vec: Vec<Vec3>) -> Self {
+        todo!();
         let normals = vec![Vec3::zeros(); vert_vec.len()];
 
         let mut ret = Self {
             triangles: tri_vec.clone(),
             vertices: vert_vec,
-            vertices_normals: normals,
+
+
+            normals_triangles: vec![],
+            normals_vertices: normals,
+
+            texture_triangles: vec![],
+            texture_vertices: vec![],
         };
 
         for indexed_tri in tri_vec.iter() {
-            let tri = ret.triangle_from_indexed(*indexed_tri);
+            let tri = Self::triangle_from_indexed(*indexed_tri, vert_vec.as_slice());
             let normal = Triangle::calc_normal(tri);
 
             for vert_idx in indexed_tri {
                 //let v_norm = vert_normals[vert_idx];
-                ret.vertices_normals[*vert_idx] = ret.vertices_normals[*vert_idx] + normal;
+                ret.normals_vertices[*vert_idx] = ret.normals_vertices[*vert_idx] + normal;
             }
         }
 
-        for normal in ret.vertices_normals.iter_mut() {
+        for normal in ret.normals_vertices.iter_mut() {
             *normal = normal.normalized();
         }
 
@@ -117,14 +129,14 @@ impl IndexedMesh {
     }
 
     pub
-    fn triangle_from_indexed (&self, indexed_tri: IndexedTriangle) -> Triangle {
+    fn triangle_from_indexed (indexed_tri: IndexedTriangle, vertices: &[Vec3]) -> Triangle {
         let a_idx = indexed_tri[0];
         let b_idx = indexed_tri[1];
         let c_idx = indexed_tri[2];
 
-        let a_vert = self.vertices[a_idx];
-        let b_vert = self.vertices[b_idx];
-        let c_vert = self.vertices[c_idx];
+        let a_vert = vertices[a_idx];
+        let b_vert = vertices[b_idx];
+        let c_vert = vertices[c_idx];
 
         Triangle::new(
             [
@@ -139,16 +151,84 @@ impl IndexedMesh {
 }
 
 pub
+struct Texture {
+    img: Vec<u8>,
+    width: usize,
+    height: usize,
+    components: usize,
+
+}
+
+impl Texture {
+    pub
+    fn new (img: Vec<u8>, width: usize, height: usize, components: usize) -> Self {
+        Self {
+            img: img,
+            width: width,
+            height: height,
+            components: components,
+        }
+    }
+
+    pub
+    fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
+        debug_assert!(
+            0.0 <= u && u < 1.0 &&
+            0.0 <= v && v < 1.0
+        );
+
+        let u_idx = (u * (self.width)  as f32).floor() as usize;
+        let v_idx = self.height -1 - (v * (self.height) as f32).floor() as usize;
+        
+        let offset = (v_idx * self.width + u_idx) * self.components;
+        self.img[
+            (offset) ..
+            (offset) + 3
+        ].try_into().unwrap()
+    }
+
+
+    pub 
+    fn new_empty() -> Self {
+        Self::new( Vec::new(), 0, 0, 0) 
+    }
+
+    pub
+    fn load_from_file (filename: &str) -> Self {
+        use std::fs::File;
+        use std::path::Path;
+        use stb::image::stbi_load_from_reader;
+        use stb::image::Channels;
+
+        let path = Path::new(filename);
+
+        let mut file = File::open(&path).expect("Unable to open file");
+        let (info, img) = stbi_load_from_reader(&mut file, Channels::Rgb)
+                            .expect("Deu errado ler a textura");
+
+        Self::new(
+            Vec::from(img.as_slice()),
+            info.width      as usize,
+            info.height     as usize,
+            info.components as usize
+        )
+    }
+
+}
+
+pub
 struct Object {
     mesh: IndexedMesh,
+    texture: Texture,
     //triangles: Vec<Triangle>,
 }
 
 impl Object {
     pub
-    fn new (mesh: IndexedMesh) -> Self {
+    fn new (mesh: IndexedMesh, texture: Texture) -> Self {
         Self {
             mesh: mesh,
+            texture: texture,
         }
     }
 
@@ -179,10 +259,12 @@ impl Object {
         let reader = BufReader::new(file);
 
         let mut vertices: Vec<Vec3> = Vec::new();
-        let mut normals: Vec<Vec3> = Vec::new();
+        let mut normals:  Vec<Vec3> = Vec::new();
+        let mut texture:  Vec<Vec3> = Vec::new();
 
-        let mut faces: Vec<IndexedTriangle> = Vec::new();
-        //let mut faces: Vec<Triangle> = Vec::new();
+        let mut faces:         Vec<IndexedTriangle> = Vec::new();
+        let mut texture_faces: Vec<IndexedTriangle> = Vec::new();
+        let mut normals_faces: Vec<IndexedTriangle> = Vec::new();
 
         for line in reader.lines() {
             println!("{}", line.as_ref().unwrap().clone());
@@ -194,24 +276,37 @@ impl Object {
             }
 
             match parts[0] {
+
                 "v" => {
                     println!("{:?}", parts);
                     // Vertex
                     let x: f32 = parts[1].parse().expect("Invalid vertex x coordinate");
-                    let y: f32 = parts[2].parse().expect("Invalid vertex y coordinate");
-                    let z: f32 = parts[3].parse().expect("Invalid vertex z coordinate");
+                    let y: f32 = parts[3].parse().expect("Invalid vertex y coordinate");
+                    let z: f32 = parts[2].parse().expect("Invalid vertex z coordinate");
                     vertices.push(Vec3::new([x, y, z]));
                 },
+
                 "vn" => {
                     // Normal
                     let x: f32 = parts[1].parse().expect("Invalid normal x coordinate");
-                    let y: f32 = parts[2].parse().expect("Invalid normal y coordinate");
-                    let z: f32 = parts[3].parse().expect("Invalid normal z coordinate");
+                    let y: f32 = parts[3].parse().expect("Invalid normal y coordinate");
+                    let z: f32 = parts[2].parse().expect("Invalid normal z coordinate");
                     normals.push(Vec3::new([x, y, z]));
                 },
+
+                "vt" => {
+                    println!("{:?}", parts);
+                    // Vertex
+                    let u: f32 = parts[1].parse().expect("Invalid vertex u coordinate");
+                    let v: f32 = parts[2].parse().expect("Invalid vertex v coordinate");
+                    let w: f32 = parts[3].parse().expect("Invalid vertex w coordinate");
+                    texture.push(Vec3::new([u, v, w]));
+                },
+
                 "f" => {
                     let mut vertex_idx_list: Vec<usize> = vec![];
-                    //let mut vertex_list: Vec<Vec3> = vec![];
+                    let mut texture_idx_list: Vec<usize> = vec![];
+                    let mut normals_idx_list: Vec<usize> = vec![];
 
                     for part in &parts[1..] {
 
@@ -223,35 +318,93 @@ impl Object {
                         //vertex_list.push(associeted_vertex);
 
                         // indice da textura
-                        if indices.len() == 3 && indices[1].is_empty() == false {
+                        if indices.len() >= 2 && indices[1].is_empty() == false {
                             let texture_index: usize = indices[1].parse().expect("Invalid texture index");
-                            //face_normals.push(texture_index - 1); // OBJ indices start at 1
+                            texture_idx_list.push(texture_index - 1);
                         }
 
                         // indice do vetor normal
                         if indices.len() == 3 && indices[2].is_empty() == false {
                             let normal_index: usize = indices[2].parse().expect("Invalid normal index");
-                            //face_normals.push(normal_index - 1); // OBJ indices start at 1
+                            normals_idx_list.push(normal_index - 1);
                         }
 
 
                     }
 
-                    /*
-                    let new_face = Triangle::new(
-                        vertex_list.as_slice().try_into().unwrap(),
-                        Color::White,
-                        ""
-                    );
-                    */
-                    faces.push(vertex_idx_list.try_into().unwrap());
+
+                    // TODO: adaptar isso aq para faces com um numero variado de vertices 
+                    let vertex_idx_a = vertex_idx_list[0];
+                    let vertex_idx_b = vertex_idx_list[1];
+                    let vertex_idx_c = vertex_idx_list[2];
+                    let vertex_idx_d = vertex_idx_list[3];
+
+                    faces.push([
+                        vertex_idx_a,
+                        vertex_idx_b,
+                        vertex_idx_c
+                    ]);
+                    faces.push([
+                        vertex_idx_c,
+                        vertex_idx_d,
+                        vertex_idx_a
+                    ]);
+
+                    let texture_idx_a = texture_idx_list[0];
+                    let texture_idx_b = texture_idx_list[1];
+                    let texture_idx_c = texture_idx_list[2];
+                    let texture_idx_d = texture_idx_list[3];
+
+                    texture_faces.push([
+                        texture_idx_a,
+                        texture_idx_b,
+                        texture_idx_c
+                    ]);
+                    texture_faces.push([
+                        texture_idx_c,
+                        texture_idx_d,
+                        texture_idx_a
+                    ]);
+
+                    let normals_idx_a = normals_idx_list[0];
+                    let normals_idx_b = normals_idx_list[1];
+                    let normals_idx_c = normals_idx_list[2];
+                    let normals_idx_d = normals_idx_list[3];
+
+                    normals_faces.push([
+                        normals_idx_a,
+                        normals_idx_b,
+                        normals_idx_c
+                    ]);
+                    normals_faces.push([
+                        normals_idx_c,
+                        normals_idx_d,
+                        normals_idx_a
+                    ]);
+
                 },
+
                 _ => {},
             }
         }
 
-        let mesh = IndexedMesh::new(faces, vertices);
-        Self::new(mesh)
+        //let mesh = IndexedMesh::new(faces, vertices);
+        let mesh = IndexedMesh {
+            triangles: faces,
+            vertices: vertices,
+
+            normals_triangles: normals_faces,
+            normals_vertices: normals,
+
+
+            texture_triangles: texture_faces,
+            texture_vertices: texture,
+        };
+
+        Self::new(
+            mesh,
+            Texture::load_from_file("airplane.jpg")
+        )
     }
 
         /*
@@ -370,7 +523,7 @@ impl Camera {
 
         let top = ratio.recip() * right;
         let bottom = - top;
-        let further = n - 50.;
+        let further = n - 5000.;
 
         assert!(n < 0.0);
         assert!(n > further);
@@ -497,16 +650,16 @@ impl Camera {
         let t = camera_window.top;
         let b = camera_window.bottom;
 
-        let A_cam = Vec3::new([ r, t, n]).as_vec4();
-        let B_cam = Vec3::new([ r, b, n]).as_vec4();      
-        let C_cam = Vec3::new([ l, b, n]).as_vec4();     
-        let D_cam = Vec3::new([ l, t, n]).as_vec4();     
+        let a_cam = Vec3::new([ r, t, n]).as_vec4();
+        let b_cam = Vec3::new([ r, b, n]).as_vec4();      
+        let c_cam = Vec3::new([ l, b, n]).as_vec4();     
+        let d_cam = Vec3::new([ l, t, n]).as_vec4();     
 
         // window view
-        let A_vec4 = matrix_basis * A_cam;      // direita superior frente
-        let B_vec4 = matrix_basis * B_cam;
-        let C_vec4 = matrix_basis * C_cam;
-        let D_vec4 = matrix_basis * D_cam;
+        let a_vec4 = matrix_basis * a_cam;      // direita superior frente
+        let b_vec4 = matrix_basis * b_cam;
+        let c_vec4 = matrix_basis * c_cam;
+        let d_vec4 = matrix_basis * d_cam;
 
         // z = f
         // x = (l + r) / 2.
@@ -556,10 +709,10 @@ impl Camera {
         let left_further_point = lfp_vec4.vec3_over_w() + camera_pos;
 
 
-        let a_point = A_vec4.as_vec3() / A_vec4.get_w() + camera_pos;
-        let b_point = B_vec4.as_vec3() / B_vec4.get_w() + camera_pos;
-        let c_point = C_vec4.as_vec3() / C_vec4.get_w() + camera_pos;
-        let d_point = D_vec4.as_vec3() / D_vec4.get_w() + camera_pos;
+        let a_point = a_vec4.as_vec3() / a_vec4.get_w() + camera_pos;
+        let b_point = b_vec4.as_vec3() / b_vec4.get_w() + camera_pos;
+        let c_point = c_vec4.as_vec3() / c_vec4.get_w() + camera_pos;
+        let d_point = d_vec4.as_vec3() / d_vec4.get_w() + camera_pos;
 
         let visible_point = (a_point + bottom_further_point) / 2.0;
 
@@ -669,11 +822,17 @@ impl ViewPlane {
 
     pub
     fn func(&self, point: Vec3) -> f32 {
-        // esse 0.5 subtraindo serve para que os triangulos sejam
+        // essa constante subtraindo serve para que os triangulos sejam
         // clipados um pouquinho antes do plano real, de modo que
         // n'ao exista chance de calcular coordenadas invalidas
         // apos as transformacoes devido 'a imprecisao do float
-        self.normal.dot(point) + self.k - 0.5
+        
+        // TODO: encontrar relação de proporcionalidade entre essa
+        // constante e as dimensões do cenário renderizado.
+
+        let delta = 500.0;
+
+        self.normal.dot(point) + self.k - delta
     }
 
     pub
@@ -785,19 +944,19 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0., 5., 23.0]);
+        let camera_pos = Vec3::new([0., 300., 630.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
-        let light_source = Vec3::new([0., 10., 5.]);
+        let light_source = Vec3::new([0., 300., 5.]);
 
         let ratio = (width as f32) / (height as f32);
         let camera = Camera::new(camera_pos, camera_dir, ratio);
 
 
         let mut canva = Canva::new(width, height);
-        canva.enable_depth(40.0);
+        canva.enable_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
-        let obj = Object::load_from_file("donut.obj");
+        let obj = Object::load_from_file("airplane.obj");
 
         Self {
             canva:   canva,
@@ -880,7 +1039,7 @@ impl Scene {
 
         let matrix_cam = self.camera.gen_matrix();
 
-        let P = Matrix4::new([
+        let persp = Matrix4::new([
             [   n,  0.0,       0.0,      0.0],
             [  0.0,   n,       0.0,      0.0],
             [  0.0,  0.0,  (n + f), -(n * f)],
@@ -888,7 +1047,7 @@ impl Scene {
         ]);
 
         //let M = M_viewport * M_orth * M_cam;
-        let matrix_transf = matrix_viewport * matrix_orth * P * matrix_cam;
+        let matrix_transf = matrix_viewport * matrix_orth * persp * matrix_cam;
 
         matrix_transf
     }
@@ -910,8 +1069,22 @@ impl Scene {
         }
 
         for obj in self.objects.iter() {
-            for indexed_tri in obj.mesh.triangles.iter() {
-                let tri = obj.mesh.triangle_from_indexed(*indexed_tri);
+            // TODO: ta meio feio isso aq, tem que embelezar
+            for (tri_idx, _) in obj.mesh.triangles.iter().enumerate() {
+                let tri = IndexedMesh::triangle_from_indexed(
+                    obj.mesh.triangles[tri_idx],
+                    obj.mesh.vertices.as_slice()
+                );
+
+                let normals_tri = IndexedMesh::triangle_from_indexed(
+                    obj.mesh.normals_triangles[tri_idx],
+                    obj.mesh.normals_vertices.as_slice()
+                );
+
+                let texture_tri = IndexedMesh::triangle_from_indexed(
+                    obj.mesh.texture_triangles[tri_idx],
+                    obj.mesh.texture_vertices.as_slice()
+                );
 
                 let tri_normal = Triangle::calc_normal(tri.clone());
 
@@ -919,17 +1092,22 @@ impl Scene {
                 let mut b_color_coef;
                 let mut c_color_coef;
 
-                let a_idx = indexed_tri[0];
-                let b_idx = indexed_tri[1];
-                let c_idx = indexed_tri[2];
+                a_color_coef = 1.0;
+                b_color_coef = 1.0;
+                c_color_coef = 1.0;
 
-                let a_normal = obj.mesh.vertices_normals[a_idx].normalized();
-                let b_normal = obj.mesh.vertices_normals[b_idx].normalized();
-                let c_normal = obj.mesh.vertices_normals[c_idx].normalized();
 
-                let a_vertex = obj.mesh.vertices[a_idx];
-                let b_vertex = obj.mesh.vertices[b_idx];
-                let c_vertex = obj.mesh.vertices[c_idx];
+                let a_vertex = tri.points[0];
+                let b_vertex = tri.points[1];
+                let c_vertex = tri.points[2];
+
+                let a_normal = normals_tri.points[0].normalized();
+                let b_normal = normals_tri.points[1].normalized();
+                let c_normal = normals_tri.points[2].normalized();
+
+                let a_texture_coord = texture_tri.points[0];
+                let b_texture_coord = texture_tri.points[1];
+                let c_texture_coord = texture_tri.points[2];
 
                 let a_light = (a_vertex - self.light_source).normalized();
                 let b_light = (b_vertex - self.light_source).normalized();
@@ -939,42 +1117,6 @@ impl Scene {
                 let b_eye = (b_vertex - camera_pos).normalized();
                 let c_eye = (c_vertex - camera_pos).normalized();
 
-                if false {
-                    // gouraud shadding test
-
-                    let a_idx = indexed_tri[0];
-                    let b_idx = indexed_tri[1];
-                    let c_idx = indexed_tri[2];
-
-                    let a_vertex = obj.mesh.vertices[a_idx];
-                    let b_vertex = obj.mesh.vertices[b_idx];
-                    let c_vertex = obj.mesh.vertices[c_idx];
-
-                    //let a_normal = obj.mesh.vertices_normals[a_idx].normalized();
-                    //let b_normal = obj.mesh.vertices_normals[b_idx].normalized();
-                    //let c_normal = obj.mesh.vertices_normals[c_idx].normalized();
-
-                    let a_normal = tri_normal;
-                    let b_normal = tri_normal;
-                    let c_normal = tri_normal;
-
-                    let a_light = (tri.get_center() - self.light_source).normalized();
-                    let b_light = (tri.get_center() - self.light_source).normalized();
-                    let c_light = (tri.get_center() - self.light_source).normalized();
-
-                    let light_intensity = 0.5;
-                    let reflectance = 0.3;
-                    let ambient = 0.5;
-
-                    a_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  a_light.dot(a_normal))) );
-                    b_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  b_light.dot(b_normal))) );
-                    c_color_coef = reflectance * (ambient + light_intensity * (cmp_max(0.0 , 1.0 -  c_light.dot(c_normal))) );
-                } else {
-
-                    a_color_coef = 1.0;
-                    b_color_coef = 1.0;
-                    c_color_coef = 1.0;
-                }
 
                 let clipped_triangles = tri.clip_against_planes(&func_planes);
                 for clipped_tri in clipped_triangles.iter() {
@@ -1010,6 +1152,7 @@ impl Scene {
                         a_normal,
                         a_light,
                         a_eye,
+                        a_texture_coord,
                     );
                     let b_attr = VertexAttributes::new(
                         Color::Green,
@@ -1017,6 +1160,7 @@ impl Scene {
                         b_normal,
                         b_light,
                         b_eye,
+                        b_texture_coord,
                     );
                     let c_attr = VertexAttributes::new(
                         Color::Green,
@@ -1024,6 +1168,7 @@ impl Scene {
                         c_normal,
                         c_light,
                         c_eye,
+                        c_texture_coord,
                     );
 
                     /*
@@ -1042,6 +1187,8 @@ impl Scene {
                         a_attr,
                         b_attr,
                         c_attr,
+
+                        &obj.texture
                         );
 
                 }

@@ -1,6 +1,5 @@
 use itertools::Either;
 use std::ops::{Mul, Add};
-use std::cmp;
 use std::cmp::Ordering;
 
 use crate::draw::linalg::{
@@ -8,6 +7,9 @@ use crate::draw::linalg::{
     Vec3,
     Vec4,
 };
+
+// TODO: resolver dependencia cruzada :(
+use crate::draw::scene::Texture;
 
 use core::arch::x86_64::{
     __rdtscp,
@@ -102,7 +104,6 @@ impl Pixel {
         ])
     }
 
-
     pub fn set_red   (&mut self, r: u8) {self.r = r;}
     pub fn set_green (&mut self, g: u8) {self.g = g;}
     pub fn set_blue  (&mut self, b: u8) {self.b = b;}
@@ -170,6 +171,7 @@ struct VertexAttributes {
     normal: Vec3,
     light:  Vec3,
     eye:    Vec3,
+    texture_coord:    Vec3,
 }
 
 impl VertexAttributes {
@@ -178,7 +180,8 @@ impl VertexAttributes {
             depth:  f32,
             normal: Vec3,
             light:  Vec3,
-            eye:    Vec3) -> Self 
+            eye:    Vec3,
+            txt_coord: Vec3) -> Self 
     {
         Self {
             color:  color,
@@ -186,6 +189,7 @@ impl VertexAttributes {
             light:  light,
             eye:    eye,
             depth:  depth,
+            texture_coord:  txt_coord,
         }
     }
 
@@ -371,7 +375,8 @@ impl Canva {
 
                                            a_attr: VertexAttributes,
                                            b_attr: VertexAttributes,
-                                           c_attr: VertexAttributes)
+                                           c_attr: VertexAttributes,
+                                           texture: &Texture)
     {
 
         let a_center = self.pos_map_center(a_vertex);
@@ -479,9 +484,28 @@ impl Canva {
                                           (beta  * b_depth) +
                                           (gama  * c_depth);
 
+                        /*
                         let pixel_color = (alpha * a_pixel_color) +
                                           (beta  * b_pixel_color) +
                                           (gama  * c_pixel_color);
+                        */
+
+                        // Texturasss ????
+                        let pixel_texture_coord = 
+                                          (a_attr.texture_coord * alpha) +
+                                          (b_attr.texture_coord * beta) +
+                                          (c_attr.texture_coord * gama);
+
+                        let pixel_color_slice = texture.get_rgb_slice(
+                            pixel_texture_coord.x(),
+                            pixel_texture_coord.y(),
+                        );
+                        
+                        let pixel_color = Pixel::new(
+                            pixel_color_slice[0],
+                            pixel_color_slice[1],
+                            pixel_color_slice[2],
+                        );
 
                         // phong shadding ??
 
@@ -502,9 +526,9 @@ impl Canva {
                         let power = 8;
 
 
-                        let c_l = 0.8;
-                        let c_r = 0.3;
-                        let c_a = 0.1;
+                        let c_l = 0.6;
+                        let c_r = 0.6;
+                        let c_a = 0.4;
                         let c_p = 1.0 - c_r;
 
                         debug_assert!(c_l + c_a <= 1.0);
@@ -663,68 +687,6 @@ impl Canva {
                     3 => delta_x,
                     _ => 0.0,
                 };
-            }
-        }
-    }
-    // m \in (-1, 0]
-    fn midpoint_draw_two(&mut self, a_center: Vec2, b_center: Vec2) {
-
-        //debug_assert!(a_center.x < b_center.x, "uso incorreto");
-        //debug_assert!(a_center.y > b_center.y, "uso incorreto");
-
-        let f = |x: f32, y:f32| -> f32 {
-            (a_center.y - b_center.y) * x + 
-            (b_center.x - a_center.x) * y +
-            (a_center.x * b_center.y) - 
-            (b_center.x * a_center.y)
-        };
-
-        let mut y = a_center.y as i32;
-        let mut d = f(a_center.x + 1.0, a_center.y - 0.5); // alt
-
-        let col_first = a_center.x as usize;
-        let col_last  = b_center.x as usize;
-
-        //println!("first {col_first}\nlast {col_last}");
-        for x in col_first..=col_last {
-            self.draw_pixel_coord(x,y as usize, Pixel::white());
-
-            if d > 0.0 {
-                y += -1; // alta
-                d += - (b_center.x - a_center.x) + (a_center.y - b_center.y); // alt
-            } else {
-                d += a_center.y - b_center.y;
-            }
-        }
-    }
-
-    fn midpoint_draw_one(&mut self, a_center: Vec2, b_center: Vec2) {
-
-        //debug_assert!(a_center.x < b_center.x, "uso incorreto");
-        //debug_assert!(a_center.y < b_center.y, "uso incorreto");
-
-        let f = |x: f32, y:f32| -> f32 {
-            (a_center.y - b_center.y) * x + 
-            (b_center.x - a_center.x) * y +
-            (a_center.x * b_center.y) - 
-            (b_center.x * a_center.y)
-        };
-
-
-        let mut y = a_center.y as usize;
-        let mut d = f(a_center.x + 1.0, a_center.y + 0.5);
-
-        let col_first = a_center.x as usize;
-        let col_last  = b_center.x as usize;
-
-        for x in col_first..=col_last {
-            self.draw_pixel_coord(x,y as usize, Pixel::white());
-
-            if d < 0.0 {
-                y += 1;
-                d += (b_center.x - a_center.x) + (a_center.y - b_center.y);
-            } else {
-                d += a_center.y - b_center.y;
             }
         }
     }

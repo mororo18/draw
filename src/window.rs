@@ -409,7 +409,7 @@ impl Window {
         self.write_frame_from_ptr(src.as_ptr() as *const _, src.len());
     }
 
-    pub
-    fn get_pitch(&self) -> usize {self.width * self.pixel_bytes}
+    //pub
+    //fn get_pitch(&self) -> usize {self.width * self.pixel_bytes}
 
 }

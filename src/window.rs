@@ -8,16 +8,11 @@
 use x11::xlib;
 use x11::keysym::*;
 use std::os::raw::*; 
-use std::ptr;
 use std::mem::MaybeUninit;
-use std::alloc::{alloc, alloc_zeroed, dealloc, handle_alloc_error, Layout};
+use std::alloc::{alloc, alloc_zeroed, Layout};
 
 use std::ffi::CString;
 
-use std::result::*;
-
-use std::time::UNIX_EPOCH;
-use std::time::SystemTime;
 
 #[derive(PartialEq)]
 pub
@@ -80,7 +75,7 @@ impl Window {
         let max_height   = 0;
 
         /* Abre display padrao */
-        let mut display: *mut xlib::Display = unsafe{xlib::XOpenDisplay(std::ptr::null())};
+        let display: *mut xlib::Display = unsafe{xlib::XOpenDisplay(std::ptr::null())};
         if display.is_null() {panic!("N'ao foi possivel abrir display");}
 
         /* Default root window and default screen */
@@ -194,13 +189,13 @@ impl Window {
         /* allocates memory and creates the window buffer */
         let pixel_bits = 32_i32;
         let pixel_bytes = pixel_bits / 8;
-        let mut window_buffer_size = ((width * height) as u32) * (pixel_bytes as u32);
+        let window_buffer_size = ((width * height) as u32) * (pixel_bytes as u32);
 
         let layout = Layout::array::<i8>(window_buffer_size as usize)
                                         .expect("layout deu merda");
-        let mut mem: *mut u8  = unsafe{alloc(layout)};
+        let mem: *mut u8  = unsafe{alloc(layout)};
 
-        let mut window_buffer: *mut xlib::XImage = unsafe{xlib::XCreateImage(display,  
+        let window_buffer: *mut xlib::XImage = unsafe{xlib::XCreateImage(display,  
                                                                     visinfo.visual, 
                                                                     visinfo.depth as u32,
                                                                     xlib::ZPixmap,
@@ -214,11 +209,11 @@ impl Window {
 
         // special way for the window manager to tell you that the window close button was
         // pressed without actually closing the window itself. 
-        let mut WM_DELETE_WINDOW: xlib::Atom = 
+        let mut wm_delete_window: xlib::Atom = 
                                   unsafe{xlib::XInternAtom(display, to_c_string("WM_DELETE_WINDOW"), 0)};
         let could_set_prot = unsafe{xlib::XSetWMProtocols(display, 
                                                     window, 
-                                                    &mut WM_DELETE_WINDOW as *mut _, 1)};
+                                                    &mut wm_delete_window as *mut _, 1)};
         if  could_set_prot == 0 {panic!("Couldn't register WM_DELETE_WINDOW property");}
 
         Window {
@@ -247,7 +242,7 @@ impl Window {
             mem:                mem,
 
             default_gc:         default_gc,
-            wm_delete_window:   WM_DELETE_WINDOW,
+            wm_delete_window:   wm_delete_window,
         }
 
 
@@ -299,7 +294,7 @@ impl Window {
                     //let e: *mut xlib::XClientMessageEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XClientMessageEvent>();
                     unsafe {
                         if (*e).data.as_longs()[0] as xlib::Atom == self.wm_delete_window {
-                            unsafe{xlib::XDestroyWindow(self.display, self.window);}
+                            xlib::XDestroyWindow(self.display, self.window);
                         }
                     }
 
@@ -358,7 +353,6 @@ impl Window {
                 },
 
                 xlib::ReparentNotify => println!("ReparentNotify"),
-                xlib::ConfigureNotify => println!("ConfigureNotify"),
                 xlib::MapNotify => println!("MapNotify"),
 
                 _ => println!("Unknown notify {}", unsafe{ev.type_}),
@@ -368,7 +362,6 @@ impl Window {
 
         if size_change {
 
-            size_change = false;
             unsafe{xlib::XDestroyImage(self.window_buffer)}; // Free's the memory we malloced;
 
             ////loop {}

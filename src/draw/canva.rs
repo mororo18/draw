@@ -1,5 +1,5 @@
 use itertools::Either;
-use std::ops::{Mul, Add};
+use std::ops::{Mul, Add, Sub};
 use std::cmp::Ordering;
 
 use crate::draw::linalg::{
@@ -11,9 +11,7 @@ use crate::draw::linalg::{
 // TODO: resolver dependencia cruzada :(
 use crate::draw::scene::Texture;
 
-use core::arch::x86_64::{
-    __rdtscp,
-};
+use core::arch::x86_64::__rdtscp;
 
 struct MicroBench {
     start: u64,
@@ -37,10 +35,10 @@ impl MicroBench {
 
     fn read_tsc() -> u64 {
 
-         let mut clock: u64 = 0;
+         let clock: u64;
 
          unsafe {
-             let mut tmp: u32 = 0;
+             let tmp: u32 = 0;
              let ptr = std::ptr::from_ref(&tmp);
              clock = __rdtscp(ptr as *mut u32);
          };
@@ -164,19 +162,22 @@ struct PixelPos {
     y: usize,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub
 struct VertexAttributes {
     depth:  f32,
     color:  Color,
-    normal: Vec3,
-    light:  Vec3,
-    eye:    Vec3,
-    texture_coord:    Vec3,
+    pub screen_coord:   Vec2,
+    normal:         Vec3,
+    light:          Vec3,
+    eye:            Vec3,
+    texture_coord:  Vec3,
 }
 
 impl VertexAttributes {
     pub
-    fn new (color:  Color,
+    fn new (screen_coord: Vec2,
+            color:  Color,
             depth:  f32,
             normal: Vec3,
             light:  Vec3,
@@ -184,6 +185,7 @@ impl VertexAttributes {
             txt_coord: Vec3) -> Self 
     {
         Self {
+            screen_coord: screen_coord,
             color:  color,
             normal: normal,
             light:  light,
@@ -194,6 +196,58 @@ impl VertexAttributes {
     }
 
 }
+
+impl Add for VertexAttributes {
+    type Output = Self;
+    fn add (self, rhs: Self) -> Self {
+        Self::new(
+            self.screen_coord   + rhs.screen_coord,
+            // TODO: tqv isso aq dps
+            self.color, 
+            self.depth          + rhs.depth,
+            self.normal         + rhs.normal,
+            self.light          + rhs.light,
+            self.eye            + rhs.eye,
+            self.texture_coord  + rhs.texture_coord,
+
+        )
+    }
+}
+
+impl Sub for VertexAttributes {
+    type Output = Self;
+    fn sub (self, rhs: Self) -> Self {
+        Self::new(
+            self.screen_coord   - rhs.screen_coord,
+            // TODO: tqv isso aq dps
+            self.color, 
+            self.depth          - rhs.depth,
+            self.normal         - rhs.normal,
+            self.light          - rhs.light,
+            self.eye            - rhs.eye,
+            self.texture_coord  - rhs.texture_coord,
+
+        )
+    }
+}
+
+impl Mul<f32> for VertexAttributes {
+    type Output = Self;
+    fn mul (self, rhs: f32) -> Self {
+        Self::new(
+            self.screen_coord   * rhs,
+            // TODO: tqv isso aq dps
+            self.color, 
+            self.depth          * rhs,
+            self.normal         * rhs,
+            self.light          * rhs,
+            self.eye            * rhs,
+            self.texture_coord  * rhs,
+
+        )
+    }
+}
+
 
 pub
 struct Canva {
@@ -369,23 +423,20 @@ impl Canva {
     }
 
     pub
-    fn draw_triangle_with_attributes(&mut self, a_vertex: Vec2, 
-                                           b_vertex: Vec2, 
-                                           c_vertex: Vec2,
-
-                                           a_attr: VertexAttributes,
-                                           b_attr: VertexAttributes,
-                                           c_attr: VertexAttributes,
-                                           texture: &Texture)
+    fn draw_triangle_with_attributes(&mut self,
+                                   a_attr: VertexAttributes,
+                                   b_attr: VertexAttributes,
+                                   c_attr: VertexAttributes,
+                                   texture: &Texture)
     {
 
-        let a_center = self.pos_map_center(a_vertex);
-        let b_center = self.pos_map_center(b_vertex);
-        let c_center = self.pos_map_center(c_vertex);
+        let a_center = self.pos_map_center(a_attr.screen_coord);
+        let b_center = self.pos_map_center(b_attr.screen_coord);
+        let c_center = self.pos_map_center(c_attr.screen_coord);
 
-        let a_pixel_color = a_attr.color.as_pixel();
-        let b_pixel_color = b_attr.color.as_pixel();
-        let c_pixel_color = c_attr.color.as_pixel();
+      //let a_pixel_color = a_attr.color.as_pixel();
+      //let b_pixel_color = b_attr.color.as_pixel();
+      //let c_pixel_color = c_attr.color.as_pixel();
 
         let a_depth = a_attr.depth;
         let b_depth = b_attr.depth;
@@ -441,10 +492,6 @@ impl Canva {
         let f_alpha_outside = f_bc(-1.0, -1.0);
         let f_beta_outside  = f_ca(-1.0, -1.0);
         let f_gama_outside  = f_ab(-1.0, -1.0);
-
-
-        let mut clock_sum: u64 = 0;
-        let mut counter: u64 = 0;
 
         for y in y_min..=y_max {
             let y_f32 = y as f32;
@@ -639,9 +686,8 @@ impl Canva {
         let mut d = f(a_center.x + midpoint_x[idx],
                       a_center.y + midpoint_y[idx]); // alt
 
-        let delta_y = (a_center.y - b_center.y);// *
-            //if idx == 0 || idx == 3 {-1.0} else {1.0};
-        let delta_x = if idx == 0 || idx == 1 {(b_center.x - a_center.x)} else {-(b_center.x - a_center.x)};
+        let delta_y = a_center.y - b_center.y;// *
+        let delta_x = if idx == 0 || idx == 1 {b_center.x - a_center.x} else {-(b_center.x - a_center.x)};
 
         fn iter_range(first: usize, last: usize, cond: bool) 
             -> Either<impl Iterator<Item = usize>, 
@@ -708,8 +754,8 @@ impl Canva {
         let w_f32 = self.width  as f32 - 1.0;
         let h_f32 = self.height as f32 - 1.0;
 
-        let mut x_center = (pos.x + 0.5).floor();
-        let mut y_center = (pos.y + 0.5).floor();
+        let x_center = (pos.x + 0.5).floor();
+        let y_center = (pos.y + 0.5).floor();
 
         // Debug
         debug_assert!(

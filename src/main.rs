@@ -80,12 +80,12 @@ fn main() {
         let elapsed = now.elapsed().as_millis() as f32;
         if elapsed > dt_ms {
             now = Instant::now();
-            //println!("{}", 1000.0 / elapsed);
+            println!("FPS {}", 1000.0 / elapsed);
             //scene.camera_right();
 
             scene.render();
-            let render_elapsed = now.elapsed().as_millis() as f32;
-            println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
+            //let render_elapsed = now.elapsed().as_millis() as f32;
+            //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
             let frame_slice = scene.frame_as_bytes_slice();
             win.write_frame_from_slice(frame_slice);

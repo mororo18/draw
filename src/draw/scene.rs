@@ -15,28 +15,32 @@ use crate::draw::linalg::{
 
 #[derive(Clone, Debug)]
 struct Triangle {
-    points: [Vec3; 3],
+    vertices:      [Vec3; 3],
+    vertices_attr: [VertexAttributes; 3],
     normal: Vec3,
     color: Color,
-    label: String,
 }
 
 impl Triangle {
     pub
-    fn new (points: [Vec3; 3], color: Color, label: & str) -> Self {
+    fn new (vertices:      [Vec3; 3],
+            vertices_attr: [VertexAttributes; 3], 
+            color: Color, 
+            label: & str) -> Self
+    {
         Self {
-            points: points,
+            vertices: vertices,
+            vertices_attr: vertices_attr,
             color: color,
             normal: Vec3::zeros(),
-            label: String::from(label),
         }
     }
     
     pub
     fn calc_normal(tri: Self) -> Vec3 {
-        let a = tri.points[0];
-        let b = tri.points[1];
-        let c = tri.points[2];
+        let a = tri.vertices[0];
+        let b = tri.vertices[1];
+        let c = tri.vertices[2];
 
         let p = b - a;
         let q = c - b;
@@ -69,7 +73,7 @@ impl Triangle {
     pub
     fn get_center(&self) -> Vec3 {
         let mut sum = Vec3::zeros();
-        for vertex in self.points.iter() {
+        for vertex in self.vertices.iter() {
             sum = sum + *vertex;
         }
 
@@ -94,6 +98,7 @@ struct IndexedMesh {
 }
 
 impl IndexedMesh {
+    /*
     pub
     fn new (tri_vec: Vec<IndexedTriangle>, vert_vec: Vec<Vec3>) -> Self {
         todo!();
@@ -111,8 +116,19 @@ impl IndexedMesh {
             texture_vertices: vec![],
         };
 
-        for indexed_tri in tri_vec.iter() {
-            let tri = Self::triangle_from_indexed(*indexed_tri, vert_vec.as_slice());
+        for (tri_idx, indexed_tri) in tri_vec.iter().enumerate() {
+            let tri_vertices = ret.vertices_from_indexed(tri_idx);
+
+            let tri = Triangle::new(
+                [
+                    tri_vertices[0],
+                    tri_vertices[1],
+                    tri_vertices[2],
+                ],
+                Color::Green,
+                "",
+            );
+
             let normal = Triangle::calc_normal(tri);
 
             for vert_idx in indexed_tri {
@@ -127,27 +143,53 @@ impl IndexedMesh {
 
         return ret;
     }
+    */
+
+    //TODO: enxugar essas 3 funcs ".._from_index" aq
 
     pub
-    fn triangle_from_indexed (indexed_tri: IndexedTriangle, vertices: &[Vec3]) -> Triangle {
-        let a_idx = indexed_tri[0];
-        let b_idx = indexed_tri[1];
-        let c_idx = indexed_tri[2];
+    fn vertices_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
+        let a_idx = self.triangles[tri_idx][0];
+        let b_idx = self.triangles[tri_idx][1];
+        let c_idx = self.triangles[tri_idx][2];
 
-        let a_vert = vertices[a_idx];
-        let b_vert = vertices[b_idx];
-        let c_vert = vertices[c_idx];
+        let a_vert = self.vertices[a_idx];
+        let b_vert = self.vertices[b_idx];
+        let c_vert = self.vertices[c_idx];
 
-        Triangle::new(
-            [
-                a_vert,
-                b_vert,
-                c_vert
-            ],
-            Color::White,
-            ""
-        )
+        [a_vert, b_vert, c_vert]
     }
+
+    pub
+    fn normals_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
+        let a_idx = self.normals_triangles[tri_idx][0];
+        let b_idx = self.normals_triangles[tri_idx][1];
+        let c_idx = self.normals_triangles[tri_idx][2];
+
+        let a_normal = self.normals_vertices[a_idx];
+        let b_normal = self.normals_vertices[b_idx];
+        let c_normal = self.normals_vertices[c_idx];
+
+        [a_normal, 
+         b_normal,
+         c_normal]
+    }
+
+    pub
+    fn textures_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
+        let a_idx = self.texture_triangles[tri_idx][0];
+        let b_idx = self.texture_triangles[tri_idx][1];
+        let c_idx = self.texture_triangles[tri_idx][2];
+
+        let a_texture = self.texture_vertices[a_idx];
+        let b_texture = self.texture_vertices[b_idx];
+        let c_texture = self.texture_vertices[c_idx];
+
+        [a_texture,
+         b_texture,
+         c_texture]
+    }
+
 }
 
 pub
@@ -253,6 +295,7 @@ impl Object {
         use std::io::{BufRead, BufReader};
         use std::path::Path;
 
+        println!("Reading Wavefront .obj file: {}", filename);
         let path = Path::new(filename);
 
         let file = File::open(&path).expect("Unable to open file");
@@ -267,7 +310,7 @@ impl Object {
         let mut normals_faces: Vec<IndexedTriangle> = Vec::new();
 
         for line in reader.lines() {
-            println!("{}", line.as_ref().unwrap().clone());
+            //println!("{}", line.as_ref().unwrap().clone());
             let line = line.expect("Unable to read line");
             let parts: Vec<&str> = line.split_whitespace().collect();
 
@@ -278,7 +321,7 @@ impl Object {
             match parts[0] {
 
                 "v" => {
-                    println!("{:?}", parts);
+                    //println!("{:?}", parts);
                     // Vertex
                     let x: f32 = parts[1].parse().expect("Invalid vertex x coordinate");
                     let y: f32 = parts[3].parse().expect("Invalid vertex y coordinate");
@@ -295,7 +338,7 @@ impl Object {
                 },
 
                 "vt" => {
-                    println!("{:?}", parts);
+                    //println!("{:?}", parts);
                     // Vertex
                     let u: f32 = parts[1].parse().expect("Invalid vertex u coordinate");
                     let v: f32 = parts[2].parse().expect("Invalid vertex v coordinate");
@@ -304,7 +347,7 @@ impl Object {
                 },
 
                 "f" => {
-                    let mut vertex_idx_list: Vec<usize> = vec![];
+                    let mut vertex_idx_list:  Vec<usize> = vec![];
                     let mut texture_idx_list: Vec<usize> = vec![];
                     let mut normals_idx_list: Vec<usize> = vec![];
 
@@ -384,9 +427,11 @@ impl Object {
 
                 },
 
-                _ => {},
+                _ => {println!("Can't interpret this line: {}", line);},
             }
         }
+
+        println!("Triangles count: {}",  faces.len());
 
         //let mesh = IndexedMesh::new(faces, vertices);
         let mesh = IndexedMesh {
@@ -844,13 +889,17 @@ impl ViewPlane {
     fn clip (&self, tri: Triangle) -> Vec<Triangle> {
         use std::mem::swap;
 
-        let mut a_point = tri.points[0];
-        let mut b_point = tri.points[1];
-        let mut c_point = tri.points[2];
+        let mut a_vertex = tri.vertices[0];
+        let mut b_vertex = tri.vertices[1];
+        let mut c_vertex = tri.vertices[2];
 
-        let mut f_a = self.func(a_point);
-        let mut f_b = self.func(b_point);
-        let mut f_c = self.func(c_point);
+        let mut a_attr = tri.vertices_attr[0];
+        let mut b_attr = tri.vertices_attr[1];
+        let mut c_attr = tri.vertices_attr[2];
+
+        let mut f_a = self.func(a_vertex);
+        let mut f_b = self.func(b_vertex);
+        let mut f_c = self.func(c_vertex);
 
         if f_a > 0.0 && 
            f_b > 0.0 && 
@@ -867,55 +916,90 @@ impl ViewPlane {
 
 
         if f_a * f_c >= 0.0 {
-            swap(&mut f_b,     &mut f_c);
-            swap(&mut b_point, &mut c_point);
+            swap(&mut f_b,      &mut f_c);
+            swap(&mut b_vertex, &mut c_vertex);
 
-            swap(&mut f_a,     &mut f_b);
-            swap(&mut a_point, &mut b_point);
+            swap(&mut b_attr,   &mut c_attr);
+
+
+            swap(&mut f_a,      &mut f_b);
+            swap(&mut a_vertex, &mut b_vertex);
+
+            swap(&mut a_attr,   &mut b_attr);
+
         } else if f_b * f_c >= 0.0 {
-            swap(&mut f_a,     &mut f_c);
-            swap(&mut a_point, &mut c_point);
+            swap(&mut f_a,      &mut f_c);
+            swap(&mut a_vertex, &mut c_vertex);
 
-            swap(&mut f_a,     &mut f_b);
-            swap(&mut a_point, &mut b_point);
+            swap(&mut a_attr,   &mut c_attr);
+
+
+            swap(&mut f_a,      &mut f_b);
+            swap(&mut a_vertex, &mut b_vertex);
+
+            swap(&mut a_attr,   &mut b_attr);
         }
 
         //  resolvendo para t onde p pertence ao plano
         //  p = in + t * (out - in)
 
-        let t_a = self.func(a_point) /
-            self.normal().dot(a_point - c_point) - EPS;
-        let new_point_a: Vec3 = a_point + (c_point - a_point) * t_a;
+        let t_a = self.func(a_vertex) /
+            self.normal().dot(a_vertex - c_vertex) - EPS;
+        let new_vertex_a = a_vertex + (c_vertex - a_vertex) * t_a;
+
+        let new_a_attr   = a_attr   + (c_attr - a_attr) * t_a;
 
 
-        let t_b = self.func(b_point) /
-            self.normal().dot(b_point - c_point) - EPS;
-        let new_point_b: Vec3 = b_point + (c_point - b_point) * t_b;
+        let t_b = self.func(b_vertex) /
+            self.normal().dot(b_vertex - c_vertex) - EPS;
+        let new_vertex_b = b_vertex + (c_vertex - b_vertex) * t_b;
+        let new_b_attr   = b_attr   + (c_attr - b_attr) * t_b;
 
 
         if f_c <= 0.0 {
-            let new_triangle_a = Triangle::new([
-                a_point, 
-                new_point_a,
-                new_point_b],
+            let new_triangle_a = Triangle::new(
+                [
+                    a_vertex, 
+                    new_vertex_a,
+                    new_vertex_b
+                ],
+                [
+                    a_attr, 
+                    new_a_attr,
+                    new_b_attr
+                ],
                 tri.color,
                 "neww a"
             );
 
-            let new_triangle_b = Triangle::new([
-                a_point, 
-                b_point,
-                new_point_b],
+            let new_triangle_b = Triangle::new(
+                [
+                    a_vertex, 
+                    b_vertex,
+                    new_vertex_b
+                ],
+                [
+                    a_attr, 
+                    b_attr,
+                    new_b_attr
+                ],
                 tri.color,
                 "neww b"
             );
 
             return Vec::from([new_triangle_a, new_triangle_b]);
         } else {
-            let new_triangle_c = Triangle::new([
-                c_point, 
-                new_point_a,
-                new_point_b],
+            let new_triangle_c = Triangle::new(
+                [
+                    c_vertex, 
+                    new_vertex_a,
+                    new_vertex_b
+                ],
+                [
+                    c_attr, 
+                    new_a_attr,
+                    new_b_attr
+                ],
                 tri.color,
                 "neww c"
             );
@@ -1071,43 +1155,21 @@ impl Scene {
         for obj in self.objects.iter() {
             // TODO: ta meio feio isso aq, tem que embelezar
             for (tri_idx, _) in obj.mesh.triangles.iter().enumerate() {
-                let tri = IndexedMesh::triangle_from_indexed(
-                    obj.mesh.triangles[tri_idx],
-                    obj.mesh.vertices.as_slice()
-                );
+                let tri_vertices = obj.mesh.vertices_from_index(tri_idx);
+                let tri_normals = obj.mesh.normals_from_index(tri_idx);
+                let tri_textures = obj.mesh.textures_from_index(tri_idx);
 
-                let normals_tri = IndexedMesh::triangle_from_indexed(
-                    obj.mesh.normals_triangles[tri_idx],
-                    obj.mesh.normals_vertices.as_slice()
-                );
+                let a_vertex = tri_vertices[0];
+                let b_vertex = tri_vertices[1];
+                let c_vertex = tri_vertices[2];
 
-                let texture_tri = IndexedMesh::triangle_from_indexed(
-                    obj.mesh.texture_triangles[tri_idx],
-                    obj.mesh.texture_vertices.as_slice()
-                );
+                let a_normal = tri_normals[0].normalized();
+                let b_normal = tri_normals[1].normalized();
+                let c_normal = tri_normals[2].normalized();
 
-                let tri_normal = Triangle::calc_normal(tri.clone());
-
-                let mut a_color_coef;
-                let mut b_color_coef;
-                let mut c_color_coef;
-
-                a_color_coef = 1.0;
-                b_color_coef = 1.0;
-                c_color_coef = 1.0;
-
-
-                let a_vertex = tri.points[0];
-                let b_vertex = tri.points[1];
-                let c_vertex = tri.points[2];
-
-                let a_normal = normals_tri.points[0].normalized();
-                let b_normal = normals_tri.points[1].normalized();
-                let c_normal = normals_tri.points[2].normalized();
-
-                let a_texture_coord = texture_tri.points[0];
-                let b_texture_coord = texture_tri.points[1];
-                let c_texture_coord = texture_tri.points[2];
+                let a_texture_coord = tri_textures[0];
+                let b_texture_coord = tri_textures[1];
+                let c_texture_coord = tri_textures[2];
 
                 let a_light = (a_vertex - self.light_source).normalized();
                 let b_light = (b_vertex - self.light_source).normalized();
@@ -1118,21 +1180,74 @@ impl Scene {
                 let c_eye = (c_vertex - camera_pos).normalized();
 
 
-                let clipped_triangles = tri.clip_against_planes(&func_planes);
-                for clipped_tri in clipped_triangles.iter() {
+                let a_depth: f32 = (camera_pos - tri_vertices[0]).norm() as _;
+                let b_depth: f32 = (camera_pos - tri_vertices[1]).norm() as _;
+                let c_depth: f32 = (camera_pos - tri_vertices[2]).norm() as _;
 
-                    let a_vec4  = matrix_transf * clipped_tri.points[0].as_vec4();
-                    let b_vec4  = matrix_transf * clipped_tri.points[1].as_vec4();
-                    let c_vec4  = matrix_transf * clipped_tri.points[2].as_vec4();
+                let a_attr = VertexAttributes::new(
+                    Vec2::new(0., 0.),
+                    Color::Green,
+                    a_depth,
+                    a_normal,
+                    a_light,
+                    a_eye,
+                    a_texture_coord,
+                );
+
+                let b_attr = VertexAttributes::new(
+                    Vec2::new(0., 0.),
+                    Color::Green,
+                    b_depth,
+                    b_normal,
+                    b_light,
+                    b_eye,
+                    b_texture_coord,
+                );
+
+
+                let c_attr = VertexAttributes::new(
+                    Vec2::new(0., 0.),
+                    Color::Green,
+                    c_depth,
+                    c_normal,
+                    c_light,
+                    c_eye,
+                    c_texture_coord,
+                );
+
+                let tri = Triangle::new(
+                    [
+                        a_vertex,
+                        b_vertex,
+                        c_vertex,
+                    ],
+                    [
+                        a_attr,
+                        b_attr,
+                        c_attr,
+                    ],
+                    Color::Green,
+                    "",
+                );
+
+                let mut clipped_triangles = tri.clip_against_planes(&func_planes);
+                for clipped_tri in clipped_triangles.iter_mut() {
+
+                    let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
+                    let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
+                    let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
 
                     let a_w = a_vec4.get_w();
                     let b_w = b_vec4.get_w();
                     let c_w = c_vec4.get_w();
 
-                    let a  = a_vec4.as_vec2();
-                    let b  = b_vec4.as_vec2();
-                    let c  = c_vec4.as_vec2();
+                    let a_coord  = a_vec4.as_vec2() / a_w;
+                    let b_coord  = b_vec4.as_vec2() / b_w;
+                    let c_coord  = c_vec4.as_vec2() / c_w;
 
+                    clipped_tri.vertices_attr[0].screen_coord = a_coord;
+                    clipped_tri.vertices_attr[1].screen_coord = b_coord;
+                    clipped_tri.vertices_attr[2].screen_coord = c_coord;
                     // vis'ao ortogonal
                     /*
                     let camera_dir = self.camera.get_direction().normalized();
@@ -1141,55 +1256,13 @@ impl Scene {
                     let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
                     */
 
-                    let a_depth: f32 = (camera_pos - clipped_tri.points[0]).norm() as _;
-                    let b_depth: f32 = (camera_pos - clipped_tri.points[1]).norm() as _;
-                    let c_depth: f32 = (camera_pos - clipped_tri.points[2]).norm() as _;
-
-
-                    let a_attr = VertexAttributes::new(
-                        Color::Green,
-                        a_depth,
-                        a_normal,
-                        a_light,
-                        a_eye,
-                        a_texture_coord,
-                    );
-                    let b_attr = VertexAttributes::new(
-                        Color::Green,
-                        b_depth,
-                        b_normal,
-                        b_light,
-                        b_eye,
-                        b_texture_coord,
-                    );
-                    let c_attr = VertexAttributes::new(
-                        Color::Green,
-                        c_depth,
-                        c_normal,
-                        c_light,
-                        c_eye,
-                        c_texture_coord,
-                    );
-
-                    /*
-                    println!("triangle ");
-                    println!("{:?}", a / a_w); 
-                    println!("{:?}", b / b_w); 
-                    println!("{:?}", c / c_w); 
-                    */
-
-                    let clipped_tri_color = tri.color;
                     self.canva.draw_triangle_with_attributes(
-                        a / a_w, 
-                        b / b_w, 
-                        c / c_w, 
-
-                        a_attr,
-                        b_attr,
-                        c_attr,
+                        clipped_tri.vertices_attr[0],
+                        clipped_tri.vertices_attr[1],
+                        clipped_tri.vertices_attr[2],
 
                         &obj.texture
-                        );
+                    );
 
                 }
             }

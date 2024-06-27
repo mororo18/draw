@@ -52,6 +52,17 @@ impl Sub for Vec2 {
     }
 }
 
+impl Mul<f32> for Vec2 {
+    type Output = Self;
+
+    fn mul (self, rhs: f32) -> Self {
+        Self {
+			x: self.x * rhs,
+			y: self.y * rhs,
+        }
+    }
+}
+
 impl Div<f32> for Vec2 {
     type Output = Self;
 

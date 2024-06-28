@@ -195,6 +195,19 @@ impl VertexAttributes {
         }
     }
 
+    pub
+    fn zeros () -> Self 
+    {
+        Self {
+            screen_coord: Vec2::new(0., 0.),
+            color:  Color::White,
+            normal: Vec3::zeros(),
+            light:  Vec3::zeros(),
+            eye:    Vec3::zeros(),
+            depth:  0.0,
+            texture_coord:  Vec3::zeros(),
+        }
+    }
 }
 
 impl Add for VertexAttributes {
@@ -296,8 +309,7 @@ impl Canva {
 
     pub
     fn clear(&mut self) {
-        let len: usize = self.width * self.height;
-        self.frame = vec![Pixel::black(); len];
+        self.frame.iter_mut().for_each(|pixel| *pixel = Pixel::black());
 
         if self.depth_frame.len() > 0 {
             self.enable_depth(self.depth_max);

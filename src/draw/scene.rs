@@ -25,8 +25,7 @@ impl Triangle {
     pub
     fn new (vertices:      [Vec3; 3],
             vertices_attr: [VertexAttributes; 3], 
-            color: Color, 
-            label: & str) -> Self
+            color: Color) -> Self
     {
         Self {
             vertices: vertices,
@@ -56,11 +55,11 @@ impl Triangle {
         let mut tri_pool:  Vec<Self> = Vec::from([self.clone()]);
 
         for plane in view_planes.iter() {
-            let mut new_tri_pool:  Vec<Self> = Vec::new();
+            let mut new_tri_pool:  Vec<Self> = Vec::with_capacity(tri_pool.len() * 2);
 
             for tri in tri_pool.iter() {
-                let clipped_triangles = plane.clip(tri.clone());
-                new_tri_pool.extend(clipped_triangles);
+                let mut clipped_triangles = plane.clip(tri.clone());
+                new_tri_pool.append(&mut clipped_triangles);
             }
 
             tri_pool = new_tri_pool;
@@ -87,14 +86,14 @@ type IndexedTriangle = [usize; 3];
 
 pub
 struct IndexedMesh {
-    triangles: Vec<IndexedTriangle>,
-    vertices: Vec<Vec3>,
+    triangles:          Vec<IndexedTriangle>,
+    vertices:           Vec<Vec3>,
 
-    normals_triangles: Vec<IndexedTriangle>,
-    normals_vertices: Vec<Vec3>,
+    normals_triangles:  Vec<IndexedTriangle>,
+    normals_vertices:   Vec<Vec3>,
 
-    texture_triangles: Vec<IndexedTriangle>,
-    texture_vertices: Vec<Vec3>,
+    texture_triangles:  Vec<IndexedTriangle>,
+    texture_vertices:   Vec<Vec3>,
 }
 
 impl IndexedMesh {
@@ -146,48 +145,53 @@ impl IndexedMesh {
     */
 
     //TODO: enxugar essas 3 funcs ".._from_index" aq
+    fn vec3_list_from_indexed(indexed_tri: IndexedTriangle, vert_list: &Vec<Vec3>) -> [Vec3; 3] {
+        let a_idx = indexed_tri[0];
+        let b_idx = indexed_tri[1];
+        let c_idx = indexed_tri[2];
+
+        unsafe {
+            let a_vert = *vert_list.get_unchecked(a_idx);
+            let b_vert = *vert_list.get_unchecked(b_idx);
+            let c_vert = *vert_list.get_unchecked(c_idx);
+
+            [a_vert, 
+            b_vert, 
+            c_vert]
+        }
+    }
 
     pub
     fn vertices_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        let a_idx = self.triangles[tri_idx][0];
-        let b_idx = self.triangles[tri_idx][1];
-        let c_idx = self.triangles[tri_idx][2];
-
-        let a_vert = self.vertices[a_idx];
-        let b_vert = self.vertices[b_idx];
-        let c_vert = self.vertices[c_idx];
-
-        [a_vert, b_vert, c_vert]
+        debug_assert!(tri_idx < self.triangles.len());
+        unsafe {
+            Self::vec3_list_from_indexed(
+                *self.triangles.get_unchecked(tri_idx), 
+                &self.vertices
+            )
+        }
     }
 
     pub
     fn normals_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        let a_idx = self.normals_triangles[tri_idx][0];
-        let b_idx = self.normals_triangles[tri_idx][1];
-        let c_idx = self.normals_triangles[tri_idx][2];
-
-        let a_normal = self.normals_vertices[a_idx];
-        let b_normal = self.normals_vertices[b_idx];
-        let c_normal = self.normals_vertices[c_idx];
-
-        [a_normal, 
-         b_normal,
-         c_normal]
+        debug_assert!(tri_idx < self.normals_triangles.len());
+        unsafe {
+            Self::vec3_list_from_indexed(
+                *self.normals_triangles.get_unchecked(tri_idx), 
+                &self.normals_vertices
+            )
+        }
     }
 
     pub
     fn textures_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        let a_idx = self.texture_triangles[tri_idx][0];
-        let b_idx = self.texture_triangles[tri_idx][1];
-        let c_idx = self.texture_triangles[tri_idx][2];
-
-        let a_texture = self.texture_vertices[a_idx];
-        let b_texture = self.texture_vertices[b_idx];
-        let c_texture = self.texture_vertices[c_idx];
-
-        [a_texture,
-         b_texture,
-         c_texture]
+        debug_assert!(tri_idx < self.texture_triangles.len());
+        unsafe {
+            Self::vec3_list_from_indexed(
+                *self.texture_triangles.get_unchecked(tri_idx), 
+                &self.texture_vertices
+            )
+        }
     }
 
 }
@@ -530,9 +534,6 @@ struct Camera {
     position:  Vec3,
     direction: Vec3,
 
-    // TODO: mudar esse conceito aq para janela 
-    // (window view - right, let, top, bottom) ja que agora a visao
-    // em perpectiva parece funcionar
     window_view: CameraWindow,
     min_view_dist: f32,
     max_view_dist: f32,
@@ -946,14 +947,13 @@ impl ViewPlane {
         let t_a = self.func(a_vertex) /
             self.normal().dot(a_vertex - c_vertex) - EPS;
         let new_vertex_a = a_vertex + (c_vertex - a_vertex) * t_a;
-
-        let new_a_attr   = a_attr   + (c_attr - a_attr) * t_a;
+        let new_a_attr   = a_attr   + (c_attr   - a_attr)   * t_a;
 
 
         let t_b = self.func(b_vertex) /
             self.normal().dot(b_vertex - c_vertex) - EPS;
         let new_vertex_b = b_vertex + (c_vertex - b_vertex) * t_b;
-        let new_b_attr   = b_attr   + (c_attr - b_attr) * t_b;
+        let new_b_attr   = b_attr   + (c_attr   - b_attr)   * t_b;
 
 
         if f_c <= 0.0 {
@@ -969,7 +969,6 @@ impl ViewPlane {
                     new_b_attr
                 ],
                 tri.color,
-                "neww a"
             );
 
             let new_triangle_b = Triangle::new(
@@ -984,7 +983,6 @@ impl ViewPlane {
                     new_b_attr
                 ],
                 tri.color,
-                "neww b"
             );
 
             return Vec::from([new_triangle_a, new_triangle_b]);
@@ -1001,7 +999,6 @@ impl ViewPlane {
                     new_b_attr
                 ],
                 tri.color,
-                "neww c"
             );
 
             return Vec::from([new_triangle_c]);
@@ -1147,16 +1144,11 @@ impl Scene {
 
         let func_planes = self.camera.gen_view_planes();
 
-        fn cmp_max (a: f32, b: f32) -> f32 {
-            if a > b {return a;}
-            else     {return b;}
-        }
-
         for obj in self.objects.iter() {
             // TODO: ta meio feio isso aq, tem que embelezar
             for (tri_idx, _) in obj.mesh.triangles.iter().enumerate() {
                 let tri_vertices = obj.mesh.vertices_from_index(tri_idx);
-                let tri_normals = obj.mesh.normals_from_index(tri_idx);
+                let tri_normals  = obj.mesh.normals_from_index(tri_idx);
                 let tri_textures = obj.mesh.textures_from_index(tri_idx);
 
                 let a_vertex = tri_vertices[0];
@@ -1180,9 +1172,9 @@ impl Scene {
                 let c_eye = (c_vertex - camera_pos).normalized();
 
 
-                let a_depth: f32 = (camera_pos - tri_vertices[0]).norm() as _;
-                let b_depth: f32 = (camera_pos - tri_vertices[1]).norm() as _;
-                let c_depth: f32 = (camera_pos - tri_vertices[2]).norm() as _;
+                let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
+                let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
+                let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
 
                 let a_attr = VertexAttributes::new(
                     Vec2::new(0., 0.),
@@ -1215,7 +1207,7 @@ impl Scene {
                     c_texture_coord,
                 );
 
-                let tri = Triangle::new(
+                let original_tri = Triangle::new(
                     [
                         a_vertex,
                         b_vertex,
@@ -1227,10 +1219,9 @@ impl Scene {
                         c_attr,
                     ],
                     Color::Green,
-                    "",
                 );
 
-                let mut clipped_triangles = tri.clip_against_planes(&func_planes);
+                let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
                 for clipped_tri in clipped_triangles.iter_mut() {
 
                     let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();

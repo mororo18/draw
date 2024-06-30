@@ -1,3 +1,3 @@
 pub mod linalg;
 pub mod scene;
-pub mod canva;
+pub mod canvas;

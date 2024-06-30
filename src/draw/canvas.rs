@@ -263,7 +263,7 @@ impl Mul<f32> for VertexAttributes {
 
 
 pub
-struct Canva {
+struct Canvas {
     frame: Vec<Pixel>,
     width: usize,
     height: usize,
@@ -272,13 +272,13 @@ struct Canva {
     depth_max:  f32,
 }
 
-impl Canva {
+impl Canvas {
     pub
     fn new (width: usize, height: usize) -> Self {
         let len: usize = width * height;
         let frame = vec![Pixel::black(); len];
 
-        Canva {
+        Self {
             frame: frame,
             width: width,
             height: height,
@@ -290,7 +290,13 @@ impl Canva {
 
     pub
     fn enable_depth(&mut self, depth: f32) {
-        self.depth_frame = vec![depth; self.frame.len()];
+        if self.depth_frame.len() != self.frame.len() {
+            self.depth_frame = vec![depth; self.frame.len()];
+
+        } else if self.depth_frame.len() == self.frame.len() {
+            self.depth_frame.iter_mut().for_each(|d| *d = depth);
+        }
+
         self.depth_max = depth;
     }
 

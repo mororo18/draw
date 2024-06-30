@@ -5,10 +5,6 @@ use std::ops::{
     Mul,
 };
 
-use crate::draw::canva::{
-    Color,
-};
-
 pub const EPS: f32 = 0.0000001;
 
 #[derive(Debug, Copy, Clone)]

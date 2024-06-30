@@ -1,5 +1,5 @@
-use crate::draw::canva::{
-    Canva,
+use crate::draw::canvas::{
+    Canvas,
     Color,
     VertexAttributes,
 };
@@ -1010,7 +1010,7 @@ impl ViewPlane {
 
 pub
 struct Scene {
-    canva: Canva,
+    canvas: Canvas,
     width: usize,
     height: usize,
     camera: Camera,
@@ -1034,13 +1034,13 @@ impl Scene {
         let camera = Camera::new(camera_pos, camera_dir, ratio);
 
 
-        let mut canva = Canva::new(width, height);
-        canva.enable_depth(100000.0);
+        let mut canvas = Canvas::new(width, height);
+        canvas.enable_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
         let obj = Object::load_from_file("airplane.obj");
 
         Self {
-            canva:   canva,
+            canvas:   canvas,
             width:   width,
             height:  height,
             camera:  camera,
@@ -1136,7 +1136,7 @@ impl Scene {
     pub
     fn render (&mut self) {
 
-        self.canva.clear();
+        self.canvas.clear();
 
         let matrix_transf = self.gen_transformation_matrix();
 
@@ -1247,7 +1247,7 @@ impl Scene {
                     let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
                     */
 
-                    self.canva.draw_triangle_with_attributes(
+                    self.canvas.draw_triangle_with_attributes(
                         clipped_tri.vertices_attr[0],
                         clipped_tri.vertices_attr[1],
                         clipped_tri.vertices_attr[2],
@@ -1266,7 +1266,7 @@ impl Scene {
 
     pub
     fn frame_as_bytes_slice(&self) -> &[u8] {
-        self.canva.as_bytes_slice()
+        self.canvas.as_bytes_slice()
     }
 
 }

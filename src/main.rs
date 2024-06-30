@@ -7,9 +7,8 @@ use window::{
     Key,
 };
 
-use draw::scene::{
+use draw::renderer::scene::{
     Scene,
-    Object,
 };
 
 use std::time::Instant;

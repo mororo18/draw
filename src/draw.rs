@@ -1,3 +1,1 @@
-pub mod linalg;
-pub mod scene;
-pub mod canvas;
+pub mod renderer;

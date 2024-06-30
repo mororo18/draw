@@ -2,14 +2,14 @@ use itertools::Either;
 use std::ops::{Mul, Add, Sub};
 use std::cmp::Ordering;
 
-use crate::draw::linalg::{
+use crate::draw::renderer::linalg::{
     Vec2,
     Vec3,
     Vec4,
 };
 
 // TODO: resolver dependencia cruzada :(
-use crate::draw::scene::Texture;
+use crate::draw::renderer::scene::Texture;
 
 use core::arch::x86_64::__rdtscp;
 

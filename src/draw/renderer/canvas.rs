@@ -11,7 +11,6 @@ use crate::draw::renderer::linalg::{
 // TODO: resolver dependencia cruzada :(
 use crate::draw::renderer::scene::Texture;
 
-use core::arch::x86_64::__rdtscp;
 
 struct MicroBench {
     start: u64,
@@ -34,6 +33,7 @@ impl MicroBench {
 
 
     fn read_tsc() -> u64 {
+        use core::arch::x86_64::__rdtscp;
 
          let clock: u64;
 
@@ -562,15 +562,15 @@ impl Canvas {
                                           (c_attr.texture_coord * gama);
 
                         let pixel_color_slice = texture.get_rgb_slice(
-                            pixel_texture_coord.x(),
-                            pixel_texture_coord.y(),
-                        );
+                                                    pixel_texture_coord.x(),
+                                                    pixel_texture_coord.y(),
+                                                );
                         
                         let pixel_color = Pixel::new(
-                            pixel_color_slice[0],
-                            pixel_color_slice[1],
-                            pixel_color_slice[2],
-                        );
+                                            pixel_color_slice[0],
+                                            pixel_color_slice[1],
+                                            pixel_color_slice[2],
+                                        );
 
                         // phong shadding ??
 

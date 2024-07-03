@@ -16,9 +16,9 @@ use crate::draw::renderer::linalg::{
 #[derive(Clone, Debug)]
 struct Triangle {
     vertices:      [Vec3; 3],
-    vertices_attr: [VertexAttributes; 3],
-    normal: Vec3,
-    color: Color,
+    vertices_attr:  Option<[VertexAttributes; 3]>,
+    normal:         Option<Vec3>,
+    color:          Option<Color>,
 }
 
 impl Triangle {
@@ -28,10 +28,10 @@ impl Triangle {
             color: Color) -> Self
     {
         Self {
-            vertices: vertices,
-            vertices_attr: vertices_attr,
-            color: color,
-            normal: Vec3::zeros(),
+            vertices:       vertices,
+            vertices_attr:  Some(vertices_attr),
+            color:          Some(color),
+            normal:         None,
         }
     }
     
@@ -92,8 +92,8 @@ struct IndexedMesh {
     normals_triangles:  Vec<IndexedTriangle>,
     normals_vertices:   Vec<Vec3>,
 
-    texture_triangles:  Vec<IndexedTriangle>,
-    texture_vertices:   Vec<Vec3>,
+    texture_triangles:  Option<Vec<IndexedTriangle>>,
+    texture_vertices:   Option<Vec<Vec3>>,
 }
 
 impl IndexedMesh {
@@ -185,11 +185,14 @@ impl IndexedMesh {
 
     pub
     fn textures_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        debug_assert!(tri_idx < self.texture_triangles.len());
+        let texture_triangles = self.texture_triangles.as_ref().expect("Mesh nao possui textura associada.");
+        let texture_vertices  = self.texture_vertices.as_ref().expect("Mesh nao possui textura associada.");
+
+        debug_assert!(tri_idx < texture_triangles.len());
         unsafe {
             Self::vec3_list_from_indexed(
-                *self.texture_triangles.get_unchecked(tri_idx), 
-                &self.texture_vertices
+                *texture_triangles.get_unchecked(tri_idx), 
+                texture_vertices
             )
         }
     }
@@ -208,25 +211,30 @@ struct Texture {
 impl Texture {
     pub
     fn new (img: Vec<u8>, width: usize, height: usize, components: usize) -> Self {
+        assert!(img.len() % components == 0);
+        assert!(img.len() / components == width * height);
+
         Self {
-            img: img,
-            width: width,
-            height: height,
+            img:        img,
+            width:      width,
+            height:     height,
             components: components,
         }
     }
 
     pub
     fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
-        debug_assert!(
-            0.0 <= u && u < 1.0 &&
-            0.0 <= v && v < 1.0
-        );
+        debug_assert!(0.0 <= u && u < 1.0);
+        debug_assert!(0.0 <= v && v < 1.0);
 
         let u_idx = (u * (self.width)  as f32).floor() as usize;
         let v_idx = self.height -1 - (v * (self.height) as f32).floor() as usize;
         
         let offset = (v_idx * self.width + u_idx) * self.components;
+
+        debug_assert!(offset     <  self.img.len());
+        debug_assert!(offset + 3 <= self.img.len());
+
         self.img[
             (offset) ..
             (offset) + 3
@@ -265,15 +273,15 @@ impl Texture {
 pub
 struct Object {
     mesh: IndexedMesh,
-    texture: Texture,
+    texture: Option<Texture>,
     //triangles: Vec<Triangle>,
 }
 
 impl Object {
     pub
-    fn new (mesh: IndexedMesh, texture: Texture) -> Self {
+    fn new (mesh: IndexedMesh, texture: Option<Texture>) -> Self {
         Self {
-            mesh: mesh,
+            mesh:    mesh,
             texture: texture,
         }
     }
@@ -439,20 +447,20 @@ impl Object {
 
         //let mesh = IndexedMesh::new(faces, vertices);
         let mesh = IndexedMesh {
-            triangles: faces,
-            vertices: vertices,
+            triangles:         faces,
+            vertices:          vertices,
 
             normals_triangles: normals_faces,
-            normals_vertices: normals,
+            normals_vertices:  normals,
 
-
-            texture_triangles: texture_faces,
-            texture_vertices: texture,
+            texture_triangles: Some(texture_faces),
+            texture_vertices:  Some(texture),
         };
 
         Self::new(
             mesh,
-            Texture::load_from_file("airplane.jpg")
+            None,
+            //Texture::load_from_file("airplane.jpg")
         )
     }
 
@@ -894,9 +902,10 @@ impl ViewPlane {
         let mut b_vertex = tri.vertices[1];
         let mut c_vertex = tri.vertices[2];
 
-        let mut a_attr = tri.vertices_attr[0];
-        let mut b_attr = tri.vertices_attr[1];
-        let mut c_attr = tri.vertices_attr[2];
+        let tri_vert_attr = tri.vertices_attr.unwrap();
+        let mut a_attr = tri_vert_attr[0];
+        let mut b_attr = tri_vert_attr[1];
+        let mut c_attr = tri_vert_attr[2];
 
         let mut f_a = self.func(a_vertex);
         let mut f_b = self.func(b_vertex);
@@ -968,7 +977,7 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color,
+                tri.color.unwrap(),
             );
 
             let new_triangle_b = Triangle::new(
@@ -982,7 +991,7 @@ impl ViewPlane {
                     b_attr,
                     new_b_attr
                 ],
-                tri.color,
+                tri.color.unwrap(),
             );
 
             return Vec::from([new_triangle_a, new_triangle_b]);
@@ -998,7 +1007,7 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color,
+                tri.color.unwrap(),
             );
 
             return Vec::from([new_triangle_c]);
@@ -1236,9 +1245,10 @@ impl Scene {
                     let b_coord  = b_vec4.as_vec2() / b_w;
                     let c_coord  = c_vec4.as_vec2() / c_w;
 
-                    clipped_tri.vertices_attr[0].screen_coord = a_coord;
-                    clipped_tri.vertices_attr[1].screen_coord = b_coord;
-                    clipped_tri.vertices_attr[2].screen_coord = c_coord;
+                    let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
+                    clip_tri_vert_attr[0].screen_coord = a_coord;
+                    clip_tri_vert_attr[1].screen_coord = b_coord;
+                    clip_tri_vert_attr[2].screen_coord = c_coord;
                     // vis'ao ortogonal
                     /*
                     let camera_dir = self.camera.get_direction().normalized();
@@ -1247,14 +1257,43 @@ impl Scene {
                     let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
                     */
 
+                    let obj_texture = match &obj.texture {
+                        Some(texture) => &texture,
+                        None          => {
+                            if let Some(tri_color) = clipped_tri.color {
+                                
+                                // TODO arrumar uma maneira de converter a cor do triangulo (enum)
+                                // num array de tres u8's.
+                                
+                                &Texture::new(
+                                    Vec::from([255, 0, 0]),
+                                    1, 
+                                    1,
+                                    3,
+                                )
+
+                            } else {
+
+                                panic!("Triangle has no associated texture or color.");
+                                
+                                // repeti isso aq só p o bicho me deixar compilar
+                                &Texture::new(
+                                    Vec::from([255, 0, 0]),
+                                    1, 
+                                    1,
+                                    3,
+                                )
+                            }
+                        },
+                    };
+
                     self.canvas.draw_triangle_with_attributes(
-                        clipped_tri.vertices_attr[0],
-                        clipped_tri.vertices_attr[1],
-                        clipped_tri.vertices_attr[2],
+                        clip_tri_vert_attr[0],
+                        clip_tri_vert_attr[1],
+                        clip_tri_vert_attr[2],
 
-                        &obj.texture
+                        obj_texture
                     );
-
                 }
             }
         }

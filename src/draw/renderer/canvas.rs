@@ -39,7 +39,7 @@ impl MicroBench {
 
          unsafe {
              let tmp: u32 = 0;
-             let ptr = std::ptr::from_ref(&tmp);
+             let ptr: *const u32 = &tmp;
              clock = __rdtscp(ptr as *mut u32);
          };
 

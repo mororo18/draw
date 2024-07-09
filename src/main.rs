@@ -1,5 +1,6 @@
 mod draw;
 mod window;
+mod microbench;
 
 use window::{
     Window,

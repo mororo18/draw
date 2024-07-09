@@ -11,41 +11,20 @@ use crate::draw::renderer::linalg::{
 // TODO: resolver dependencia cruzada :(
 use crate::draw::renderer::scene::Texture;
 
-
-struct MicroBench {
-    start: u64,
+trait ColorOp {
+    fn color_multiply(self, rhs: Self) -> Self;
 }
 
-impl MicroBench {
-    fn now() -> Self {
-
-        let stamp = Self::read_tsc();
-
-         Self {
-             start: stamp,
-         }
-    }
-
-    fn elapsed(&self) -> u64 {
-        let now = Self::read_tsc();
-        return now - self.start;
-    }
-
-
-    fn read_tsc() -> u64 {
-        use core::arch::x86_64::__rdtscp;
-
-         let clock: u64;
-
-         unsafe {
-             let tmp: u32 = 0;
-             let ptr: *const u32 = &tmp;
-             clock = __rdtscp(ptr as *mut u32);
-         };
-
-         return clock;
+impl ColorOp for Vec3 {
+    fn color_multiply(self, rhs: Self) -> Self {
+        Self::new([
+            self.x() * rhs.x(),
+            self.y() * rhs.y(),
+            self.z() * rhs.z(),
+        ])
     }
 }
+
 
 #[derive(Clone, Copy, Debug)]
 pub
@@ -89,7 +68,26 @@ struct Pixel {
 impl Pixel {
     pub
     fn new (r: u8, g: u8, b: u8) -> Self {
-        Pixel {r:r, g:g, b:b, padd: 0}
+        Self {r:r, g:g, b:b, padd: 0}
+    }
+
+    pub
+    fn normalized_as_vec3(&self) -> Vec3 {
+        Vec3::new([
+            self.r as f32 / 255.0,
+            self.g as f32 / 255.0,
+            self.b as f32 / 255.0,
+        ])
+    }
+
+    pub
+    fn from_normalized_vec3(src: Vec3) -> Self {
+        let scaled = src * 255.0;
+        Self::new(
+            scaled.x() as u8,
+            scaled.y() as u8,
+            scaled.z() as u8,
+        )
     }
 
     pub
@@ -561,16 +559,16 @@ impl Canvas {
                                           (b_attr.texture_coord * beta) +
                                           (c_attr.texture_coord * gama);
 
-                        let pixel_color_slice = texture.get_rgb_slice(
+                        let pixel_color_slice = texture.map_ka.get_rgb_slice(
                                                     pixel_texture_coord.x(),
                                                     pixel_texture_coord.y(),
                                                 );
                         
-                        let pixel_color = Pixel::new(
-                                            pixel_color_slice[0],
-                                            pixel_color_slice[1],
-                                            pixel_color_slice[2],
-                                        );
+                        let pixel_color: Vec3 = Pixel::new(
+                                                pixel_color_slice[0],
+                                                pixel_color_slice[1],
+                                                pixel_color_slice[2],
+                                            ).normalized_as_vec3();
 
                         // phong shadding ??
 
@@ -588,22 +586,21 @@ impl Canvas {
 
                         let pixel_halfway = h_compute(pixel_light, pixel_eye);
 
-                        let power = 8;
+                        let power = 2;
 
 
-                        let c_l = 0.6;
-                        let c_r = 0.6;
-                        let c_a = 0.4;
-                        let c_p = 1.0 - c_r;
+                        let c_l = texture.ks;  // intensity term
+                        let c_r = pixel_color * 0.4;  // diffuse reflectance
+                        let c_a = pixel_color ;  // ambient term
 
-                        debug_assert!(c_l + c_a <= 1.0);
+                        //debug_assert!(c_l + c_a <= 1.0);
 
-                        let color_coef = c_r * (c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )
-                                        + c_p * c_l * (pixel_halfway.dot(pixel_normal).powi(power));
+                        let color_normalized = c_r.color_multiply(c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )
+                                        + c_l * (pixel_halfway.dot(pixel_normal).powi(power));
 
+                        let color = Pixel::from_normalized_vec3(color_normalized);
 
-
-                        self.draw_pixel_coord_with_depth(x, y, pixel_color * color_coef, pixel_depth);
+                        self.draw_pixel_coord_with_depth(x, y, color, pixel_depth);
 
                     }
                 }

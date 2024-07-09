@@ -12,6 +12,8 @@ use crate::draw::renderer::linalg::{
     EPS,
 };
 
+use obj;
+
 
 #[derive(Clone, Debug)]
 struct Triangle {
@@ -87,13 +89,10 @@ type IndexedTriangle = [usize; 3];
 pub
 struct IndexedMesh {
     triangles:          Vec<IndexedTriangle>,
-    vertices:           Vec<Vec3>,
-
     normals_triangles:  Vec<IndexedTriangle>,
-    normals_vertices:   Vec<Vec3>,
-
     texture_triangles:  Option<Vec<IndexedTriangle>>,
-    texture_vertices:   Option<Vec<Vec3>>,
+
+    texture_idx:       Option<usize>,
 }
 
 impl IndexedMesh {
@@ -144,11 +143,15 @@ impl IndexedMesh {
     }
     */
 
-    //TODO: enxugar essas 3 funcs ".._from_index" aq
+    pub
     fn vec3_list_from_indexed(indexed_tri: IndexedTriangle, vert_list: &Vec<Vec3>) -> [Vec3; 3] {
         let a_idx = indexed_tri[0];
         let b_idx = indexed_tri[1];
         let c_idx = indexed_tri[2];
+
+        assert!(vert_list.len() > a_idx);
+        assert!(vert_list.len() > b_idx);
+        assert!(vert_list.len() > c_idx);
 
         unsafe {
             let a_vert = *vert_list.get_unchecked(a_idx);
@@ -161,54 +164,20 @@ impl IndexedMesh {
         }
     }
 
-    pub
-    fn vertices_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        debug_assert!(tri_idx < self.triangles.len());
-        unsafe {
-            Self::vec3_list_from_indexed(
-                *self.triangles.get_unchecked(tri_idx), 
-                &self.vertices
-            )
-        }
-    }
-
-    pub
-    fn normals_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        debug_assert!(tri_idx < self.normals_triangles.len());
-        unsafe {
-            Self::vec3_list_from_indexed(
-                *self.normals_triangles.get_unchecked(tri_idx), 
-                &self.normals_vertices
-            )
-        }
-    }
-
-    pub
-    fn textures_from_index (&self, tri_idx: usize) -> [Vec3; 3] {
-        let texture_triangles = self.texture_triangles.as_ref().expect("Mesh nao possui textura associada.");
-        let texture_vertices  = self.texture_vertices.as_ref().expect("Mesh nao possui textura associada.");
-
-        debug_assert!(tri_idx < texture_triangles.len());
-        unsafe {
-            Self::vec3_list_from_indexed(
-                *texture_triangles.get_unchecked(tri_idx), 
-                texture_vertices
-            )
-        }
-    }
-
 }
 
 pub
-struct Texture {
+struct TextureMap {
     img: Vec<u8>,
     width: usize,
     height: usize,
     components: usize,
 
+    f_width: f32,
+    f_height: f32,
 }
 
-impl Texture {
+impl TextureMap {
     pub
     fn new (img: Vec<u8>, width: usize, height: usize, components: usize) -> Self {
         assert!(img.len() % components == 0);
@@ -219,6 +188,9 @@ impl Texture {
             width:      width,
             height:     height,
             components: components,
+
+            f_width: width as f32,
+            f_height: height as f32,
         }
     }
 
@@ -227,8 +199,8 @@ impl Texture {
         debug_assert!(0.0 <= u && u < 1.0);
         debug_assert!(0.0 <= v && v < 1.0);
 
-        let u_idx = (u * (self.width)  as f32).floor() as usize;
-        let v_idx = self.height -1 - (v * (self.height) as f32).floor() as usize;
+        let u_idx =                  (u * self.f_width).floor()  as usize;
+        let v_idx = self.height -1 - (v * self.f_height).floor() as usize;
         
         let offset = (v_idx * self.width + u_idx) * self.components;
 
@@ -270,19 +242,68 @@ impl Texture {
 
 }
 
+// https://paulbourke.net/dataformats/mtl/
+
+// isso eh um obj mtl
+pub
+struct Texture {
+    pub ka: Vec3,
+    pub kd: Vec3,
+    pub ks: Vec3,
+
+    pub map_ka:      TextureMap,
+}
+
+impl Texture {
+    fn default() -> Self {
+        let map = TextureMap::new(
+            Vec::from([255, 0, 0]),
+            1, 
+            1,
+            3,
+        );
+
+        Self {
+            ka: Vec3::new([1.0, 1.0, 1.0]),
+            kd: Vec3::new([1.0, 1.0, 1.0]),
+            ks: Vec3::new([0.5, 0.5, 0.5]),
+
+            map_ka: map,
+        }
+    }
+}
+
+// 1. conter no obeto vetor de meshes de triangulos
+// 2. cada mesh pode referenciar um meterial especifico
+// 3. os dados dos vetores/vertices/texturas serao armazenados pelo struct Object
+// 4. as malhas armazenaram as infos de materiasi e os indices de vetores/vertices/textura
+
 pub
 struct Object {
-    mesh: IndexedMesh,
-    texture: Option<Texture>,
-    //triangles: Vec<Triangle>,
+    vertices:           Vec<Vec3>,
+    normals_vertices:   Vec<Vec3>,
+    texture_vertices:   Option<Vec<Vec3>>,
+
+    meshes: Vec<IndexedMesh>,
+
+    textures: Option<Vec<Texture>>,
 }
 
 impl Object {
     pub
-    fn new (mesh: IndexedMesh, texture: Option<Texture>) -> Self {
+    fn new (vertices:           Vec<Vec3>,
+            normals_vertices:   Vec<Vec3>,
+            texture_vertices:   Option<Vec<Vec3>>,
+            meshes:             Vec<IndexedMesh>,
+            textures:           Option<Vec<Texture>>) -> Self 
+    {
         Self {
-            mesh:    mesh,
-            texture: texture,
+            vertices:           vertices,
+            normals_vertices:   normals_vertices,
+            texture_vertices:   texture_vertices,
+
+            meshes:             meshes,
+            textures:           textures,
         }
     }
 
@@ -300,9 +321,199 @@ impl Object {
         sum / (3. * self.triangles.len() as f32)
     }
     */
-
     pub
-    fn load_from_file(filename: &str) -> Self {
+    fn load_from_file_test(filename: &str) -> Self {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        use std::path::Path;
+
+        let path = Path::new(filename);
+
+        let file = File::open(&path).expect("Unable to open file {filename}.");
+        let reader = BufReader::new(file);
+
+        let mut obj_data = obj::ObjData::load_buf(reader).unwrap();
+
+        obj_data.material_libs.iter_mut().for_each(
+            |mtllib| {
+                let path = Path::new(mtllib.filename.as_str());
+                let fname = mtllib.filename.as_str();
+                let file = File::open(&path).expect("Unable to open file {fname}.");
+                mtllib.reload(file);
+            }
+        );
+
+
+        let mut vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
+        let mut normals:     Vec<Vec3> = obj_data.normal.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
+        let mut texture_uv:  Vec<Vec3> = obj_data.texture.iter().map(|e| Vec3::new([e[0], e[1], 0.0])).collect::<_>();
+
+        let mut textures: Vec<Texture> = Vec::new();
+
+        let mut meshes: Vec<IndexedMesh> = Vec::new();
+
+        //assert!(obj_data.objects.len() == 1);
+        for mtl in obj_data.material_libs.iter() {
+            for material in mtl.materials.iter() {
+                println!("material {}", material.map_ka.as_ref().unwrap());
+                let ka = material.ka.as_ref().unwrap();
+                let kd = material.kd.as_ref().unwrap();
+                let ks = material.ks.as_ref().unwrap();
+                let map_ka_filename = material.map_ka.as_ref().unwrap();
+
+                println!("{}", map_ka_filename);
+                println!("ambient {:?}", ka);
+                println!("difuse {:?}", kd);
+                println!("ssss {:?}", ks);
+
+                textures.push(
+                    Texture {
+                        ka: Vec3::new(*ka),
+                        kd: Vec3::new(*kd),
+                        ks: Vec3::new(*ks),
+
+                        map_ka: TextureMap::load_from_file(map_ka_filename),
+                    }
+                );
+                let _ = material.map_kd.as_ref().unwrap();
+
+            }
+        }
+
+        //unreachable!();
+
+        for obj in obj_data.objects.iter() {
+            println!("Object {}", obj.name);
+
+
+            for group in obj.groups.iter() {
+
+                let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
+                let mut mesh_texture_faces: Vec<IndexedTriangle> = Vec::new();
+                let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
+
+                println!("\t Group name     {}", group.name);
+                //println!("\t Group material {:?}", group.material);
+
+                if let Some(material) = &group.material {
+                    match material {
+                        obj::ObjMaterial::Ref(material_name) => {
+                            println!("\tGroup material (Ref) {:?}", material_name)
+                        },
+
+                        obj::ObjMaterial::Mtl(material_arc) => {
+                            println!("\tGroup material (Arc) {:?}", material_arc)
+                        },
+                    }
+                }
+
+                for face in group.polys.iter() {
+                    let face_vec = &face.0;
+                    let mut vertex_index: Vec<usize> = Vec::new();
+                    let mut texture_index: Vec<usize> = Vec::new();
+                    let mut normals_index: Vec<usize> = Vec::new();
+
+                    for vertex_tuple in face_vec.iter() {
+                        //println!("\t\tVertex {:?}", vertex_tuple);
+                        vertex_index.push(vertex_tuple.0);
+                        texture_index.push(vertex_tuple.1.unwrap());
+                        normals_index.push(vertex_tuple.2.unwrap());
+                    }
+
+
+                    let vertex_idx_a = vertex_index[0];
+                    let vertex_idx_b = vertex_index[1];
+                    let vertex_idx_c = vertex_index[2];
+
+                    let texture_idx_a = texture_index[0];
+                    let texture_idx_b = texture_index[1];
+                    let texture_idx_c = texture_index[2];
+
+                    let normals_idx_a = normals_index[0];
+                    let normals_idx_b = normals_index[1];
+                    let normals_idx_c = normals_index[2];
+
+                    if face_vec.len() >= 3 {
+
+                        mesh_faces.push([
+                            vertex_idx_a,
+                            vertex_idx_b,
+                            vertex_idx_c
+                        ]);
+                        mesh_texture_faces.push([
+                            texture_idx_a,
+                            texture_idx_b,
+                            texture_idx_c
+                        ]);
+                        mesh_normals_faces.push([
+                            normals_idx_a,
+                            normals_idx_b,
+                            normals_idx_c
+                        ]);
+
+                    }
+
+                    if face_vec.len() == 4 {
+
+                        let vertex_idx_d  = vertex_index[3];
+                        let texture_idx_d = texture_index[3];
+                        let normals_idx_d = normals_index[3];
+
+                        mesh_faces.push([
+                            vertex_idx_c,
+                            vertex_idx_d,
+                            vertex_idx_a
+                        ]);
+
+                        mesh_texture_faces.push([
+                            texture_idx_c,
+                            texture_idx_d,
+                            texture_idx_a
+                        ]);
+
+                        mesh_normals_faces.push([
+                            normals_idx_c,
+                            normals_idx_d,
+                            normals_idx_a
+                        ]);
+
+                    } else if face_vec.len() > 4 {
+                        todo!();
+                    }
+                }
+
+                assert!(
+                    mesh_faces.len() == mesh_normals_faces.len() &&
+                    mesh_faces.len() == mesh_texture_faces.len()
+                );
+
+                meshes.push(
+
+                    IndexedMesh {
+                        triangles:              mesh_faces,
+                        normals_triangles:      mesh_normals_faces,
+                        texture_triangles: Some(mesh_texture_faces),
+                        texture_idx: None,
+                    }
+                );
+
+            }
+        }
+
+        Self::new(
+          vertices,
+          normals,
+          Some(texture_uv),
+          meshes,
+          //Some(materials),
+          Some(textures),             // Option<Vec<TextureMap>>
+        )
+
+    }
+
+    /*
+    pub
+    fn load_from_file(filename: &str) {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
         use std::path::Path;
@@ -321,7 +532,17 @@ impl Object {
         let mut texture_faces: Vec<IndexedTriangle> = Vec::new();
         let mut normals_faces: Vec<IndexedTriangle> = Vec::new();
 
-        for line in reader.lines() {
+        let mut group_current_name      = String::new();
+        let mut group_current_face: usize = 0;
+
+        let mut material_current_name      = String::new();
+        let mut material_current_face: usize = 0;
+
+                                     // name  , face_idx
+        let mut groups_tuple_list: Vec<(String, usize)> = Vec::new();
+        let mut materials_tuple_list: Vec<(String, usize)> = Vec::new();
+
+        for (line_idx, line) in reader.lines().enumerate() {
             //println!("{}", line.as_ref().unwrap().clone());
             let line = line.expect("Unable to read line");
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -439,11 +660,38 @@ impl Object {
 
                 },
 
-                _ => {println!("Can't interpret this line: {}", line);},
+                "g" => {
+                    group_current_name = String::from(*parts.get(1).unwrap());
+                    group_current_face = faces.len();
+
+                    groups_tuple_list.push(
+                        (group_current_name, group_current_face)
+                    );
+                },
+
+                "usemtl" => {
+                    material_current_name = String::from(*parts.get(1).unwrap());
+                    material_current_face = faces.len();
+
+                    materials_tuple_list.push(
+                        (material_current_name, material_current_face)
+                    );
+                },
+
+                _ => {println!("Can't interpret this line ({line_idx}): {line}");},
             }
         }
 
         println!("Triangles count: {}",  faces.len());
+
+        /*
+        for (group_name, group_idx) in groups_tuple_list.iter() {
+            if let Some(next_idx) = group_idx.next() {
+
+            }
+        }
+        */
+
 
         //let mesh = IndexedMesh::new(faces, vertices);
         let mesh = IndexedMesh {
@@ -460,10 +708,11 @@ impl Object {
         Self::new(
             mesh,
             None,
-            //Texture::load_from_file("airplane.jpg")
-        )
+            //TextureMap::load_from_file("airplane.jpg")
+        );
     }
 
+*/
         /*
     pub
     fn inv_piramid (bot: Vec3) -> Self {
@@ -1037,7 +1286,7 @@ impl Scene {
         let camera_pos = Vec3::new([0., 300., 630.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
-        let light_source = Vec3::new([0., 300., 5.]);
+        let light_source = Vec3::new([0., 300., 300.]);
 
         let ratio = (width as f32) / (height as f32);
         let camera = Camera::new(camera_pos, camera_dir, ratio);
@@ -1046,7 +1295,7 @@ impl Scene {
         let mut canvas = Canvas::new(width, height);
         canvas.enable_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
-        let obj = Object::load_from_file("airplane.obj");
+        let obj = Object::load_from_file_test("11804_Airplane_v2_l2.obj");
 
         Self {
             canvas:   canvas,
@@ -1153,147 +1402,160 @@ impl Scene {
 
         let func_planes = self.camera.gen_view_planes();
 
+        let obj_texture = &TextureMap::load_from_file("11804_Airplane_diff.jpg");
+
         for obj in self.objects.iter() {
-            // TODO: ta meio feio isso aq, tem que embelezar
-            for (tri_idx, _) in obj.mesh.triangles.iter().enumerate() {
-                let tri_vertices = obj.mesh.vertices_from_index(tri_idx);
-                let tri_normals  = obj.mesh.normals_from_index(tri_idx);
-                let tri_textures = obj.mesh.textures_from_index(tri_idx);
-
-                let a_vertex = tri_vertices[0];
-                let b_vertex = tri_vertices[1];
-                let c_vertex = tri_vertices[2];
-
-                let a_normal = tri_normals[0].normalized();
-                let b_normal = tri_normals[1].normalized();
-                let c_normal = tri_normals[2].normalized();
-
-                let a_texture_coord = tri_textures[0];
-                let b_texture_coord = tri_textures[1];
-                let c_texture_coord = tri_textures[2];
-
-                let a_light = (a_vertex - self.light_source).normalized();
-                let b_light = (b_vertex - self.light_source).normalized();
-                let c_light = (c_vertex - self.light_source).normalized();
-
-                let a_eye = (a_vertex - camera_pos).normalized();
-                let b_eye = (b_vertex - camera_pos).normalized();
-                let c_eye = (c_vertex - camera_pos).normalized();
+            let obj_vertices    = &obj.vertices;
+            let obj_normals     = &obj.normals_vertices;
+            let obj_texture_uv  = obj.texture_vertices.as_ref().unwrap();
+            for obj_mesh in obj.meshes.iter() {
+                // TODO: ta meio feio isso aq, tem que embelezar.
+                // criar um iterador no futuro tlvz
+                for (tri_idx, _) in obj_mesh.triangles.iter().enumerate() {
+                    let indexed_tri_vertex  = obj_mesh.triangles[tri_idx];
+                    let indexed_tri_normal  = obj_mesh.normals_triangles[tri_idx];
+                    let indexed_tri_texture = obj_mesh.texture_triangles.as_ref().unwrap()[tri_idx];
 
 
-                let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
-                let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
-                let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
 
-                let a_attr = VertexAttributes::new(
-                    Vec2::new(0., 0.),
-                    Color::Green,
-                    a_depth,
-                    a_normal,
-                    a_light,
-                    a_eye,
-                    a_texture_coord,
-                );
+                    let tri_vertices = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_vertex,
+                        obj_vertices,
+                    );
+                    let tri_normals  = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_normal,
+                        obj_normals,
+                    );
+                    let tri_textures = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_texture,
+                        obj_texture_uv,
+                    );
 
-                let b_attr = VertexAttributes::new(
-                    Vec2::new(0., 0.),
-                    Color::Green,
-                    b_depth,
-                    b_normal,
-                    b_light,
-                    b_eye,
-                    b_texture_coord,
-                );
+                    let a_vertex = tri_vertices[0];
+                    let b_vertex = tri_vertices[1];
+                    let c_vertex = tri_vertices[2];
+
+                    let a_normal = tri_normals[0].normalized();
+                    let b_normal = tri_normals[1].normalized();
+                    let c_normal = tri_normals[2].normalized();
+
+                    let a_texture_coord = tri_textures[0];
+                    let b_texture_coord = tri_textures[1];
+                    let c_texture_coord = tri_textures[2];
+
+                    let a_light = (a_vertex - self.light_source).normalized();
+                    let b_light = (b_vertex - self.light_source).normalized();
+                    let c_light = (c_vertex - self.light_source).normalized();
+
+                    let a_eye = (a_vertex - camera_pos).normalized();
+                    let b_eye = (b_vertex - camera_pos).normalized();
+                    let c_eye = (c_vertex - camera_pos).normalized();
 
 
-                let c_attr = VertexAttributes::new(
-                    Vec2::new(0., 0.),
-                    Color::Green,
-                    c_depth,
-                    c_normal,
-                    c_light,
-                    c_eye,
-                    c_texture_coord,
-                );
+                    let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
+                    let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
+                    let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
 
-                let original_tri = Triangle::new(
-                    [
+                    let a_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        a_depth,
+                        a_normal,
+                        a_light,
+                        a_eye,
+                        a_texture_coord,
+                    );
+
+                    let b_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        b_depth,
+                        b_normal,
+                        b_light,
+                        b_eye,
+                        b_texture_coord,
+                    );
+
+
+                    let c_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        c_depth,
+                        c_normal,
+                        c_light,
+                        c_eye,
+                        c_texture_coord,
+                    );
+
+                    let original_tri = Triangle::new(
+                        [
                         a_vertex,
                         b_vertex,
                         c_vertex,
-                    ],
-                    [
+                        ],
+                        [
                         a_attr,
                         b_attr,
                         c_attr,
-                    ],
-                    Color::Green,
-                );
-
-                let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
-                for clipped_tri in clipped_triangles.iter_mut() {
-
-                    let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
-                    let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
-                    let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
-
-                    let a_w = a_vec4.get_w();
-                    let b_w = b_vec4.get_w();
-                    let c_w = c_vec4.get_w();
-
-                    let a_coord  = a_vec4.as_vec2() / a_w;
-                    let b_coord  = b_vec4.as_vec2() / b_w;
-                    let c_coord  = c_vec4.as_vec2() / c_w;
-
-                    let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
-                    clip_tri_vert_attr[0].screen_coord = a_coord;
-                    clip_tri_vert_attr[1].screen_coord = b_coord;
-                    clip_tri_vert_attr[2].screen_coord = c_coord;
-                    // vis'ao ortogonal
-                    /*
-                    let camera_dir = self.camera.get_direction().normalized();
-                    let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
-                    let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
-                    let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
-                    */
-
-                    let obj_texture = match &obj.texture {
-                        Some(texture) => &texture,
-                        None          => {
-                            if let Some(tri_color) = clipped_tri.color {
-                                
-                                // TODO arrumar uma maneira de converter a cor do triangulo (enum)
-                                // num array de tres u8's.
-                                
-                                &Texture::new(
-                                    Vec::from([255, 0, 0]),
-                                    1, 
-                                    1,
-                                    3,
-                                )
-
-                            } else {
-
-                                panic!("Triangle has no associated texture or color.");
-                                
-                                // repeti isso aq só p o bicho me deixar compilar
-                                &Texture::new(
-                                    Vec::from([255, 0, 0]),
-                                    1, 
-                                    1,
-                                    3,
-                                )
-                            }
-                        },
-                    };
-
-                    self.canvas.draw_triangle_with_attributes(
-                        clip_tri_vert_attr[0],
-                        clip_tri_vert_attr[1],
-                        clip_tri_vert_attr[2],
-
-                        obj_texture
+                        ],
+                        Color::Green,
                     );
+
+                    let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
+                    for clipped_tri in clipped_triangles.iter_mut() {
+
+                        let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
+                        let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
+                        let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
+
+                        let a_w = a_vec4.get_w();
+                        let b_w = b_vec4.get_w();
+                        let c_w = c_vec4.get_w();
+
+                        let a_coord  = a_vec4.as_vec2() / a_w;
+                        let b_coord  = b_vec4.as_vec2() / b_w;
+                        let c_coord  = c_vec4.as_vec2() / c_w;
+
+                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
+                        clip_tri_vert_attr[0].screen_coord = a_coord;
+                        clip_tri_vert_attr[1].screen_coord = b_coord;
+                        clip_tri_vert_attr[2].screen_coord = c_coord;
+                        // vis'ao ortogonal
+                        /*
+                           let camera_dir = self.camera.get_direction().normalized();
+                           let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                           let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                           let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                           */
+
+                        let mesh_texture = match obj.textures.as_ref().unwrap().get(0) {
+                            Some(texture) => &texture,
+                            None          => {
+                                if let Some(tri_color) = clipped_tri.color {
+
+                                    // TODO arrumar uma maneira de converter a cor do triangulo (enum)
+                                    // num array de tres u8's.
+
+                                    &Texture::default()
+
+                                } else {
+
+                                    panic!("Triangle has no associated texture or color.");
+
+                                    // repeti isso aq só p o bicho me deixar compilar
+                                    &Texture::default()
+                                }
+                            },
+                        };
+
+                        self.canvas.draw_triangle_with_attributes(
+                            clip_tri_vert_attr[0],
+                            clip_tri_vert_attr[1],
+                            clip_tri_vert_attr[2],
+
+                            mesh_texture
+                        );
+                    }
                 }
             }
         }

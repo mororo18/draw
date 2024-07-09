@@ -108,7 +108,7 @@ impl Vec4 {
         self.as_vec3() / self.get_w()
     }
 
-	pub fn get_x(&self) -> f32 {self.a[0]}
+	pub fn x(&self) -> f32 {self.a[0]}
 	pub fn get_y(&self) -> f32 {self.a[1]}
 	pub fn get_z(&self) -> f32 {self.a[2]}
 	pub fn get_w(&self) -> f32 {self.a[3]}

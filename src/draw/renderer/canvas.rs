@@ -72,6 +72,16 @@ impl Pixel {
     }
 
     pub
+    fn blend(a: Self, b: Self) -> Self {
+        let norm_a = a.normalized_as_vec3();
+        let norm_b = b.normalized_as_vec3();
+
+        let blend = norm_a.color_multiply(norm_b);
+
+        Self::from_normalized_vec3(blend)
+    }
+
+    pub
     fn normalized_as_vec3(&self) -> Vec3 {
         Vec3::new([
             self.r as f32 / 255.0,
@@ -266,7 +276,10 @@ struct Canvas {
     width: usize,
     height: usize,
 
+    depth_enabled: bool,
     depth_frame: Vec<f32>,
+    opacity_frame: Vec<f32>,
+
     depth_max:  f32,
 }
 
@@ -275,6 +288,7 @@ impl Canvas {
     fn new (width: usize, height: usize) -> Self {
         let len: usize = width * height;
         let frame = vec![Pixel::black(); len];
+        let opacity_frame = vec![1.0; len];
 
         Self {
             frame: frame,
@@ -283,23 +297,54 @@ impl Canvas {
 
             depth_frame: vec![],
             depth_max: 0.0,
+            depth_enabled: false,
+
+            opacity_frame: opacity_frame,
         }
     }
 
     pub
-    fn enable_depth(&mut self, depth: f32) {
+    fn disable_depth(&mut self) {
+        self.depth_enabled = false;
+    }
+
+    pub
+    fn enable_depth(&mut self) {
+        self.depth_enabled = true;
+    }
+
+    pub
+    fn init_depth(&mut self, depth: f32) {
+        self.depth_max = depth;
+
         if self.depth_frame.len() != self.frame.len() {
             self.depth_frame = vec![depth; self.frame.len()];
 
         } else if self.depth_frame.len() == self.frame.len() {
             self.depth_frame.iter_mut().for_each(|d| *d = depth);
         }
-
-        self.depth_max = depth;
     }
 
     pub
-    fn get_pixel_depth(&self, x: usize, y: usize) -> f32{
+    fn reset_opacity(&mut self) {
+        self.opacity_frame.iter_mut().for_each(|o| *o = 1.0);
+    }
+
+    pub
+    fn get_pixel_opacity(&self, x: usize, y: usize) -> f32 {
+        debug_assert!(self.in_bounds(x, y));
+        unsafe{*self.opacity_frame.get_unchecked(self.width * y + x)}
+    }
+
+    pub
+    fn set_pixel_opacity(&mut self, x: usize, y: usize, opacity: f32) {
+        debug_assert!(self.in_bounds(x, y));
+        debug_assert!(opacity <= 1.0);
+        unsafe{*self.opacity_frame.get_unchecked_mut(self.width * y + x) = opacity;}
+    }
+
+    pub
+    fn get_pixel_depth(&self, x: usize, y: usize) -> f32 {
         debug_assert!(self.in_bounds(x, y));
         unsafe{*self.depth_frame.get_unchecked(self.width * y + x)}
     }
@@ -310,13 +355,12 @@ impl Canvas {
         unsafe{*self.depth_frame.get_unchecked_mut(self.width * y + x) = depth;}
     }
 
-
     pub
     fn clear(&mut self) {
         self.frame.iter_mut().for_each(|pixel| *pixel = Pixel::black());
 
         if self.depth_frame.len() > 0 {
-            self.enable_depth(self.depth_max);
+            self.init_depth(self.depth_max);
         }
     }
 
@@ -795,12 +839,15 @@ impl Canvas {
     }
 
     pub
-    fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, depth: f32) {
+    fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, depth: f32/*, opacity: Option<f32>*/) {
         debug_assert!(self.depth_frame.len() > 0, "Depth not initialized");
 
         if depth < self.get_pixel_depth(x, y) {
             self.draw_pixel_coord(x, y, color);
-            self.set_pixel_depth(x, y, depth);
+
+            if self.depth_enabled == true {
+                self.set_pixel_depth(x, y, depth);
+            }
         }
     }
 

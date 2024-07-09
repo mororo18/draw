@@ -86,6 +86,7 @@ impl Triangle {
 
 type IndexedTriangle = [usize; 3];
 
+#[derive(Clone)]
 pub
 struct IndexedMesh {
     triangles:          Vec<IndexedTriangle>,
@@ -247,9 +248,12 @@ impl TextureMap {
 // isso eh um obj mtl
 pub
 struct Texture {
+    pub name: String,
     pub ka: Vec3,
     pub kd: Vec3,
     pub ks: Vec3,
+
+    pub alpha: f32,
 
     pub map_ka:      TextureMap,
 }
@@ -264,9 +268,12 @@ impl Texture {
         );
 
         Self {
+            name: String::from("default"),
             ka: Vec3::new([1.0, 1.0, 1.0]),
             kd: Vec3::new([1.0, 1.0, 1.0]),
             ks: Vec3::new([0.5, 0.5, 0.5]),
+
+            alpha: 1.0,
 
             map_ka: map,
         }
@@ -284,7 +291,8 @@ struct Object {
     normals_vertices:   Vec<Vec3>,
     texture_vertices:   Option<Vec<Vec3>>,
 
-    meshes: Vec<IndexedMesh>,
+    opaque_meshes:      Vec<IndexedMesh>,
+    transparent_meshes: Vec<IndexedMesh>,
 
     textures: Option<Vec<Texture>>,
 }
@@ -297,12 +305,34 @@ impl Object {
             meshes:             Vec<IndexedMesh>,
             textures:           Option<Vec<Texture>>) -> Self 
     {
+
+        let mut opaque:      Vec<IndexedMesh> = Vec::new();
+        let mut transparent: Vec<IndexedMesh> = Vec::new();
+
+        if let Some(ref texts) = textures {
+
+            for mesh in meshes.iter() {
+                let texture_idx = mesh.texture_idx.unwrap();
+
+                if texts[texture_idx].alpha < 1.0 {
+                    transparent.push(mesh.clone());
+                } else {
+                    opaque.push(mesh.clone());
+                }
+            }
+
+        } else {
+            opaque = meshes;
+        }
+
         Self {
             vertices:           vertices,
             normals_vertices:   normals_vertices,
             texture_vertices:   texture_vertices,
 
-            meshes:             meshes,
+            opaque_meshes:      opaque,
+            transparent_meshes: transparent,
+
             textures:           textures,
         }
     }
@@ -356,21 +386,30 @@ impl Object {
         for mtl in obj_data.material_libs.iter() {
             for material in mtl.materials.iter() {
                 println!("material {}", material.map_ka.as_ref().unwrap());
+                let name = material.name.clone();
+
                 let ka = material.ka.as_ref().unwrap();
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
                 let map_ka_filename = material.map_ka.as_ref().unwrap();
 
+                let alpha = material.d.as_ref().unwrap();
+
                 println!("{}", map_ka_filename);
                 println!("ambient {:?}", ka);
                 println!("difuse {:?}", kd);
-                println!("ssss {:?}", ks);
+                println!("specular {:?}", ks);
+                println!("d {}", alpha);
 
                 textures.push(
                     Texture {
+                        name: name,
+
                         ka: Vec3::new(*ka),
                         kd: Vec3::new(*kd),
                         ks: Vec3::new(*ks),
+
+                        alpha: *alpha,
 
                         map_ka: TextureMap::load_from_file(map_ka_filename),
                     }
@@ -395,17 +434,25 @@ impl Object {
                 println!("\t Group name     {}", group.name);
                 //println!("\t Group material {:?}", group.material);
 
+                let material_name = 
                 if let Some(material) = &group.material {
                     match material {
                         obj::ObjMaterial::Ref(material_name) => {
-                            println!("\tGroup material (Ref) {:?}", material_name)
+                            //println!("\tGroup material (Ref) {:?}", material_name);
+                            material_name.clone()
+                            
                         },
 
                         obj::ObjMaterial::Mtl(material_arc) => {
-                            println!("\tGroup material (Arc) {:?}", material_arc)
+                            //println!("\tGroup material (Arc) {:?}", material_arc.name);
+                            material_arc.name.clone()
                         },
                     }
-                }
+                } else {
+                    unreachable!();
+
+                    String::from("default")
+                };
 
                 for face in group.polys.iter() {
                     let face_vec = &face.0;
@@ -487,18 +534,30 @@ impl Object {
                     mesh_faces.len() == mesh_texture_faces.len()
                 );
 
+
+                // determinar texture_idx 
+
+                let mut texture_idx_match: Option<usize> = None;
+                for (text_idx, texture) in textures.iter().enumerate() {
+                    if texture.name == material_name {
+                        texture_idx_match = Some(text_idx);
+                        break;
+                    }
+                }
+
                 meshes.push(
 
                     IndexedMesh {
                         triangles:              mesh_faces,
                         normals_triangles:      mesh_normals_faces,
                         texture_triangles: Some(mesh_texture_faces),
-                        texture_idx: None,
+                        texture_idx: texture_idx_match,
                     }
                 );
 
             }
         }
+
 
         Self::new(
           vertices,
@@ -1293,7 +1352,7 @@ impl Scene {
 
 
         let mut canvas = Canvas::new(width, height);
-        canvas.enable_depth(100000.0);
+        canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
         let obj = Object::load_from_file_test("11804_Airplane_v2_l2.obj");
 
@@ -1402,13 +1461,13 @@ impl Scene {
 
         let func_planes = self.camera.gen_view_planes();
 
-        let obj_texture = &TextureMap::load_from_file("11804_Airplane_diff.jpg");
-
         for obj in self.objects.iter() {
             let obj_vertices    = &obj.vertices;
             let obj_normals     = &obj.normals_vertices;
             let obj_texture_uv  = obj.texture_vertices.as_ref().unwrap();
-            for obj_mesh in obj.meshes.iter() {
+
+            self.canvas.enable_depth();
+            for obj_mesh in obj.opaque_meshes.iter() {
                 // TODO: ta meio feio isso aq, tem que embelezar.
                 // criar um iterador no futuro tlvz
                 for (tri_idx, _) in obj_mesh.triangles.iter().enumerate() {
@@ -1489,14 +1548,14 @@ impl Scene {
 
                     let original_tri = Triangle::new(
                         [
-                        a_vertex,
-                        b_vertex,
-                        c_vertex,
+                            a_vertex,
+                            b_vertex,
+                            c_vertex,
                         ],
                         [
-                        a_attr,
-                        b_attr,
-                        c_attr,
+                            a_attr,
+                            b_attr,
+                            c_attr,
                         ],
                         Color::Green,
                     );
@@ -1562,7 +1621,7 @@ impl Scene {
     }
 
     pub
-    fn draw_objects (&mut self) {
+    fn draw_indexed_mesh (&mut self, mesh: &IndexedMesh) {
     }
 
     pub

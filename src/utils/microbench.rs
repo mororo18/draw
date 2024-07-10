@@ -1,8 +1,10 @@
+#[allow(dead_code)]
 pub
 struct MicroBench {
     start: u64,
 }
 
+#[allow(dead_code)]
 impl MicroBench {
 
     fn now() -> Self {

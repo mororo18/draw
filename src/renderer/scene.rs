@@ -1,10 +1,10 @@
-use crate::draw::renderer::canvas::{
+use crate::renderer::canvas::{
     Canvas,
     Color,
     VertexAttributes,
 };
 
-use crate::draw::renderer::linalg::{
+use crate::renderer::linalg::{
     Vec2,
     Vec3,
     Vec4,
@@ -614,208 +614,6 @@ impl Object {
 
     }
 
-    /*
-    pub
-    fn load_from_file(filename: &str) {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
-        use std::path::Path;
-
-        println!("Reading Wavefront .obj file: {}", filename);
-        let path = Path::new(filename);
-
-        let file = File::open(&path).expect("Unable to open file");
-        let reader = BufReader::new(file);
-
-        let mut vertices: Vec<Vec3> = Vec::new();
-        let mut normals:  Vec<Vec3> = Vec::new();
-        let mut texture:  Vec<Vec3> = Vec::new();
-
-        let mut faces:         Vec<IndexedTriangle> = Vec::new();
-        let mut texture_faces: Vec<IndexedTriangle> = Vec::new();
-        let mut normals_faces: Vec<IndexedTriangle> = Vec::new();
-
-        let mut group_current_name      = String::new();
-        let mut group_current_face: usize = 0;
-
-        let mut material_current_name      = String::new();
-        let mut material_current_face: usize = 0;
-
-                                     // name  , face_idx
-        let mut groups_tuple_list: Vec<(String, usize)> = Vec::new();
-        let mut materials_tuple_list: Vec<(String, usize)> = Vec::new();
-
-        for (line_idx, line) in reader.lines().enumerate() {
-            //println!("{}", line.as_ref().unwrap().clone());
-            let line = line.expect("Unable to read line");
-            let parts: Vec<&str> = line.split_whitespace().collect();
-
-            if parts.is_empty() {
-                continue;
-            }
-
-            match parts[0] {
-
-                "v" => {
-                    //println!("{:?}", parts);
-                    // Vertex
-                    let x: f32 = parts[1].parse().expect("Invalid vertex x coordinate");
-                    let y: f32 = parts[3].parse().expect("Invalid vertex y coordinate");
-                    let z: f32 = parts[2].parse().expect("Invalid vertex z coordinate");
-                    vertices.push(Vec3::new([x, y, z]));
-                },
-
-                "vn" => {
-                    // Normal
-                    let x: f32 = parts[1].parse().expect("Invalid normal x coordinate");
-                    let y: f32 = parts[3].parse().expect("Invalid normal y coordinate");
-                    let z: f32 = parts[2].parse().expect("Invalid normal z coordinate");
-                    normals.push(Vec3::new([x, y, z]));
-                },
-
-                "vt" => {
-                    //println!("{:?}", parts);
-                    // Vertex
-                    let u: f32 = parts[1].parse().expect("Invalid vertex u coordinate");
-                    let v: f32 = parts[2].parse().expect("Invalid vertex v coordinate");
-                    let w: f32 = parts[3].parse().expect("Invalid vertex w coordinate");
-                    texture.push(Vec3::new([u, v, w]));
-                },
-
-                "f" => {
-                    let mut vertex_idx_list:  Vec<usize> = vec![];
-                    let mut texture_idx_list: Vec<usize> = vec![];
-                    let mut normals_idx_list: Vec<usize> = vec![];
-
-                    for part in &parts[1..] {
-
-                        let indices: Vec<&str> = part.split('/').collect();
-                        let vertex_idx: usize = indices[0].parse().expect("Deu ruimm");
-                        //let associeted_vertex: Vec3 = vertices[vertex_idx - 1];
-
-                        vertex_idx_list.push(vertex_idx - 1);
-                        //vertex_list.push(associeted_vertex);
-
-                        // indice da textura
-                        if indices.len() >= 2 && indices[1].is_empty() == false {
-                            let texture_index: usize = indices[1].parse().expect("Invalid texture index");
-                            texture_idx_list.push(texture_index - 1);
-                        }
-
-                        // indice do vetor normal
-                        if indices.len() == 3 && indices[2].is_empty() == false {
-                            let normal_index: usize = indices[2].parse().expect("Invalid normal index");
-                            normals_idx_list.push(normal_index - 1);
-                        }
-
-
-                    }
-
-
-                    // TODO: adaptar isso aq para faces com um numero variado de vertices 
-                    let vertex_idx_a = vertex_idx_list[0];
-                    let vertex_idx_b = vertex_idx_list[1];
-                    let vertex_idx_c = vertex_idx_list[2];
-                    let vertex_idx_d = vertex_idx_list[3];
-
-                    faces.push([
-                        vertex_idx_a,
-                        vertex_idx_b,
-                        vertex_idx_c
-                    ]);
-                    faces.push([
-                        vertex_idx_c,
-                        vertex_idx_d,
-                        vertex_idx_a
-                    ]);
-
-                    let texture_idx_a = texture_idx_list[0];
-                    let texture_idx_b = texture_idx_list[1];
-                    let texture_idx_c = texture_idx_list[2];
-                    let texture_idx_d = texture_idx_list[3];
-
-                    texture_faces.push([
-                        texture_idx_a,
-                        texture_idx_b,
-                        texture_idx_c
-                    ]);
-                    texture_faces.push([
-                        texture_idx_c,
-                        texture_idx_d,
-                        texture_idx_a
-                    ]);
-
-                    let normals_idx_a = normals_idx_list[0];
-                    let normals_idx_b = normals_idx_list[1];
-                    let normals_idx_c = normals_idx_list[2];
-                    let normals_idx_d = normals_idx_list[3];
-
-                    normals_faces.push([
-                        normals_idx_a,
-                        normals_idx_b,
-                        normals_idx_c
-                    ]);
-                    normals_faces.push([
-                        normals_idx_c,
-                        normals_idx_d,
-                        normals_idx_a
-                    ]);
-
-                },
-
-                "g" => {
-                    group_current_name = String::from(*parts.get(1).unwrap());
-                    group_current_face = faces.len();
-
-                    groups_tuple_list.push(
-                        (group_current_name, group_current_face)
-                    );
-                },
-
-                "usemtl" => {
-                    material_current_name = String::from(*parts.get(1).unwrap());
-                    material_current_face = faces.len();
-
-                    materials_tuple_list.push(
-                        (material_current_name, material_current_face)
-                    );
-                },
-
-                _ => {println!("Can't interpret this line ({line_idx}): {line}");},
-            }
-        }
-
-        println!("Triangles count: {}",  faces.len());
-
-        /*
-        for (group_name, group_idx) in groups_tuple_list.iter() {
-            if let Some(next_idx) = group_idx.next() {
-
-            }
-        }
-        */
-
-
-        //let mesh = IndexedMesh::new(faces, vertices);
-        let mesh = IndexedMesh {
-            triangles:         faces,
-            vertices:          vertices,
-
-            normals_triangles: normals_faces,
-            normals_vertices:  normals,
-
-            texture_triangles: Some(texture_faces),
-            texture_vertices:  Some(texture),
-        };
-
-        Self::new(
-            mesh,
-            None,
-            //TextureMap::load_from_file("airplane.jpg")
-        );
-    }
-
-*/
         /*
     pub
     fn inv_piramid (bot: Vec3) -> Self {
@@ -1434,7 +1232,7 @@ impl Scene {
         let new_light = Matrix4::rotate_y(theta.to_radians()) * 
                         self.light_source.as_vec4();
 
-        //self.light_source = new_light.as_vec3();
+        self.light_source = new_light.as_vec3();
     }
 
     pub
@@ -1448,7 +1246,7 @@ impl Scene {
         let new_light = Matrix4::rotate_y(theta.to_radians()) * 
                         self.light_source.as_vec4();
 
-        //self.light_source = new_light.as_vec3();
+        self.light_source = new_light.as_vec3();
     }
 
     fn gen_transformation_matrix(&mut self) -> Matrix4 {
@@ -1510,7 +1308,7 @@ impl Scene {
             let obj_normals     = &obj.normals_vertices;
             let obj_texture_uv  = obj.texture_vertices.as_ref().unwrap();
 
-            self.canvas.enable_depth();
+            self.canvas.enable_depth_update();
             for obj_mesh in obj.opaque_meshes.iter() {
                 // TODO: ta meio feio isso aq, tem que embelezar.
                 // criar um iterador no futuro tlvz
@@ -1645,8 +1443,9 @@ impl Scene {
 
                                     panic!("Triangle has no associated texture or color.");
 
+                                    //unreachable!();
                                     // repeti isso aq só p o bicho me deixar compilar
-                                    &Texture::default()
+                                    //&Texture::default()
                                 }
                             },
                         };
@@ -1662,7 +1461,7 @@ impl Scene {
                 }
             }
 
-            self.canvas.disable_depth();
+            self.canvas.disable_depth_update();
 
 
             for obj_mesh in obj.transparent_meshes.iter_mut() {
@@ -1670,8 +1469,13 @@ impl Scene {
 
 
                 // sort aq (painter algorithm)
+                // TODO: essa ordenação precisa ser aplicada a todos os triangulos
+                // de todos os objetos transparentes de maneira absoluta.
+                // Talvez seja possivel apenas manter essa ordenação atual, relativa
+                // a cada mesh, e complementar com a ordenação prévia das meshes 
+                // transparentes pela sua posição.
+
                 obj_mesh.triangles.as_mut_slice().sort_by(|a, b| {
-                    use std::cmp::Ordering;
                     let (a_vert_tri, _, _) = a;
                     let (b_vert_tri, _, _) = b;
 
@@ -1691,10 +1495,11 @@ impl Scene {
                     let a_depth = a_center.dist(camera_pos);
                     let b_depth = b_center.dist(camera_pos);
 
+                    // ordem não decrescente
                     if a_depth < b_depth {
-                        Ordering::Greater
+                        std::cmp::Ordering::Greater
                     } else {
-                        Ordering::Less
+                        std::cmp::Ordering::Less
                     }
                 });
                 

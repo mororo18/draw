@@ -1,8 +1,4 @@
-mod draw;
-mod window;
-mod microbench;
-
-use window::{
+use draw::app::window::{
     Window,
     Event,
     Key,

@@ -2,14 +2,14 @@ use itertools::Either;
 use std::ops::{Mul, Add, Sub};
 use std::cmp::Ordering;
 
-use crate::draw::renderer::linalg::{
+use crate::renderer::linalg::{
     Vec2,
     Vec3,
     Vec4,
 };
 
 // TODO: resolver dependencia cruzada :(
-use crate::draw::renderer::scene::Texture;
+use crate::renderer::scene::Texture;
 
 trait ColorOp {
     fn color_multiply(self, rhs: Self) -> Self;
@@ -277,7 +277,7 @@ struct Canvas {
     width: usize,
     height: usize,
 
-    depth_enabled: bool,
+    depth_update_enabled: bool,
     depth_frame: Vec<f32>,
 
     depth_max:  f32,
@@ -296,19 +296,19 @@ impl Canvas {
 
             depth_frame: vec![],
             depth_max: 0.0,
-            depth_enabled: false,
+            depth_update_enabled: false,
 
         }
     }
 
     pub
-    fn disable_depth(&mut self) {
-        self.depth_enabled = false;
+    fn disable_depth_update(&mut self) {
+        self.depth_update_enabled = false;
     }
 
     pub
-    fn enable_depth(&mut self) {
-        self.depth_enabled = true;
+    fn enable_depth_update(&mut self) {
+        self.depth_update_enabled = true;
     }
 
     pub
@@ -835,7 +835,7 @@ impl Canvas {
         if depth < self.get_pixel_depth(x, y) {
             self.draw_pixel_coord(x, y, new_color);
 
-            if self.depth_enabled == true {
+            if self.depth_update_enabled == true {
                 self.set_pixel_depth(x, y, depth);
             }
         }

@@ -89,9 +89,11 @@ type IndexedTriangle = [usize; 3];
 #[derive(Clone)]
 pub
 struct IndexedMesh {
-    triangles:          Vec<IndexedTriangle>,
-    normals_triangles:  Vec<IndexedTriangle>,
-    texture_triangles:  Option<Vec<IndexedTriangle>>,
+    triangles:  Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)>,
+  //triangles:          Vec<IndexedTriangle>,
+  //texture_triangles:  Vec<IndexedTriangle>,
+  //normals_triangles:  Vec<IndexedTriangle>,
+
 
     texture_idx:       Option<usize>,
 }
@@ -427,9 +429,10 @@ impl Object {
 
             for group in obj.groups.iter() {
 
-                let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
-                let mut mesh_texture_faces: Vec<IndexedTriangle> = Vec::new();
-                let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
+                let mut mesh_triangles: Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)> = Vec::new();
+              //let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
+              //let mut mesh_texture_faces: Vec<IndexedTriangle> = Vec::new();
+              //let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
 
                 println!("\t Group name     {}", group.name);
                 //println!("\t Group material {:?}", group.material);
@@ -482,6 +485,25 @@ impl Object {
 
                     if face_vec.len() >= 3 {
 
+                        mesh_triangles.push((
+                            [
+                                vertex_idx_a,
+                                vertex_idx_b,
+                                vertex_idx_c
+                            ],
+                            [
+                                texture_idx_a,
+                                texture_idx_b,
+                                texture_idx_c
+                            ],
+                            [
+                                normals_idx_a,
+                                normals_idx_b,
+                                normals_idx_c
+                            ],
+                        ));
+
+                        /*
                         mesh_faces.push([
                             vertex_idx_a,
                             vertex_idx_b,
@@ -497,6 +519,7 @@ impl Object {
                             normals_idx_b,
                             normals_idx_c
                         ]);
+                        */
 
                     }
 
@@ -506,6 +529,25 @@ impl Object {
                         let texture_idx_d = texture_index[3];
                         let normals_idx_d = normals_index[3];
 
+                        mesh_triangles.push((
+                            [
+                                vertex_idx_c,
+                                vertex_idx_d,
+                                vertex_idx_a
+                            ],
+                            [
+                                texture_idx_c,
+                                texture_idx_d,
+                                texture_idx_a
+                            ],
+                            [
+                                normals_idx_c,
+                                normals_idx_d,
+                                normals_idx_a
+                            ],
+                        ));
+
+                        /*
                         mesh_faces.push([
                             vertex_idx_c,
                             vertex_idx_d,
@@ -523,16 +565,17 @@ impl Object {
                             normals_idx_d,
                             normals_idx_a
                         ]);
+                        */
 
                     } else if face_vec.len() > 4 {
                         todo!();
                     }
                 }
 
-                assert!(
-                    mesh_faces.len() == mesh_normals_faces.len() &&
-                    mesh_faces.len() == mesh_texture_faces.len()
-                );
+              //assert!(
+              //    mesh_faces.len() == mesh_normals_faces.len() &&
+              //    mesh_faces.len() == mesh_texture_faces.len()
+              //);
 
 
                 // determinar texture_idx 
@@ -548,9 +591,10 @@ impl Object {
                 meshes.push(
 
                     IndexedMesh {
-                        triangles:              mesh_faces,
-                        normals_triangles:      mesh_normals_faces,
-                        texture_triangles: Some(mesh_texture_faces),
+                        triangles:  mesh_triangles,
+                      //triangles:              mesh_faces,
+                      //normals_triangles:      mesh_normals_faces,
+                      //texture_triangles:      mesh_texture_faces,
                         texture_idx: texture_idx_match,
                     }
                 );
@@ -1461,7 +1505,7 @@ impl Scene {
 
         let func_planes = self.camera.gen_view_planes();
 
-        for obj in self.objects.iter() {
+        for obj in self.objects.iter_mut() {
             let obj_vertices    = &obj.vertices;
             let obj_normals     = &obj.normals_vertices;
             let obj_texture_uv  = obj.texture_vertices.as_ref().unwrap();
@@ -1470,10 +1514,10 @@ impl Scene {
             for obj_mesh in obj.opaque_meshes.iter() {
                 // TODO: ta meio feio isso aq, tem que embelezar.
                 // criar um iterador no futuro tlvz
-                for (tri_idx, _) in obj_mesh.triangles.iter().enumerate() {
-                    let indexed_tri_vertex  = obj_mesh.triangles[tri_idx];
-                    let indexed_tri_normal  = obj_mesh.normals_triangles[tri_idx];
-                    let indexed_tri_texture = obj_mesh.texture_triangles.as_ref().unwrap()[tri_idx];
+                for (vertex_tri_idx, texture_tri_idx, normal_tri_idx) in obj_mesh.triangles.iter() {
+                    let indexed_tri_vertex  = vertex_tri_idx.clone();
+                    let indexed_tri_normal  = normal_tri_idx.clone();
+                    let indexed_tri_texture = texture_tri_idx.clone();
 
 
 
@@ -1588,6 +1632,190 @@ impl Scene {
                            */
 
                         let mesh_texture = match obj.textures.as_ref().unwrap().get(0) {
+                            Some(texture) => &texture,
+                            None          => {
+                                if let Some(tri_color) = clipped_tri.color {
+
+                                    // TODO arrumar uma maneira de converter a cor do triangulo (enum)
+                                    // num array de tres u8's.
+
+                                    &Texture::default()
+
+                                } else {
+
+                                    panic!("Triangle has no associated texture or color.");
+
+                                    // repeti isso aq só p o bicho me deixar compilar
+                                    &Texture::default()
+                                }
+                            },
+                        };
+
+                        self.canvas.draw_triangle_with_attributes(
+                            clip_tri_vert_attr[0],
+                            clip_tri_vert_attr[1],
+                            clip_tri_vert_attr[2],
+
+                            mesh_texture
+                        );
+                    }
+                }
+            }
+
+            self.canvas.disable_depth();
+
+
+            for obj_mesh in obj.transparent_meshes.iter_mut() {
+                let mesh_texture_idx = obj_mesh.texture_idx.unwrap();
+
+
+                // sort aq (painter algorithm)
+                obj_mesh.triangles.as_mut_slice().sort_by(|a, b| {
+                    use std::cmp::Ordering;
+                    let (a_vert_tri, _, _) = a;
+                    let (b_vert_tri, _, _) = b;
+
+                    let a_verts = IndexedMesh::vec3_list_from_indexed(
+                        *a_vert_tri,
+                        obj_vertices,
+                    );
+
+                    let b_verts = IndexedMesh::vec3_list_from_indexed(
+                        *b_vert_tri,
+                        obj_vertices,
+                    );
+
+                    let a_center = (a_verts[0] + a_verts[1] + a_verts[2]) / 3.0;
+                    let b_center = (b_verts[0] + b_verts[1] + b_verts[2]) / 3.0;
+
+                    let a_depth = a_center.dist(camera_pos);
+                    let b_depth = b_center.dist(camera_pos);
+
+                    if a_depth < b_depth {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Less
+                    }
+                });
+                
+                for (vertex_tri_idx, texture_tri_idx, normal_tri_idx) in obj_mesh.triangles.iter() {
+                    let indexed_tri_vertex  = vertex_tri_idx.clone();
+                    let indexed_tri_normal  = normal_tri_idx.clone();
+                    let indexed_tri_texture = texture_tri_idx.clone();
+
+
+
+                    let tri_vertices = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_vertex,
+                        obj_vertices,
+                    );
+                    let tri_normals  = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_normal,
+                        obj_normals,
+                    );
+                    let tri_textures = IndexedMesh::vec3_list_from_indexed(
+                        indexed_tri_texture,
+                        obj_texture_uv,
+                    );
+
+                    let a_vertex = tri_vertices[0];
+                    let b_vertex = tri_vertices[1];
+                    let c_vertex = tri_vertices[2];
+
+                    let a_normal = tri_normals[0].normalized();
+                    let b_normal = tri_normals[1].normalized();
+                    let c_normal = tri_normals[2].normalized();
+
+                    let a_texture_coord = tri_textures[0];
+                    let b_texture_coord = tri_textures[1];
+                    let c_texture_coord = tri_textures[2];
+
+                    let a_light = (a_vertex - self.light_source).normalized();
+                    let b_light = (b_vertex - self.light_source).normalized();
+                    let c_light = (c_vertex - self.light_source).normalized();
+
+                    let a_eye = (a_vertex - camera_pos).normalized();
+                    let b_eye = (b_vertex - camera_pos).normalized();
+                    let c_eye = (c_vertex - camera_pos).normalized();
+
+
+                    let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
+                    let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
+                    let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
+
+                    let a_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        a_depth,
+                        a_normal,
+                        a_light,
+                        a_eye,
+                        a_texture_coord,
+                    );
+
+                    let b_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        b_depth,
+                        b_normal,
+                        b_light,
+                        b_eye,
+                        b_texture_coord,
+                    );
+
+
+                    let c_attr = VertexAttributes::new(
+                        Vec2::new(0., 0.),
+                        Color::Green,
+                        c_depth,
+                        c_normal,
+                        c_light,
+                        c_eye,
+                        c_texture_coord,
+                    );
+
+                    let original_tri = Triangle::new(
+                        [
+                            a_vertex,
+                            b_vertex,
+                            c_vertex,
+                        ],
+                        [
+                            a_attr,
+                            b_attr,
+                            c_attr,
+                        ],
+                        Color::Green,
+                    );
+
+                    let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
+                    for clipped_tri in clipped_triangles.iter_mut() {
+
+                        let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
+                        let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
+                        let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
+
+                        let a_w = a_vec4.get_w();
+                        let b_w = b_vec4.get_w();
+                        let c_w = c_vec4.get_w();
+
+                        let a_coord  = a_vec4.as_vec2() / a_w;
+                        let b_coord  = b_vec4.as_vec2() / b_w;
+                        let c_coord  = c_vec4.as_vec2() / c_w;
+
+                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
+                        clip_tri_vert_attr[0].screen_coord = a_coord;
+                        clip_tri_vert_attr[1].screen_coord = b_coord;
+                        clip_tri_vert_attr[2].screen_coord = c_coord;
+                        // vis'ao ortogonal
+                        /*
+                           let camera_dir = self.camera.get_direction().normalized();
+                           let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                           let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                           let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                           */
+                        
+                        let mesh_texture = match obj.textures.as_ref().unwrap().get(mesh_texture_idx) {
                             Some(texture) => &texture,
                             None          => {
                                 if let Some(tri_color) = clipped_tri.color {

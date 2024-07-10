@@ -120,6 +120,7 @@ impl Pixel {
     pub fn blue () -> Self {Pixel::new(0,0,255)}
     pub fn white() -> Self {Pixel::new(255,255,255)}
     pub fn black() -> Self {Pixel::new(0,0,0)}
+    pub fn azul_bb() -> Self {Pixel::new(155,186,255)}
 }
 
 impl Add for Pixel {
@@ -278,7 +279,6 @@ struct Canvas {
 
     depth_enabled: bool,
     depth_frame: Vec<f32>,
-    opacity_frame: Vec<f32>,
 
     depth_max:  f32,
 }
@@ -288,7 +288,6 @@ impl Canvas {
     fn new (width: usize, height: usize) -> Self {
         let len: usize = width * height;
         let frame = vec![Pixel::black(); len];
-        let opacity_frame = vec![1.0; len];
 
         Self {
             frame: frame,
@@ -299,7 +298,6 @@ impl Canvas {
             depth_max: 0.0,
             depth_enabled: false,
 
-            opacity_frame: opacity_frame,
         }
     }
 
@@ -326,24 +324,6 @@ impl Canvas {
     }
 
     pub
-    fn reset_opacity(&mut self) {
-        self.opacity_frame.iter_mut().for_each(|o| *o = 1.0);
-    }
-
-    pub
-    fn get_pixel_opacity(&self, x: usize, y: usize) -> f32 {
-        debug_assert!(self.in_bounds(x, y));
-        unsafe{*self.opacity_frame.get_unchecked(self.width * y + x)}
-    }
-
-    pub
-    fn set_pixel_opacity(&mut self, x: usize, y: usize, opacity: f32) {
-        debug_assert!(self.in_bounds(x, y));
-        debug_assert!(opacity <= 1.0);
-        unsafe{*self.opacity_frame.get_unchecked_mut(self.width * y + x) = opacity;}
-    }
-
-    pub
     fn get_pixel_depth(&self, x: usize, y: usize) -> f32 {
         debug_assert!(self.in_bounds(x, y));
         unsafe{*self.depth_frame.get_unchecked(self.width * y + x)}
@@ -357,7 +337,7 @@ impl Canvas {
 
     pub
     fn clear(&mut self) {
-        self.frame.iter_mut().for_each(|pixel| *pixel = Pixel::black());
+        self.frame.iter_mut().for_each(|pixel| *pixel = Pixel::azul_bb());
 
         if self.depth_frame.len() > 0 {
             self.init_depth(self.depth_max);
@@ -634,7 +614,7 @@ impl Canvas {
 
 
                         let c_l = texture.ks;  // intensity term
-                        let c_r = pixel_color * 0.4;  // diffuse reflectance
+                        let c_r = pixel_color * 0.5;  // diffuse reflectance
                         let c_a = pixel_color ;  // ambient term
 
                         //debug_assert!(c_l + c_a <= 1.0);
@@ -644,7 +624,9 @@ impl Canvas {
 
                         let color = Pixel::from_normalized_vec3(color_normalized);
 
-                        self.draw_pixel_coord_with_depth(x, y, color, pixel_depth);
+                        let pixel_opacity = texture.alpha;
+
+                        self.draw_pixel_coord_with_depth(x, y, color, pixel_opacity, pixel_depth);
 
                     }
                 }
@@ -839,16 +821,36 @@ impl Canvas {
     }
 
     pub
-    fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, depth: f32/*, opacity: Option<f32>*/) {
+    fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, opacity: f32, depth: f32) {
         debug_assert!(self.depth_frame.len() > 0, "Depth not initialized");
 
+        let new_color = if opacity < 1.0 {
+            let old_color = self.get_pixel_coord(x, y);
+            Pixel::blend(color, old_color)
+
+        } else {
+            color
+        };
+
         if depth < self.get_pixel_depth(x, y) {
-            self.draw_pixel_coord(x, y, color);
+            self.draw_pixel_coord(x, y, new_color);
 
             if self.depth_enabled == true {
                 self.set_pixel_depth(x, y, depth);
             }
         }
+    }
+
+    pub
+    fn get_pixel_coord (&self, x: usize, y: usize) -> Pixel {
+        debug_assert!(self.in_bounds(x, y),
+                    "Drawing out of bounds. \
+                    Point ({x}, {y}) doesnt fit ({0}, {1})",
+                    self.width, self.height
+        );
+
+        let y_inv = self.height - y - 1;
+        unsafe{*self.frame.get_unchecked(self.width * y_inv + x)}
     }
 
     pub

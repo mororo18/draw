@@ -130,7 +130,7 @@ impl Window {
         };
 
         /**/
-        unsafe{xlib::XStoreName(display, window, to_c_string("Hello, World!"));}
+        unsafe{xlib::XStoreName(display, window, to_c_string("draw"));}
 
         /* Defines the minimum and maximum dimensions of the window */
         {

@@ -1,6 +1,9 @@
 # draw
 
-rendering from scratch
+rendering from scratch (no graphics api)
+
+![alt text](https://github.com/mororo18/draw/blob/main/readme/airplane.png?raw=true)
+
 ### dependencies
 install the latest version of [rust](https://www.rust-lang.org/tools/install) and:
 ```console

@@ -84,7 +84,27 @@ impl Triangle {
 
 }
 
+trait IndexedTriangleNormal {
+    fn calc_normal(&self, vertices: &Vec<Vec3>) -> Vec3;
+}
+
 type IndexedTriangle = [usize; 3];
+
+impl IndexedTriangleNormal for IndexedTriangle {
+
+    fn calc_normal(&self, vertices: &Vec<Vec3>) -> Vec3 {
+        let a = vertices[self[0]];
+        let b = vertices[self[1]];
+        let c = vertices[self[2]];
+
+        let p = b - a;
+        let q = c - b;
+
+        let normal = p.cross(q);
+
+        normal
+    }
+}
 
 #[derive(Clone)]
 pub
@@ -101,7 +121,10 @@ struct IndexedMesh {
 impl IndexedMesh {
     /*
     pub
-    fn new (tri_vec: Vec<IndexedTriangle>, vert_vec: Vec<Vec3>) -> Self {
+    fn new (tri_vec: &Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)>, vertex_vec: &Vec<Vec3>, text_idx: usize) -> Self {
+        // se algum triangulo nao possuir textura entao -> texture_idx = None
+        //
+    }
         todo!();
         let normals = vec![Vec3::zeros(); vert_vec.len()];
 
@@ -198,6 +221,16 @@ impl TextureMap {
     }
 
     pub
+    fn default () -> Self {
+        Self ::new(
+            Vec::from([255, 0, 0]),
+            1, 
+            1,
+            3,
+        )
+    }
+
+    pub
     fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
         debug_assert!(0.0 <= u && u < 1.0);
         debug_assert!(0.0 <= v && v < 1.0);
@@ -262,12 +295,7 @@ struct Texture {
 
 impl Texture {
     fn default() -> Self {
-        let map = TextureMap::new(
-            Vec::from([255, 0, 0]),
-            1, 
-            1,
-            3,
-        );
+        let map = TextureMap::default();
 
         Self {
             name: String::from("default"),
@@ -296,7 +324,7 @@ struct Object {
     opaque_meshes:      Vec<IndexedMesh>,
     transparent_meshes: Vec<IndexedMesh>,
 
-    textures: Option<Vec<Texture>>,
+    textures: Vec<Texture>,
 }
 
 impl Object {
@@ -305,27 +333,22 @@ impl Object {
             normals_vertices:   Vec<Vec3>,
             texture_vertices:   Option<Vec<Vec3>>,
             meshes:             Vec<IndexedMesh>,
-            textures:           Option<Vec<Texture>>) -> Self 
+            textures:           Vec<Texture>) -> Self 
     {
 
         let mut opaque:      Vec<IndexedMesh> = Vec::new();
         let mut transparent: Vec<IndexedMesh> = Vec::new();
 
-        if let Some(ref texts) = textures {
+        for mesh in meshes.iter() {
+            let texture_idx = mesh.texture_idx.unwrap();
 
-            for mesh in meshes.iter() {
-                let texture_idx = mesh.texture_idx.unwrap();
-
-                if texts[texture_idx].alpha < 1.0 {
-                    transparent.push(mesh.clone());
-                } else {
-                    opaque.push(mesh.clone());
-                }
+            if textures[texture_idx].alpha < 1.0 {
+                transparent.push(mesh.clone());
+            } else {
+                opaque.push(mesh.clone());
             }
-
-        } else {
-            opaque = meshes;
         }
+
 
         Self {
             vertices:           vertices,
@@ -353,6 +376,8 @@ impl Object {
         sum / (3. * self.triangles.len() as f32)
     }
     */
+
+    // TODO: utilizar Result no retorno da funcao
     pub
     fn load_from_file_test(filename: &str) -> Self {
         use std::fs::File;
@@ -376,28 +401,33 @@ impl Object {
         );
 
 
-        let mut vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
-        let mut normals:     Vec<Vec3> = obj_data.normal.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
-        let mut texture_uv:  Vec<Vec3> = obj_data.texture.iter().map(|e| Vec3::new([e[0], e[1], 0.0])).collect::<_>();
+        let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
+        let mut obj_normals:     Vec<Vec3> = obj_data.normal.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
+        let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture.iter().map(|e| Vec3::new([e[0], e[1], 0.0])).collect::<_>();
 
-        let mut textures: Vec<Texture> = Vec::new();
+        let mut textures: Vec<Texture> = Vec::from([Texture::default()]);
 
         let mut meshes: Vec<IndexedMesh> = Vec::new();
 
         //assert!(obj_data.objects.len() == 1);
         for mtl in obj_data.material_libs.iter() {
             for material in mtl.materials.iter() {
-                println!("material {}", material.map_ka.as_ref().unwrap());
+                println!("material {:?}", material.map_ka.as_ref());
                 let name = material.name.clone();
 
                 let ka = material.ka.as_ref().unwrap();
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
-                let map_ka_filename = material.map_ka.as_ref().unwrap();
+                let map_ka = 
+                    if let Some(map_ka_filename) = material.map_ka.as_ref() {
+                        println!("{}", map_ka_filename);
+                        TextureMap::load_from_file(map_ka_filename)
+                    } else {
+                        TextureMap::default()
+                    };
 
                 let alpha = material.d.as_ref().unwrap();
 
-                println!("{}", map_ka_filename);
                 println!("ambient {:?}", ka);
                 println!("difuse {:?}", kd);
                 println!("specular {:?}", ks);
@@ -413,10 +443,11 @@ impl Object {
 
                         alpha: *alpha,
 
-                        map_ka: TextureMap::load_from_file(map_ka_filename),
+                        map_ka: map_ka,
                     }
                 );
-                let _ = material.map_kd.as_ref().unwrap();
+                
+                //let _ = material.map_kd.as_ref().unwrap();
 
             }
         }
@@ -429,7 +460,7 @@ impl Object {
 
             for group in obj.groups.iter() {
 
-                let mut mesh_triangles: Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)> = Vec::new();
+                let mut group_mesh_triangles: Vec<(IndexedTriangle, Option<IndexedTriangle>, Option<IndexedTriangle>)> = Vec::new();
               //let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
               //let mut mesh_texture_faces: Vec<IndexedTriangle> = Vec::new();
               //let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
@@ -457,19 +488,42 @@ impl Object {
                     String::from("default")
                 };
 
+                let mut mesh_missing_texture = false;
+                let mut mesh_missing_normals = false;
+
                 for face in group.polys.iter() {
                     let face_vec = &face.0;
-                    let mut vertex_index: Vec<usize> = Vec::new();
-                    let mut texture_index: Vec<usize> = Vec::new();
-                    let mut normals_index: Vec<usize> = Vec::new();
+                    let mut vertex_index:  Vec<usize>         = Vec::new();
+                    let mut texture_index: Vec<Option<usize>> = Vec::new();
+                    let mut normals_index: Vec<Option<usize>> = Vec::new();
 
                     for vertex_tuple in face_vec.iter() {
-                        //println!("\t\tVertex {:?}", vertex_tuple);
+
                         vertex_index.push(vertex_tuple.0);
-                        texture_index.push(vertex_tuple.1.unwrap());
-                        normals_index.push(vertex_tuple.2.unwrap());
+
+                        if vertex_tuple.1.is_some() {
+                            texture_index.push(vertex_tuple.1);
+                        } else {
+                            texture_index.push(None);
+                        }
+
+                        if vertex_tuple.2.is_some() {
+                            normals_index.push(vertex_tuple.2);
+                        } else {
+                            normals_index.push(None);
+                        }
                     }
 
+                    let face_missing_texture = texture_index.contains(&None);
+                    let face_missing_normals = normals_index.contains(&None);
+
+                    if face_missing_texture {
+                        mesh_missing_texture = true;
+                    }
+
+                    if face_missing_normals {
+                        mesh_missing_normals = true;
+                    }
 
                     let vertex_idx_a = vertex_index[0];
                     let vertex_idx_b = vertex_index[1];
@@ -485,41 +539,36 @@ impl Object {
 
                     if face_vec.len() >= 3 {
 
-                        mesh_triangles.push((
+
+
+                        group_mesh_triangles.push((
+                            // position vertices
                             [
                                 vertex_idx_a,
                                 vertex_idx_b,
                                 vertex_idx_c
                             ],
-                            [
-                                texture_idx_a,
-                                texture_idx_b,
-                                texture_idx_c
-                            ],
-                            [
-                                normals_idx_a,
-                                normals_idx_b,
-                                normals_idx_c
-                            ],
-                        ));
 
-                        /*
-                        mesh_faces.push([
-                            vertex_idx_a,
-                            vertex_idx_b,
-                            vertex_idx_c
-                        ]);
-                        mesh_texture_faces.push([
-                            texture_idx_a,
-                            texture_idx_b,
-                            texture_idx_c
-                        ]);
-                        mesh_normals_faces.push([
-                            normals_idx_a,
-                            normals_idx_b,
-                            normals_idx_c
-                        ]);
-                        */
+                            // texture vertices
+                            if face_missing_texture == false
+                            {
+                                Some([
+                                    texture_idx_a.unwrap(),
+                                    texture_idx_b.unwrap(),
+                                    texture_idx_c.unwrap()
+                                ])
+                            } else { None },
+
+                            // normal vertices
+                            if face_missing_normals == false
+                            {
+                                Some([
+                                    normals_idx_a.unwrap(),
+                                    normals_idx_b.unwrap(),
+                                    normals_idx_c.unwrap()
+                                ])
+                            } else { None }
+                        ));
 
                     }
 
@@ -529,64 +578,137 @@ impl Object {
                         let texture_idx_d = texture_index[3];
                         let normals_idx_d = normals_index[3];
 
-                        mesh_triangles.push((
+                        group_mesh_triangles.push((
                             [
                                 vertex_idx_c,
                                 vertex_idx_d,
                                 vertex_idx_a
                             ],
-                            [
-                                texture_idx_c,
-                                texture_idx_d,
-                                texture_idx_a
-                            ],
-                            [
-                                normals_idx_c,
-                                normals_idx_d,
-                                normals_idx_a
-                            ],
+                            
+                            // texture vertices
+                            if face_missing_texture == false
+                            {
+                                Some([
+                                    texture_idx_c.unwrap(),
+                                    texture_idx_d.unwrap(),
+                                    texture_idx_a.unwrap()
+                                ])
+                            } else { None },
+
+                            // normal vertices
+                            if face_missing_normals == false
+                            {
+                                Some([
+                                    normals_idx_c.unwrap(),
+                                    normals_idx_d.unwrap(),
+                                    normals_idx_a.unwrap()
+                                ])
+                            } else { None }
                         ));
-
-                        /*
-                        mesh_faces.push([
-                            vertex_idx_c,
-                            vertex_idx_d,
-                            vertex_idx_a
-                        ]);
-
-                        mesh_texture_faces.push([
-                            texture_idx_c,
-                            texture_idx_d,
-                            texture_idx_a
-                        ]);
-
-                        mesh_normals_faces.push([
-                            normals_idx_c,
-                            normals_idx_d,
-                            normals_idx_a
-                        ]);
-                        */
 
                     } else if face_vec.len() > 4 {
                         todo!();
                     }
                 }
+                
+                let mut texture_idx_match: Option<usize> = Some(0);
 
-              //assert!(
-              //    mesh_faces.len() == mesh_normals_faces.len() &&
-              //    mesh_faces.len() == mesh_texture_faces.len()
-              //);
+                if mesh_missing_texture {
+                    // add dummy global texture coord
+                    // (PT): isso aq serve pra ter oque armazenar no struct VertexAttributes dps,
+                    // pra nao precisar ficar usando um monte de Option por ai
+                    let new_dummy_texture_indx = obj_texture_uv.len();
+                    obj_texture_uv.push(Vec3::zeros());
+
+                    for (_, indexed_uv, _) in group_mesh_triangles.iter_mut() {
+
+                        if indexed_uv.is_none() {
+                            *indexed_uv = Some([
+                                new_dummy_texture_indx,
+                                new_dummy_texture_indx,
+                                new_dummy_texture_indx,
+                            ]);
+                        }
+                    }
 
 
-                // determinar texture_idx 
-
-                let mut texture_idx_match: Option<usize> = None;
-                for (text_idx, texture) in textures.iter().enumerate() {
-                    if texture.name == material_name {
-                        texture_idx_match = Some(text_idx);
-                        break;
+                } else {
+                    
+                    // determinar texture_idx 
+                    for (text_idx, texture) in textures.iter().enumerate() {
+                        if texture.name == material_name {
+                            texture_idx_match = Some(text_idx);
+                            break;
+                        }
                     }
                 }
+
+                if mesh_missing_normals {
+                    //println!("{:#?}", group_mesh_triangles);
+
+                    // calc normals
+                    let mut gen_normals: Vec<Vec3> = vec![Vec3::zeros(); obj_vertices.len()];
+                    for (indexed_tri, _, _) in group_mesh_triangles.iter() {
+                        let normal = indexed_tri.calc_normal(&obj_vertices);
+
+                        let a_idx = indexed_tri[0];
+                        let b_idx = indexed_tri[1];
+                        let c_idx = indexed_tri[2];
+
+                        gen_normals[a_idx] = gen_normals[a_idx] + normal;
+                        gen_normals[b_idx] = gen_normals[b_idx] + normal;
+                        gen_normals[c_idx] = gen_normals[c_idx] + normal;
+                    }
+
+                    /*
+                    if gen_normals.contains(&Vec3::zeros()) { 
+                        let mut sum = 0;
+                        for norm in gen_normals.iter() {
+                            if *norm == Vec3::zeros() {
+                                sum += 1;
+                            }
+                        }
+
+                        println!("foun {sum} of {}", gen_normals.len());
+                        panic!("The normal vectors can't be calculated properly.");
+                    }
+                    */
+
+                    for normal in gen_normals.iter_mut() {
+                        *normal = normal.normalized();
+                    }
+
+                    // TODO: Como os indeces armazenados num IndexedTriangle
+                    // sao utilizados para indexar os vectors globais dum Object, uma possivel
+                    // solucao seria extender o vector global de vetores normais, obtidos na leitura
+                    // do arquivo, utilizando o vector de normais calculados.
+                    //
+                    // TODO: Criar teste onde eh realizada a leitura de um modelo que possui
+                    // vetores normais definidos e faces que nao referenciam os vetores
+                    // normais.
+
+                    // build indexed triangles for the normals
+                    // (PT): substitui os triangulos de normais faltantes.
+                    // poercorre o group_mesh_triangles procurando por faces onde 
+                    // faltam normais. 
+                    for (indexed_tri, _, indexed_normal) in group_mesh_triangles.iter_mut() {
+
+                        if indexed_normal.is_none() {
+                            *indexed_normal = Some([
+                                indexed_tri[0] + obj_normals.len(),
+                                indexed_tri[1] + obj_normals.len(),
+                                indexed_tri[2] + obj_normals.len(),
+                            ]);
+                        }
+                    }
+
+                    obj_normals.extend(gen_normals);
+
+                }
+
+                let mesh_triangles = group_mesh_triangles.iter()
+                                                        .map(|(vert, text, norm)| (*vert, text.unwrap(), norm.unwrap()))
+                                                        .collect::<_>();
 
                 meshes.push(
 
@@ -604,79 +726,15 @@ impl Object {
 
 
         Self::new(
-          vertices,
-          normals,
-          Some(texture_uv),
+          obj_vertices,
+          obj_normals,
+          Some(obj_texture_uv),
           meshes,
           //Some(materials),
-          Some(textures),             // Option<Vec<TextureMap>>
+          textures,             // Option<Vec<TextureMap>>
         )
 
     }
-
-        /*
-    pub
-    fn inv_piramid (bot: Vec3) -> Self {
-        let height: f32 = 3.0;
-        let side = 3.0_f32;
-        let l = (side / 2.0) * (2.0 / f32::sqrt(3.0));
-
-        let c_x = 0.0_f32;
-        let c_z = l;
-
-        let a_x = side / 2.0;
-        let a_z = -l / 2.0;
-
-        let b_x = -(side / 2.0);
-        let b_z = -l / 2.0;
-
-        let vert_a = Vec3::new([a_x, height, a_z]);
-        let vert_b = Vec3::new([b_x, height, b_z]);
-        let vert_c = Vec3::new([c_x, height, c_z]);
-        let vert_o = Vec3::zeros();
-
-        let base = Triangle::new([
-                bot + vert_a,
-                bot + vert_b,
-                bot + vert_c
-            ],
-            Color::White,
-            "white basee"
-            );
-
-        let f_a = Triangle::new([
-                bot + vert_a,
-                bot + vert_b,
-                bot + vert_o
-            ],
-            Color::Blue,
-            "Blue f_A"
-            );
-
-        let f_b = Triangle::new([
-                bot + vert_c,
-                bot + vert_b,
-                bot + vert_o
-            ],
-            Color::Red,
-            "Red f_B"
-            );
-
-        let f_c = Triangle::new([
-                bot + vert_c,
-                bot + vert_a,
-                bot + vert_o
-            ],
-            Color::Green,
-            "Green f_C"
-            );
-
-        Self {
-            triangles: vec![f_a, f_b, f_c, base],
-            //triangles: vec![base, f_c, f_b, f_a],
-        }
-    }
-        */
 
 }
 
@@ -1184,7 +1242,8 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0., 300., 630.0]);
+        let camera_pos = Vec3::new([0., 300., 630.0]); // Aviao ae
+        //let camera_pos = Vec3::new([0., 20., 20.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let light_source = Vec3::new([0., 300., 300.]);
@@ -1196,6 +1255,7 @@ impl Scene {
         let mut canvas = Canvas::new(width, height);
         canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
+        //let obj = Object::load_from_file_test("Glass Bowl with Cloth Towel.obj");
         let obj = Object::load_from_file_test("11804_Airplane_v2_l2.obj");
 
         Self {
@@ -1310,6 +1370,7 @@ impl Scene {
 
             self.canvas.enable_depth_update();
             for obj_mesh in obj.opaque_meshes.iter() {
+                let mesh_texture_idx = obj_mesh.texture_idx.unwrap();
                 // TODO: ta meio feio isso aq, tem que embelezar.
                 // criar um iterador no futuro tlvz
                 for (vertex_tri_idx, texture_tri_idx, normal_tri_idx) in obj_mesh.triangles.iter() {
@@ -1429,10 +1490,10 @@ impl Scene {
                            let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
                            */
 
-                        let mesh_texture = match obj.textures.as_ref().unwrap().get(0) {
+                        let mesh_texture = match obj.textures.get(mesh_texture_idx) {
                             Some(texture) => &texture,
                             None          => {
-                                if let Some(tri_color) = clipped_tri.color {
+                                if clipped_tri.color.is_some() {
 
                                     // TODO arrumar uma maneira de converter a cor do triangulo (enum)
                                     // num array de tres u8's.
@@ -1496,11 +1557,14 @@ impl Scene {
                     let b_depth = b_center.dist(camera_pos);
 
                     // ordem não decrescente
+                    a_depth.total_cmp(&b_depth).reverse()
+                    /*
                     if a_depth < b_depth {
                         std::cmp::Ordering::Greater
                     } else {
                         std::cmp::Ordering::Less
                     }
+                    */
                 });
                 
                 for (vertex_tri_idx, texture_tri_idx, normal_tri_idx) in obj_mesh.triangles.iter() {
@@ -1620,10 +1684,10 @@ impl Scene {
                            let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
                            */
                         
-                        let mesh_texture = match obj.textures.as_ref().unwrap().get(mesh_texture_idx) {
+                        let mesh_texture = match obj.textures.get(mesh_texture_idx) {
                             Some(texture) => &texture,
                             None          => {
-                                if let Some(tri_color) = clipped_tri.color {
+                                if clipped_tri.color.is_some() {
 
                                     // TODO arrumar uma maneira de converter a cor do triangulo (enum)
                                     // num array de tres u8's.

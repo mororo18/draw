@@ -153,7 +153,7 @@ impl Mul<Vec4> for f32 {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub
 struct Vec3 {
     a: [f32; 3],

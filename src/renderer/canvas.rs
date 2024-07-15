@@ -811,7 +811,6 @@ impl Canvas {
         }
     }
 
-    pub
     fn img_map (&self, pos: Vec2) -> PixelPos {
         let pos_center = self.pos_map_center(pos);
         PixelPos {
@@ -820,13 +819,12 @@ impl Canvas {
         }
     }
 
-    pub
     fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, opacity: f32, depth: f32) {
         debug_assert!(self.depth_frame.len() > 0, "Depth not initialized");
 
         let new_color = if opacity < 1.0 {
-            let old_color = self.get_pixel_coord(x, y);
-            Pixel::blend(color, old_color)
+            let bg_color = self.get_pixel_coord(x, y);
+            bg_color * (1.0 - opacity) + color * opacity
 
         } else {
             color
@@ -841,7 +839,6 @@ impl Canvas {
         }
     }
 
-    pub
     fn get_pixel_coord (&self, x: usize, y: usize) -> Pixel {
         debug_assert!(self.in_bounds(x, y),
                     "Drawing out of bounds. \

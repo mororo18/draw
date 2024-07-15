@@ -15,12 +15,12 @@ use crate::renderer::linalg::{
 use obj;
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Triangle {
-    vertices:      [Vec3; 3],
-    vertices_attr:  Option<[VertexAttributes; 3]>,
-    normal:         Option<Vec3>,
-    color:          Option<Color>,
+    vertices:       [Vec3; 3],
+    vertices_attr:  [VertexAttributes; 3],
+    normal:         Vec3,
+    color:          Color,
 }
 
 impl Triangle {
@@ -31,10 +31,18 @@ impl Triangle {
     {
         Self {
             vertices:       vertices,
-            vertices_attr:  Some(vertices_attr),
-            color:          Some(color),
-            normal:         None,
+            vertices_attr:  vertices_attr,
+            color:          color,
+            normal:         Vec3::zeros(),
         }
+    }
+
+    fn zeroed () -> Self {
+        Triangle::new(
+            [Vec3::zeros(), Vec3::zeros(), Vec3::zeros()],
+            [VertexAttributes::zeros(), VertexAttributes::zeros(), VertexAttributes::zeros()],
+            Color::White,
+        )
     }
     
     pub
@@ -52,22 +60,47 @@ impl Triangle {
     }
 
     pub
-    fn clip_against_planes(&self, view_planes: &[ViewPlane]) -> Vec<Self> 
+    fn clip_against_planes(&self, view_planes: &[ViewPlane], tri_pool_ret: &mut [Triangle]) -> usize
     {
-        let mut tri_pool:  Vec<Self> = Vec::from([self.clone()]);
+
+        let mut tri_pool_size: usize = 0;
+
+        tri_pool_ret[tri_pool_size] = self.clone();
+        tri_pool_size += 1;
+
+        assert!(tri_pool_ret.len() <= 8);
+        let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
+        // TODO: otimizar isso aq dsp (tlvz substituir por MaybeUninit zeroed etc tqv)
+        new_tri_pool.copy_from_slice(tri_pool_ret);
 
         for plane in view_planes.iter() {
-            let mut new_tri_pool:  Vec<Self> = Vec::with_capacity(tri_pool.len() * 2);
+            let mut new_tri_pool_size: usize = 0;
+            //let mut new_tri_pool:  Vec<Self> = Vec::with_capacity(tri_pool.len() * 2);
 
-            for tri in tri_pool.iter() {
-                let mut clipped_triangles = plane.clip(tri.clone());
-                new_tri_pool.append(&mut clipped_triangles);
+            for tri in tri_pool_ret[0..tri_pool_size].iter() {
+
+                let clipped_count = plane.clip(tri, new_tri_pool[new_tri_pool_size..].as_mut());
+
+                new_tri_pool_size += clipped_count;
             }
 
-            tri_pool = new_tri_pool;
+            /*
+            for tri in tri_pool.iter() {
+                let mut clipped_triangles = plane.clip(tri);
+                new_tri_pool.append(&mut clipped_triangles);
+            }
+            */
+
+
+
+
+            //tri_pool = new_tri_pool;
+            tri_pool_ret[..new_tri_pool_size].copy_from_slice(new_tri_pool[..new_tri_pool_size].as_mut());
+
+            tri_pool_size = new_tri_pool_size;
         }
 
-        return tri_pool;
+        return tri_pool_size;
 
     }
 
@@ -401,9 +434,26 @@ impl Object {
         );
 
 
+
         let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
         let mut obj_normals:     Vec<Vec3> = obj_data.normal.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
         let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture.iter().map(|e| Vec3::new([e[0], e[1], 0.0])).collect::<_>();
+
+
+        let mut vertices_sorted = 
+        obj_vertices.iter()
+                    .map(|e| e.norm())
+                    .collect::<Vec<_>>();
+        vertices_sorted.as_mut_slice()
+                    .sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
+        let vertex_max = vertices_sorted.get(0).unwrap();
+        dbg!(vertex_max);
+        
+        let scale = 100.0;
+        let factor = scale / vertex_max;
+        obj_vertices.iter_mut().for_each(|e| *e = *e * factor);
+                    
+
 
         let mut textures: Vec<Texture> = Vec::from([Texture::default()]);
 
@@ -777,20 +827,23 @@ impl Camera {
         let b: f32 = -10.0;     // bottom-most
         */
 
-        let horizontal_view_angle: f32 = 50.0;  // degrees
+        let horizontal_view_angle: f32 = 135.0;  // degrees
         let h_angle_rad = horizontal_view_angle.to_radians();
 
-        let right = n.abs() * h_angle_rad.tan();
+        let right = dbg!(n.abs() * (h_angle_rad / 2.0).tan());
         let left = - right;
 
         let top = ratio.recip() * right;
         let bottom = - top;
-        let further = n - 5000.;
+        let further = n - 500.;
 
+        assert!(horizontal_view_angle < 180.0);
         assert!(n < 0.0);
         assert!(n > further);
         assert!(right > left);
         assert!(top > bottom);
+
+        println!("CameraWindow dimension ({} x {})", right-left, top-bottom);
 
         // nearest face of the view volume
 
@@ -1103,17 +1156,16 @@ impl ViewPlane {
     }
 
     pub
-    fn clip (&self, tri: Triangle) -> Vec<Triangle> {
+    fn clip (&self, tri: &Triangle, tri_pool_ret: &mut [Triangle]) -> usize {
         use std::mem::swap;
 
         let mut a_vertex = tri.vertices[0];
         let mut b_vertex = tri.vertices[1];
         let mut c_vertex = tri.vertices[2];
 
-        let tri_vert_attr = tri.vertices_attr.unwrap();
-        let mut a_attr = tri_vert_attr[0];
-        let mut b_attr = tri_vert_attr[1];
-        let mut c_attr = tri_vert_attr[2];
+        let mut a_attr = tri.vertices_attr[0];
+        let mut b_attr = tri.vertices_attr[1];
+        let mut c_attr = tri.vertices_attr[2];
 
         let mut f_a = self.func(a_vertex);
         let mut f_b = self.func(b_vertex);
@@ -1123,13 +1175,16 @@ impl ViewPlane {
            f_b > 0.0 && 
            f_c > 0.0 
         {
-            return Vec::from([tri]);
+            //return Vec::from([tri.clone()]);
+            tri_pool_ret[0] = tri.clone();
+            return 1;
         } else
         if f_a <= 0.0 && 
            f_b <= 0.0 && 
            f_c <= 0.0 
         {
-            return Vec::new();
+            //return Vec::new();
+            return 0;
         }
 
 
@@ -1185,7 +1240,7 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color.unwrap(),
+                tri.color,
             );
 
             let new_triangle_b = Triangle::new(
@@ -1199,10 +1254,14 @@ impl ViewPlane {
                     b_attr,
                     new_b_attr
                 ],
-                tri.color.unwrap(),
+                tri.color,
             );
 
-            return Vec::from([new_triangle_a, new_triangle_b]);
+            //return Vec::from([new_triangle_a, new_triangle_b]);
+            tri_pool_ret[0] = new_triangle_a;
+            tri_pool_ret[1] = new_triangle_b;
+            return 2;
+
         } else {
             let new_triangle_c = Triangle::new(
                 [
@@ -1215,10 +1274,11 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color.unwrap(),
+                tri.color,
             );
 
-            return Vec::from([new_triangle_c]);
+            tri_pool_ret[0] = new_triangle_c;
+            return 1;
 
         }
 
@@ -1242,8 +1302,8 @@ impl Scene {
     pub
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
-        let camera_pos = Vec3::new([0., 300., 630.0]); // Aviao ae
-        //let camera_pos = Vec3::new([0., 20., 20.0]);
+        //let camera_pos = Vec3::new([0., 300., 630.0]); // Aviao ae
+        let camera_pos = Vec3::new([0., 50., 70.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let light_source = Vec3::new([0., 300., 300.]);
@@ -1463,8 +1523,9 @@ impl Scene {
                         Color::Green,
                     );
 
-                    let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
-                    for clipped_tri in clipped_triangles.iter_mut() {
+                    let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
+                    let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
+                    for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
 
                         let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
                         let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
@@ -1478,7 +1539,7 @@ impl Scene {
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;
 
-                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
+                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
                         clip_tri_vert_attr[0].screen_coord = a_coord;
                         clip_tri_vert_attr[1].screen_coord = b_coord;
                         clip_tri_vert_attr[2].screen_coord = c_coord;
@@ -1492,23 +1553,7 @@ impl Scene {
 
                         let mesh_texture = match obj.textures.get(mesh_texture_idx) {
                             Some(texture) => &texture,
-                            None          => {
-                                if clipped_tri.color.is_some() {
-
-                                    // TODO arrumar uma maneira de converter a cor do triangulo (enum)
-                                    // num array de tres u8's.
-
-                                    &Texture::default()
-
-                                } else {
-
-                                    panic!("Triangle has no associated texture or color.");
-
-                                    //unreachable!();
-                                    // repeti isso aq só p o bicho me deixar compilar
-                                    //&Texture::default()
-                                }
-                            },
+                            None          => &Texture::default(),
                         };
 
                         self.canvas.draw_triangle_with_attributes(
@@ -1657,8 +1702,9 @@ impl Scene {
                         Color::Green,
                     );
 
-                    let mut clipped_triangles = original_tri.clip_against_planes(&func_planes);
-                    for clipped_tri in clipped_triangles.iter_mut() {
+                    let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
+                    let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
+                    for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
 
                         let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
                         let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
@@ -1672,7 +1718,7 @@ impl Scene {
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;
 
-                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr.unwrap();
+                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
                         clip_tri_vert_attr[0].screen_coord = a_coord;
                         clip_tri_vert_attr[1].screen_coord = b_coord;
                         clip_tri_vert_attr[2].screen_coord = c_coord;
@@ -1686,22 +1732,7 @@ impl Scene {
                         
                         let mesh_texture = match obj.textures.get(mesh_texture_idx) {
                             Some(texture) => &texture,
-                            None          => {
-                                if clipped_tri.color.is_some() {
-
-                                    // TODO arrumar uma maneira de converter a cor do triangulo (enum)
-                                    // num array de tres u8's.
-
-                                    &Texture::default()
-
-                                } else {
-
-                                    panic!("Triangle has no associated texture or color.");
-
-                                    // repeti isso aq só p o bicho me deixar compilar
-                                    &Texture::default()
-                                }
-                            },
+                            None          => &Texture::default(),
                         };
 
                         self.canvas.draw_triangle_with_attributes(

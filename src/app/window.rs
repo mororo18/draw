@@ -9,7 +9,7 @@ use x11::xlib;
 use x11::keysym::*;
 use std::os::raw::*; 
 use std::mem::MaybeUninit;
-use std::alloc::{alloc, alloc_zeroed, Layout};
+use std::alloc::{alloc_zeroed, Layout};
 
 use std::ffi::CString;
 
@@ -193,7 +193,7 @@ impl Window {
 
         let layout = Layout::array::<i8>(window_buffer_size as usize)
                                         .expect("layout deu merda");
-        let mem: *mut u8  = unsafe{alloc(layout)};
+        let mem: *mut u8  = unsafe{alloc_zeroed(layout)};
 
         let window_buffer: *mut xlib::XImage = unsafe{xlib::XCreateImage(display,  
                                                                     visinfo.visual, 

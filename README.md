@@ -15,3 +15,16 @@ $ git clone https://github.com/mororo18/draw.git
 $ cd draw
 $ cargo run --release
 ```
+
+### todo
+
+- [x] perspective projection
+- [x] triangle clipping
+- [ ] camera movement by mouse input
+- [x] phong shading
+- [x] texture mapping
+- [ ] wavefront .obj fileformat
+- [ ] normal mapping
+- [ ] decent user interface :(
+- [ ] anti-alising
+- [ ] vertical synchronization 

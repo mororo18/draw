@@ -38,15 +38,26 @@ impl Triangle {
     }
 
     fn zeroed () -> Self {
+        unsafe {std::mem::MaybeUninit::<Triangle>::zeroed().assume_init()}
+        /*
         Triangle::new(
-            [Vec3::zeros(), Vec3::zeros(), Vec3::zeros()],
-            [VertexAttributes::zeros(), VertexAttributes::zeros(), VertexAttributes::zeros()],
+            [
+                Vec3::zeros(), 
+                Vec3::zeros(), 
+                Vec3::zeros()
+            ],
+            [
+                VertexAttributes::zeros(), 
+                VertexAttributes::zeros(), 
+                VertexAttributes::zeros()
+            ],
             Color::White,
         )
+        */
     }
     
     pub
-    fn calc_normal(tri: Self) -> Vec3 {
+    fn calc_normal(tri: &Self) -> Vec3 {
         let a = tri.vertices[0];
         let b = tri.vertices[1];
         let c = tri.vertices[2];
@@ -68,18 +79,21 @@ impl Triangle {
         tri_pool_ret[tri_pool_size] = self.clone();
         tri_pool_size += 1;
 
-        assert!(tri_pool_ret.len() <= 8);
+        assert!(tri_pool_ret.len() >= 8);
         let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
         // TODO: otimizar isso aq dsp (tlvz substituir por MaybeUninit zeroed etc tqv)
         new_tri_pool.copy_from_slice(tri_pool_ret);
+
+        let mut tri_pool_ref: &mut [Triangle] = tri_pool_ret;
+        let mut new_pool_ref: &mut [Triangle] = new_tri_pool.as_mut();
 
         for plane in view_planes.iter() {
             let mut new_tri_pool_size: usize = 0;
             //let mut new_tri_pool:  Vec<Self> = Vec::with_capacity(tri_pool.len() * 2);
 
-            for tri in tri_pool_ret[0..tri_pool_size].iter() {
+            for tri in tri_pool_ref[0..tri_pool_size].iter() {
 
-                let clipped_count = plane.clip(tri, new_tri_pool[new_tri_pool_size..].as_mut());
+                let clipped_count = plane.clip(tri, new_pool_ref[new_tri_pool_size..].as_mut());
 
                 new_tri_pool_size += clipped_count;
             }
@@ -94,10 +108,11 @@ impl Triangle {
 
 
 
-            //tri_pool = new_tri_pool;
-            tri_pool_ret[..new_tri_pool_size].copy_from_slice(new_tri_pool[..new_tri_pool_size].as_mut());
-
-            tri_pool_size = new_tri_pool_size;
+            //tri_pool_ret[..new_tri_pool_size].copy_from_slice(new_tri_pool[..new_tri_pool_size].as_mut());
+            //tri_pool_size = new_tri_pool_size;
+            
+            std::mem::swap(&mut tri_pool_ref, &mut new_pool_ref);
+            std::mem::swap(&mut tri_pool_size, &mut new_tri_pool_size);
         }
 
         return tri_pool_size;
@@ -343,16 +358,38 @@ impl Texture {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct VertexVisual {
+    light:  Vec3,
+    eye:    Vec3,
+    halfway:    Vec3,
+    depth:  f32,
+}
+
+impl VertexVisual {
+    fn zeroed () -> Self {
+        Self {
+            light:  Vec3::zeros(),
+            eye:    Vec3::zeros(),
+            halfway:    Vec3::zeros(),
+            depth:  0.0,
+        }
+    }
+}
+
 // 1. conter no obeto vetor de meshes de triangulos
 // 2. cada mesh pode referenciar um meterial especifico
 // 3. os dados dos vetores/vertices/texturas serao armazenados pelo struct Object
-// 4. as malhas armazenaram as infos de materiasi e os indices de vetores/vertices/textura
+// 4. as malhas armazenar'ao as infos de materiasi e os indices de vetores/vertices/textura
 
 pub
 struct Object {
     vertices:           Vec<Vec3>,
+
     normals_vertices:   Vec<Vec3>,
     texture_vertices:   Option<Vec<Vec3>>,
+
+    vertices_visual_info: Vec<VertexVisual>,
 
     opaque_meshes:      Vec<IndexedMesh>,
     transparent_meshes: Vec<IndexedMesh>,
@@ -382,11 +419,14 @@ impl Object {
             }
         }
 
+        let vert_total = vertices.len();
 
         Self {
             vertices:           vertices,
             normals_vertices:   normals_vertices,
             texture_vertices:   texture_vertices,
+
+            vertices_visual_info: vec![VertexVisual::zeroed(); vert_total],
 
             opaque_meshes:      opaque,
             transparent_meshes: transparent,
@@ -394,21 +434,6 @@ impl Object {
             textures:           textures,
         }
     }
-
-    /*
-    pub
-    fn get_center (&self) -> Vec3 {
-        let mut sum = Vec3::zeros();
-
-        for tri in self.triangles.iter() {
-            for p in tri.points.iter() {
-                sum = sum + *p;
-            }
-        }
-
-        sum / (3. * self.triangles.len() as f32)
-    }
-    */
 
     // TODO: utilizar Result no retorno da funcao
     pub
@@ -435,11 +460,12 @@ impl Object {
 
 
 
-        let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
-        let mut obj_normals:     Vec<Vec3> = obj_data.normal.iter().map(|e| Vec3::new([e[0], e[2], e[1]])).collect::<_>();
-        let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture.iter().map(|e| Vec3::new([e[0], e[1], 0.0])).collect::<_>();
+        let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]]))             .collect::<_>();
+        let mut obj_normals:     Vec<Vec3> = obj_data.normal  .iter().map(|e| Vec3::new([e[0], e[2], e[1]]).normalized()).collect::<_>();
+        let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture .iter().map(|e| Vec3::new([e[0], e[1], 0.0]))              .collect::<_>();
 
 
+        // rescaling test
         let mut vertices_sorted = 
         obj_vertices.iter()
                     .map(|e| e.norm())
@@ -1428,6 +1454,21 @@ impl Scene {
             let obj_normals     = &obj.normals_vertices;
             let obj_texture_uv  = obj.texture_vertices.as_ref().unwrap();
 
+            // Calcular VertexAttributes aq para remover cálculos redundantes
+        
+            for (vertex, visual_info) in obj.vertices.iter()
+                .zip(obj.vertices_visual_info.iter_mut()) {
+
+                    let eye_dir = *vertex - camera_pos;
+
+                    visual_info.light   = (*vertex - self.light_source).normalized();
+                    visual_info.eye     = eye_dir.normalized();
+                    visual_info.depth   = eye_dir.norm() as _;
+                    visual_info.halfway = (visual_info.light + visual_info.eye).normalized();
+
+            }
+
+
             self.canvas.enable_depth_update();
             for obj_mesh in obj.opaque_meshes.iter() {
                 let mesh_texture_idx = obj_mesh.texture_idx.unwrap();
@@ -1453,30 +1494,37 @@ impl Scene {
                         obj_texture_uv,
                     );
 
+                    let a_vertex_idx = indexed_tri_vertex[0];
+                    let b_vertex_idx = indexed_tri_vertex[1];
+                    let c_vertex_idx = indexed_tri_vertex[2];
+
                     let a_vertex = tri_vertices[0];
                     let b_vertex = tri_vertices[1];
                     let c_vertex = tri_vertices[2];
 
-                    let a_normal = tri_normals[0].normalized();
-                    let b_normal = tri_normals[1].normalized();
-                    let c_normal = tri_normals[2].normalized();
+                    let a_normal = tri_normals[0];
+                    let b_normal = tri_normals[1];
+                    let c_normal = tri_normals[2];
 
                     let a_texture_coord = tri_textures[0];
                     let b_texture_coord = tri_textures[1];
                     let c_texture_coord = tri_textures[2];
 
-                    let a_light = (a_vertex - self.light_source).normalized();
-                    let b_light = (b_vertex - self.light_source).normalized();
-                    let c_light = (c_vertex - self.light_source).normalized();
+                    let a_light = obj.vertices_visual_info[a_vertex_idx].light;
+                    let b_light = obj.vertices_visual_info[b_vertex_idx].light;
+                    let c_light = obj.vertices_visual_info[c_vertex_idx].light;
 
-                    let a_eye = (a_vertex - camera_pos).normalized();
-                    let b_eye = (b_vertex - camera_pos).normalized();
-                    let c_eye = (c_vertex - camera_pos).normalized();
+                    //let a_eye = obj.vertices_visual_info[a_vertex_idx].eye;
+                    //let b_eye = obj.vertices_visual_info[b_vertex_idx].eye;
+                    //let c_eye = obj.vertices_visual_info[c_vertex_idx].eye;
 
+                    let a_halfway = obj.vertices_visual_info[a_vertex_idx].halfway;
+                    let b_halfway = obj.vertices_visual_info[b_vertex_idx].halfway;
+                    let c_halfway = obj.vertices_visual_info[c_vertex_idx].halfway;
 
-                    let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
-                    let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
-                    let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
+                    let a_depth = obj.vertices_visual_info[a_vertex_idx].depth;
+                    let b_depth = obj.vertices_visual_info[b_vertex_idx].depth;
+                    let c_depth = obj.vertices_visual_info[c_vertex_idx].depth;
 
                     let a_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
@@ -1484,7 +1532,8 @@ impl Scene {
                         a_depth,
                         a_normal,
                         a_light,
-                        a_eye,
+                        //a_eye,
+                        a_halfway,
                         a_texture_coord,
                     );
 
@@ -1494,7 +1543,8 @@ impl Scene {
                         b_depth,
                         b_normal,
                         b_light,
-                        b_eye,
+                        //b_eye,
+                        b_halfway,
                         b_texture_coord,
                     );
 
@@ -1505,7 +1555,8 @@ impl Scene {
                         c_depth,
                         c_normal,
                         c_light,
-                        c_eye,
+                        //c_eye,
+                        c_halfway,
                         c_texture_coord,
                     );
 
@@ -1632,30 +1683,37 @@ impl Scene {
                         obj_texture_uv,
                     );
 
+                    let a_vertex_idx = indexed_tri_vertex[0];
+                    let b_vertex_idx = indexed_tri_vertex[1];
+                    let c_vertex_idx = indexed_tri_vertex[2];
+
                     let a_vertex = tri_vertices[0];
                     let b_vertex = tri_vertices[1];
                     let c_vertex = tri_vertices[2];
 
-                    let a_normal = tri_normals[0].normalized();
-                    let b_normal = tri_normals[1].normalized();
-                    let c_normal = tri_normals[2].normalized();
+                    let a_normal = tri_normals[0];
+                    let b_normal = tri_normals[1];
+                    let c_normal = tri_normals[2];
 
                     let a_texture_coord = tri_textures[0];
                     let b_texture_coord = tri_textures[1];
                     let c_texture_coord = tri_textures[2];
 
-                    let a_light = (a_vertex - self.light_source).normalized();
-                    let b_light = (b_vertex - self.light_source).normalized();
-                    let c_light = (c_vertex - self.light_source).normalized();
+                    let a_light = obj.vertices_visual_info[a_vertex_idx].light;
+                    let b_light = obj.vertices_visual_info[b_vertex_idx].light;
+                    let c_light = obj.vertices_visual_info[c_vertex_idx].light;
 
-                    let a_eye = (a_vertex - camera_pos).normalized();
-                    let b_eye = (b_vertex - camera_pos).normalized();
-                    let c_eye = (c_vertex - camera_pos).normalized();
+                    //let a_eye = obj.vertices_visual_info[a_vertex_idx].eye;
+                    //let b_eye = obj.vertices_visual_info[b_vertex_idx].eye;
+                    //let c_eye = obj.vertices_visual_info[c_vertex_idx].eye;
 
+                    let a_halfway = obj.vertices_visual_info[a_vertex_idx].halfway;
+                    let b_halfway = obj.vertices_visual_info[b_vertex_idx].halfway;
+                    let c_halfway = obj.vertices_visual_info[c_vertex_idx].halfway;
 
-                    let a_depth: f32 = (camera_pos - a_vertex).norm() as _;
-                    let b_depth: f32 = (camera_pos - b_vertex).norm() as _;
-                    let c_depth: f32 = (camera_pos - c_vertex).norm() as _;
+                    let a_depth = obj.vertices_visual_info[a_vertex_idx].depth;
+                    let b_depth = obj.vertices_visual_info[b_vertex_idx].depth;
+                    let c_depth = obj.vertices_visual_info[c_vertex_idx].depth;
 
                     let a_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
@@ -1663,7 +1721,8 @@ impl Scene {
                         a_depth,
                         a_normal,
                         a_light,
-                        a_eye,
+                        //a_eye,
+                        a_halfway,
                         a_texture_coord,
                     );
 
@@ -1673,7 +1732,8 @@ impl Scene {
                         b_depth,
                         b_normal,
                         b_light,
-                        b_eye,
+                        //b_eye,
+                        b_halfway,
                         b_texture_coord,
                     );
 
@@ -1684,7 +1744,8 @@ impl Scene {
                         c_depth,
                         c_normal,
                         c_light,
-                        c_eye,
+                        //c_eye,
+                        c_halfway,
                         c_texture_coord,
                     );
 

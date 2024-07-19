@@ -179,7 +179,8 @@ struct VertexAttributes {
     pub screen_coord:   Vec2,
     normal:         Vec3,
     light:          Vec3,
-    eye:            Vec3,
+    //eye:            Vec3,
+    halfway:        Vec3,
     texture_coord:  Vec3,
 }
 
@@ -190,7 +191,8 @@ impl VertexAttributes {
             depth:  f32,
             normal: Vec3,
             light:  Vec3,
-            eye:    Vec3,
+            //eye:    Vec3,
+            halfway:    Vec3,
             txt_coord: Vec3) -> Self 
     {
         Self {
@@ -198,7 +200,8 @@ impl VertexAttributes {
             color:  color,
             normal: normal,
             light:  light,
-            eye:    eye,
+            //eye:    eye,
+            halfway:    halfway,
             depth:  depth,
             texture_coord:  txt_coord,
         }
@@ -212,7 +215,8 @@ impl VertexAttributes {
             color:  Color::White,
             normal: Vec3::zeros(),
             light:  Vec3::zeros(),
-            eye:    Vec3::zeros(),
+            //eye:    Vec3::zeros(),
+            halfway:    Vec3::zeros(),
             depth:  0.0,
             texture_coord:  Vec3::zeros(),
         }
@@ -229,7 +233,8 @@ impl Add for VertexAttributes {
             self.depth          + rhs.depth,
             self.normal         + rhs.normal,
             self.light          + rhs.light,
-            self.eye            + rhs.eye,
+            //self.eye            + rhs.eye,
+            self.halfway        + rhs.halfway,
             self.texture_coord  + rhs.texture_coord,
 
         )
@@ -246,7 +251,8 @@ impl Sub for VertexAttributes {
             self.depth          - rhs.depth,
             self.normal         - rhs.normal,
             self.light          - rhs.light,
-            self.eye            - rhs.eye,
+            //self.eye            - rhs.eye,
+            self.halfway        - rhs.halfway,
             self.texture_coord  - rhs.texture_coord,
 
         )
@@ -263,7 +269,8 @@ impl Mul<f32> for VertexAttributes {
             self.depth          * rhs,
             self.normal         * rhs,
             self.light          * rhs,
-            self.eye            * rhs,
+            //self.eye            * rhs,
+            self.halfway        * rhs,
             self.texture_coord  * rhs,
 
         )
@@ -604,11 +611,18 @@ impl Canvas {
                                           (b_attr.light * beta) +
                                           (c_attr.light * gama);
 
+
+                        /*
                         let pixel_eye = (a_attr.eye * alpha) +
                                         (b_attr.eye * beta) +
                                         (c_attr.eye * gama);
+                        */
 
-                        let pixel_halfway = h_compute(pixel_light, pixel_eye);
+                        let pixel_halfway    = (a_attr.halfway * alpha) +
+                                        (b_attr.halfway * beta) +
+                                        (c_attr.halfway * gama);
+
+                        //let pixel_halfway = h_compute(pixel_light, pixel_eye);
 
                         let power = 2;
 

@@ -174,20 +174,20 @@ struct PixelPos {
 #[derive(Debug, Copy, Clone)]
 pub
 struct VertexAttributes {
-    depth:  f32,
-    color:  Color,
-    pub screen_coord:   Vec2,
+    //color:  Color,
     normal:         Vec3,
     light:          Vec3,
     //eye:            Vec3,
     halfway:        Vec3,
     texture_coord:  Vec3,
+    pub screen_coord:   Vec2,
+    depth:  f32,
 }
 
 impl VertexAttributes {
     pub
     fn new (screen_coord: Vec2,
-            color:  Color,
+            //color:  Color,
             depth:  f32,
             normal: Vec3,
             light:  Vec3,
@@ -197,7 +197,7 @@ impl VertexAttributes {
     {
         Self {
             screen_coord: screen_coord,
-            color:  color,
+            //color:  color,
             normal: normal,
             light:  light,
             //eye:    eye,
@@ -212,7 +212,7 @@ impl VertexAttributes {
     {
         Self {
             screen_coord: Vec2::new(0., 0.),
-            color:  Color::White,
+            //color:  Color::White,
             normal: Vec3::zeros(),
             light:  Vec3::zeros(),
             //eye:    Vec3::zeros(),
@@ -229,7 +229,7 @@ impl Add for VertexAttributes {
         Self::new(
             self.screen_coord   + rhs.screen_coord,
             // TODO: tqv isso aq dps
-            self.color, 
+            //self.color, 
             self.depth          + rhs.depth,
             self.normal         + rhs.normal,
             self.light          + rhs.light,
@@ -247,7 +247,7 @@ impl Sub for VertexAttributes {
         Self::new(
             self.screen_coord   - rhs.screen_coord,
             // TODO: tqv isso aq dps
-            self.color, 
+            //self.color, 
             self.depth          - rhs.depth,
             self.normal         - rhs.normal,
             self.light          - rhs.light,
@@ -265,7 +265,7 @@ impl Mul<f32> for VertexAttributes {
         Self::new(
             self.screen_coord   * rhs,
             // TODO: tqv isso aq dps
-            self.color, 
+            //self.color, 
             self.depth          * rhs,
             self.normal         * rhs,
             self.light          * rhs,
@@ -471,9 +471,9 @@ impl Canvas {
 
     pub
     fn draw_triangle_with_attributes(&mut self,
-                                   a_attr: VertexAttributes,
-                                   b_attr: VertexAttributes,
-                                   c_attr: VertexAttributes,
+                                   a_attr: &VertexAttributes,
+                                   b_attr: &VertexAttributes,
+                                   c_attr: &VertexAttributes,
                                    texture: &Texture)
     {
 

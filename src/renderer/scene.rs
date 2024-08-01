@@ -19,21 +19,22 @@ use obj;
 struct Triangle {
     vertices:       [Vec3; 3],
     vertices_attr:  [VertexAttributes; 3],
-    normal:         Vec3,
-    color:          Color,
+    //normal:         Vec3,
+    //color:          Color,
 }
 
 impl Triangle {
     pub
     fn new (vertices:      [Vec3; 3],
             vertices_attr: [VertexAttributes; 3], 
-            color: Color) -> Self
+            //color: Color
+            ) -> Self
     {
         Self {
             vertices:       vertices,
             vertices_attr:  vertices_attr,
-            color:          color,
-            normal:         Vec3::zeros(),
+            //color:          color,
+            //normal:         Vec3::zeros(),
         }
     }
 
@@ -80,9 +81,11 @@ impl Triangle {
         tri_pool_size += 1;
 
         assert!(tri_pool_ret.len() >= 8);
-        let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
+        //let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
+        let mut new_tri_pool: [Triangle; 8] = unsafe {std::mem::MaybeUninit::<[Triangle; 8]>::zeroed().assume_init()};
+        
         // TODO: otimizar isso aq dsp (tlvz substituir por MaybeUninit zeroed etc tqv)
-        new_tri_pool.copy_from_slice(tri_pool_ret);
+        //new_tri_pool.copy_from_slice(tri_pool_ret);
 
         let mut tri_pool_ref: &mut [Triangle] = tri_pool_ret;
         let mut new_pool_ref: &mut [Triangle] = new_tri_pool.as_mut();
@@ -1266,7 +1269,7 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color,
+                //tri.color,
             );
 
             let new_triangle_b = Triangle::new(
@@ -1280,7 +1283,7 @@ impl ViewPlane {
                     b_attr,
                     new_b_attr
                 ],
-                tri.color,
+                //tri.color,
             );
 
             //return Vec::from([new_triangle_a, new_triangle_b]);
@@ -1300,7 +1303,7 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                tri.color,
+                //tri.color,
             );
 
             tri_pool_ret[0] = new_triangle_c;
@@ -1528,7 +1531,7 @@ impl Scene {
 
                     let a_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         a_depth,
                         a_normal,
                         a_light,
@@ -1539,7 +1542,7 @@ impl Scene {
 
                     let b_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         b_depth,
                         b_normal,
                         b_light,
@@ -1551,7 +1554,7 @@ impl Scene {
 
                     let c_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         c_depth,
                         c_normal,
                         c_light,
@@ -1571,12 +1574,29 @@ impl Scene {
                             b_attr,
                             c_attr,
                         ],
-                        Color::Green,
+                        //Color::Green,
                     );
+
+                    let tri_normal = Triangle::calc_normal(&original_tri);
+                    let tri_eye = camera_pos - original_tri.get_center();
+
+                    // TODO: calculo da normal potencialmente errado
+                    if tri_eye.dot(tri_normal) >= 0.0 {
+                        continue;
+                    }
 
                     let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
+                        // TODO: (performance) mover para esse laço a criação dos VertexAttr's.
+                        // 1) O caso onde o triangulo nao eh clipado -> VisualInfo já está
+                        // pré-calculado.
+                        // 2) O caso onde o triangulo nao eh totalmente clipado -> Recalcular
+                        // VisualInfo.
+                        // Justificativa: A maioria dos triangulos do mundo ou será totalmente
+                        // clippada ou nao será clippada. Por isso, teoricamente, vale a pena
+                        // recalcular os a VisualInfo triangulos parcialmente clippados, para
+                        // evitar as cópias dessas structs na funcao de clipping
 
                         let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
                         let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
@@ -1608,9 +1628,9 @@ impl Scene {
                         };
 
                         self.canvas.draw_triangle_with_attributes(
-                            clip_tri_vert_attr[0],
-                            clip_tri_vert_attr[1],
-                            clip_tri_vert_attr[2],
+                            &clip_tri_vert_attr[0],
+                            &clip_tri_vert_attr[1],
+                            &clip_tri_vert_attr[2],
 
                             mesh_texture
                         );
@@ -1717,7 +1737,7 @@ impl Scene {
 
                     let a_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         a_depth,
                         a_normal,
                         a_light,
@@ -1728,7 +1748,7 @@ impl Scene {
 
                     let b_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         b_depth,
                         b_normal,
                         b_light,
@@ -1740,7 +1760,7 @@ impl Scene {
 
                     let c_attr = VertexAttributes::new(
                         Vec2::new(0., 0.),
-                        Color::Green,
+                        //Color::Green,
                         c_depth,
                         c_normal,
                         c_light,
@@ -1760,7 +1780,7 @@ impl Scene {
                             b_attr,
                             c_attr,
                         ],
-                        Color::Green,
+                        //Color::Green,
                     );
 
                     let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
@@ -1797,9 +1817,9 @@ impl Scene {
                         };
 
                         self.canvas.draw_triangle_with_attributes(
-                            clip_tri_vert_attr[0],
-                            clip_tri_vert_attr[1],
-                            clip_tri_vert_attr[2],
+                            &clip_tri_vert_attr[0],
+                            &clip_tri_vert_attr[1],
+                            &clip_tri_vert_attr[2],
 
                             mesh_texture
                         );

@@ -266,15 +266,15 @@ impl TextureMap {
             height:     height,
             components: components,
 
-            f_width: width as f32,
-            f_height: height as f32,
+            f_width:  ( width -1) as f32,
+            f_height: ( height-1) as f32,
         }
     }
 
     pub
     fn default () -> Self {
         Self ::new(
-            Vec::from([255, 0, 0]),
+            Vec::from([255, 255, 255]),
             1, 
             1,
             3,
@@ -283,8 +283,8 @@ impl TextureMap {
 
     pub
     fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
-        debug_assert!(0.0 <= u && u < 1.0);
-        debug_assert!(0.0 <= v && v < 1.0);
+        debug_assert!(0.0 <= u && u <= 1.0);
+        debug_assert!(0.0 <= v && v <= 1.0);
 
         let u_idx =                  (u * self.f_width).floor()  as usize;
         let v_idx = self.height -1 - (v * self.f_height).floor() as usize;
@@ -307,16 +307,30 @@ impl TextureMap {
     }
 
     pub
-    fn load_from_file (filename: &str) -> Self {
+    fn load_from_file (file_path: &std::path::PathBuf) -> Self {
         use std::fs::File;
+        use std::io::Seek;
         use std::path::Path;
         use stb::image::stbi_load_from_reader;
+        use stb::image::stbi_info_from_reader;
         use stb::image::Channels;
 
-        let path = Path::new(filename);
+        //let path = Path::new(filename);
 
-        let mut file = File::open(&path).expect("Unable to open file");
-        let (info, img) = stbi_load_from_reader(&mut file, Channels::Rgb)
+        let mut file = File::open(file_path).expect("Unable to open file");
+        let pre_info = stbi_info_from_reader(&mut file)
+                            .expect("Deu errado ler a textura");
+
+        file.rewind();
+
+        let channels = match dbg!(pre_info.components) {
+            3 => Channels::Rgb,
+            4 => Channels::RgbAlpha,
+            _ => unreachable!(),
+        };
+
+        dbg!(channels);
+        let (info, img) = stbi_load_from_reader(&mut file, channels)
                             .expect("Deu errado ler a textura");
 
         Self::new(
@@ -443,28 +457,42 @@ impl Object {
     fn load_from_file_test(filename: &str) -> Self {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
-        use std::path::Path;
+        use std::path::{Path, PathBuf};
 
         let path = Path::new(filename);
+        let parent_dir = path.parent();
 
-        let file = File::open(&path).expect("Unable to open file {filename}.");
-        let reader = BufReader::new(file);
+        let add_file_path = |filename: &String| -> PathBuf {
+            if parent_dir.is_some() {
+                [
+                    parent_dir.unwrap().to_str().expect("Failed adding file path."),
+                    filename.as_str()
+                ].iter().collect()
+            } else {
+                PathBuf::from(filename.as_str())
+            }
+        };
+
+        let file = File::open(&path);
+        assert!(file.is_ok(), "Unable to open file {}", filename);
+        let reader = BufReader::new(file.unwrap());
 
         let mut obj_data = obj::ObjData::load_buf(reader).unwrap();
 
         obj_data.material_libs.iter_mut().for_each(
             |mtllib| {
-                let path = Path::new(mtllib.filename.as_str());
+                let mtl_path: PathBuf = add_file_path(&mtllib.filename);
                 let fname = mtllib.filename.as_str();
-                let file = File::open(&path).expect("Unable to open file {fname}.");
-                mtllib.reload(file);
+                let file = File::open(&mtl_path);
+                assert!(file.is_ok(), "Unable to open file {}", fname);
+                mtllib.reload(file.unwrap());
             }
         );
 
 
 
-        let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[2], e[1]]))             .collect::<_>();
-        let mut obj_normals:     Vec<Vec3> = obj_data.normal  .iter().map(|e| Vec3::new([e[0], e[2], e[1]]).normalized()).collect::<_>();
+        let mut obj_vertices:    Vec<Vec3> = obj_data.position.iter().map(|e| Vec3::new([e[0], e[1], e[2]]))             .collect::<_>();
+        let mut obj_normals:     Vec<Vec3> = obj_data.normal  .iter().map(|e| Vec3::new([e[0], e[1], e[2]]).normalized()).collect::<_>();
         let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture .iter().map(|e| Vec3::new([e[0], e[1], 0.0]))              .collect::<_>();
 
 
@@ -498,9 +526,10 @@ impl Object {
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
                 let map_ka = 
-                    if let Some(map_ka_filename) = material.map_ka.as_ref() {
+                    if let Some(map_ka_filename) = material.map_kd.as_ref() {
                         println!("{}", map_ka_filename);
-                        TextureMap::load_from_file(map_ka_filename)
+                        let f_path = add_file_path(map_ka_filename);
+                        TextureMap::load_from_file(&f_path)
                     } else {
                         TextureMap::default()
                     };
@@ -1345,7 +1374,8 @@ impl Scene {
         canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
         //let obj = Object::load_from_file_test("Glass Bowl with Cloth Towel.obj");
-        let obj = Object::load_from_file_test("11804_Airplane_v2_l2.obj");
+        let obj = Object::load_from_file_test("models/lemur/lemur.obj");
+        //let obj = Object::load_from_file_test("models/airplane/11804_Airplane_v2_l2.obj");
 
         Self {
             canvas:   canvas,
@@ -1581,7 +1611,7 @@ impl Scene {
                     let tri_eye = camera_pos - original_tri.get_center();
 
                     // TODO: calculo da normal potencialmente errado
-                    if tri_eye.dot(tri_normal) >= 0.0 {
+                    if tri_eye.dot(tri_normal) <= 0.0 {
                         continue;
                     }
 

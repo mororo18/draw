@@ -366,8 +366,8 @@ impl Texture {
 
         Self {
             name: String::from("default"),
-            ka: Vec3::new([1.0, 1.0, 1.0]),
-            kd: Vec3::new([1.0, 1.0, 1.0]),
+            ka: Vec3::new([0.9, 0.9, 0.9]),
+            kd: Vec3::new([0.4, 0.4, 0.4]),
             ks: Vec3::new([0.5, 0.5, 0.5]),
 
             alpha: 1.0,
@@ -608,7 +608,7 @@ impl Object {
                         },
                     }
                 } else {
-                    unreachable!();
+                    //unreachable!();
 
                     String::from("default")
                 };
@@ -1394,7 +1394,8 @@ impl Scene {
         canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
         //let obj = Object::load_from_file_test("Glass Bowl with Cloth Towel.obj");
-        let obj = Object::load_from_file_test("models/soldier1/soldier1.obj");
+        let obj = Object::load_from_file_test("models/donut/donut.obj");
+        //let obj = Object::load_from_file_test("models/soldier1/soldier1.obj");
         //let obj = Object::load_from_file_test("models/lemur/lemur.obj");
         //let obj = Object::load_from_file_test("models/airplane/11804_Airplane_v2_l2.obj");
 

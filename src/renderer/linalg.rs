@@ -1,3 +1,8 @@
+#[cfg(target_arch = "x86")]
+use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+
 use std::ops::{
     Add,
     Sub,
@@ -139,7 +144,7 @@ impl Mul<f32> for Vec4 {
             self.a[0] * rhs,
             self.a[1] * rhs,
             self.a[2] * rhs,
-            self.a[2] * rhs
+            self.a[3] * rhs
             ],
         }
     }

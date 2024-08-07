@@ -356,11 +356,13 @@ struct Texture {
     pub alpha: f32,
 
     pub map_ka:      TextureMap,
+    pub map_kd:      TextureMap,
 }
 
 impl Texture {
     fn default() -> Self {
-        let map = TextureMap::default();
+        let map_ka = TextureMap::default();
+        let map_kd = TextureMap::default();
 
         Self {
             name: String::from("default"),
@@ -370,7 +372,8 @@ impl Texture {
 
             alpha: 1.0,
 
-            map_ka: map,
+            map_ka: map_ka,
+            map_kd: map_kd,
         }
     }
 }
@@ -519,16 +522,25 @@ impl Object {
         //assert!(obj_data.objects.len() == 1);
         for mtl in obj_data.material_libs.iter() {
             for material in mtl.materials.iter() {
-                println!("material {:?}", material.map_ka.as_ref());
                 let name = material.name.clone();
+                println!("material {:?}", name);
 
                 let ka = material.ka.as_ref().unwrap();
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
                 let map_ka = 
-                    if let Some(map_ka_filename) = material.map_kd.as_ref() {
+                    if let Some(map_ka_filename) = material.map_ka.as_ref() {
                         println!("{}", map_ka_filename);
                         let f_path = add_file_path(map_ka_filename);
+                        TextureMap::load_from_file(&f_path)
+                    } else {
+                        TextureMap::default()
+                    };
+
+                let map_kd = 
+                    if let Some(map_kd_filename) = material.map_kd.as_ref() {
+                        println!("{}", map_kd_filename);
+                        let f_path = add_file_path(map_kd_filename);
                         TextureMap::load_from_file(&f_path)
                     } else {
                         TextureMap::default()
@@ -552,6 +564,7 @@ impl Object {
                         alpha: *alpha,
 
                         map_ka: map_ka,
+                        map_kd: map_kd,
                     }
                 );
                 
@@ -567,6 +580,10 @@ impl Object {
 
 
             for group in obj.groups.iter() {
+                // Group doesnt has faces
+                if group.polys.is_empty() {
+                    continue;
+                }
 
                 let mut group_mesh_triangles: Vec<(IndexedTriangle, Option<IndexedTriangle>, Option<IndexedTriangle>)> = Vec::new();
               //let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
@@ -574,7 +591,7 @@ impl Object {
               //let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
 
                 println!("\t Group name     {}", group.name);
-                //println!("\t Group material {:?}", group.material);
+                println!("\t Group material {:?}", group.material);
 
                 let material_name = 
                 if let Some(material) = &group.material {
@@ -740,7 +757,10 @@ impl Object {
                     }
 
 
-                } else {
+                }
+
+                // TODO: mudar struct Texture para Material
+                {
                     
                     // determinar texture_idx 
                     for (text_idx, texture) in textures.iter().enumerate() {
@@ -1374,7 +1394,8 @@ impl Scene {
         canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
         //let obj = Object::load_from_file_test("Glass Bowl with Cloth Towel.obj");
-        let obj = Object::load_from_file_test("models/lemur/lemur.obj");
+        let obj = Object::load_from_file_test("models/soldier1/soldier1.obj");
+        //let obj = Object::load_from_file_test("models/lemur/lemur.obj");
         //let obj = Object::load_from_file_test("models/airplane/11804_Airplane_v2_l2.obj");
 
         Self {

@@ -590,19 +590,31 @@ impl Canvas {
                                           (b_attr.texture_coord * beta) +
                                           (c_attr.texture_coord * gama);
 
-                        let pixel_color_slice = texture.map_ka.get_rgb_slice(
+                        let diffuse_color_slice = texture.map_kd.get_rgb_slice(
                                                     pixel_texture_coord.x(),
                                                     pixel_texture_coord.y(),
                                                 );
                         
-                        let pixel_color: Vec3 = Pixel::new(
-                                                pixel_color_slice[0],
-                                                pixel_color_slice[1],
-                                                pixel_color_slice[2],
+                        let ambient_color_slice = texture.map_ka.get_rgb_slice(
+                                                    pixel_texture_coord.x(),
+                                                    pixel_texture_coord.y(),
+                                                );
+
+                        let diffuse_color: Vec3 = Pixel::new(
+                                                diffuse_color_slice[0],
+                                                diffuse_color_slice[1],
+                                                diffuse_color_slice[2],
+                                            ).normalized_as_vec3();
+                        
+                        let ambient_color: Vec3 = Pixel::new(
+                                                ambient_color_slice[0],
+                                                ambient_color_slice[1],
+                                                ambient_color_slice[2],
                                             ).normalized_as_vec3();
 
                         // phong shadding ??
 
+                        // TODO: Transformar isso aq em operacao matricial + utilizar SIMD
                         let pixel_normal = (a_attr.normal * alpha) +
                                            (b_attr.normal * beta) +
                                            (c_attr.normal * gama);
@@ -626,11 +638,18 @@ impl Canvas {
 
                         let power = 2;
 
-
-                        let c_l = texture.ks;  // intensity term
+                        /*
+                        let c_l = texture.ks;         // intensity term
                         let c_r = pixel_color * 0.5;  // diffuse reflectance
-                        let c_a = pixel_color ;  // ambient term
+                        let c_a = pixel_color ;       // ambient term
+                        */
 
+                        let c_l = texture.ks;       // intensity term
+                        let c_r = diffuse_color.color_multiply( texture.kd);       // diffuse reflectance
+                        let c_a = ambient_color.color_multiply( texture.ka);       // ambient term
+
+                        //dbg!(texture.kd);
+                        //dbg!(c_a);
                         //debug_assert!(c_l + c_a <= 1.0);
 
                         let color_normalized = c_r.color_multiply(c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )

@@ -455,9 +455,42 @@ impl Object {
         }
     }
 
+    pub
+    fn load_from_directory(dir: &str) -> Vec<Self> {
+        let file_ext = "obj";
+        let path = std::path::Path::new(dir);
+
+        if path.is_dir() == false {
+            eprintln!("Invalid directory path: {}", path.display());
+            return Vec::new();
+        }
+
+        // Lê o diretório
+        let entries = std::fs::read_dir(path).unwrap();
+
+        let mut obj_vec = Vec::new();
+
+        // Itera sobre as entradas do diretório
+        for entry in entries {
+            if entry.is_ok() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+
+                // Verifica se o caminho é um arquivo e tem a extensão específica
+                if path.is_file() && path.extension().map_or(false, |e| e == file_ext) {
+                    println!("{}", path.display());
+                    
+                    obj_vec.push(Self::load_from_file(path.to_str().unwrap()))
+                }
+            }
+        }
+
+        obj_vec
+    }
+
     // TODO: utilizar Result no retorno da funcao
     pub
-    fn load_from_file_test(filename: &str) -> Self {
+    fn load_from_file(filename: &str) -> Self {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
         use std::path::{Path, PathBuf};
@@ -1393,17 +1426,20 @@ impl Scene {
         let mut canvas = Canvas::new(width, height);
         canvas.init_depth(100000.0);
         //let obj = Object::inv_piramid(Vec3::zeros());
-        //let obj = Object::load_from_file_test("Glass Bowl with Cloth Towel.obj");
-        let obj = Object::load_from_file_test("models/donut/donut.obj");
-        //let obj = Object::load_from_file_test("models/soldier1/soldier1.obj");
-        //let obj = Object::load_from_file_test("models/lemur/lemur.obj");
-        //let obj = Object::load_from_file_test("models/airplane/11804_Airplane_v2_l2.obj");
+        //let obj = Object::load_from_file("Glass Bowl with Cloth Towel.obj");
+        //let obj = Object::load_from_file("models/donut/donut.obj");
+        //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
+        let obj = Object::load_from_file("models/lemur/lemur.obj");
+        //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
+
+        //let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
             canvas:   canvas,
             width:   width,
             height:  height,
             camera:  camera,
+            //objects: obj_vec,
             objects: vec![obj],
 
             light_source: light_source,

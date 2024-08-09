@@ -80,9 +80,9 @@ impl Triangle {
         tri_pool_ret[tri_pool_size] = self.clone();
         tri_pool_size += 1;
 
-        assert!(tri_pool_ret.len() >= 8);
+        assert!(tri_pool_ret.len() >= 12);
         //let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
-        let mut new_tri_pool: [Triangle; 8] = unsafe {std::mem::MaybeUninit::<[Triangle; 8]>::zeroed().assume_init()};
+        let mut new_tri_pool: [Triangle; 12] = unsafe {std::mem::MaybeUninit::<[Triangle; 12]>::zeroed().assume_init()};
         
         // TODO: otimizar isso aq dsp (tlvz substituir por MaybeUninit zeroed etc tqv)
         //new_tri_pool.copy_from_slice(tri_pool_ret);
@@ -1339,6 +1339,11 @@ impl ViewPlane {
         let new_b_attr   = b_attr   + (c_attr   - b_attr)   * t_b;
 
 
+        if tri_pool_ret.is_empty() {
+            println!("eita minino");
+        }
+
+
         if f_c <= 0.0 {
             let new_triangle_a = Triangle::new(
                 [
@@ -1432,15 +1437,15 @@ impl Scene {
         let obj = Object::load_from_file("models/lemur/lemur.obj");
         //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
 
-        //let obj_vec = Object::load_from_directory("models/dungeon_set/");
+        let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
             canvas:   canvas,
             width:   width,
             height:  height,
             camera:  camera,
-            //objects: obj_vec,
-            objects: vec![obj],
+            objects: obj_vec,
+            //objects: vec![obj],
 
             light_source: light_source,
         }
@@ -1673,7 +1678,7 @@ impl Scene {
                         continue;
                     }
 
-                    let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
+                    let mut clipped_triangles: [Triangle; 12]  = [Triangle::zeroed(); 12]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
                         // TODO: (performance) mover para esse laço a criação dos VertexAttr's.
@@ -1871,7 +1876,7 @@ impl Scene {
                         //Color::Green,
                     );
 
-                    let mut clipped_triangles: [Triangle; 8]  = [Triangle::zeroed(); 8]; 
+                    let mut clipped_triangles: [Triangle; 12]  = [Triangle::zeroed(); 12]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
 

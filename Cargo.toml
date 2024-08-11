@@ -9,7 +9,7 @@ build = "build.rs"
 
 [dependencies]
 itertools = "0.13.0"
-obj = "0.10.2"
+obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 stb = "0.3.2"
 x11 = "2.21.0"

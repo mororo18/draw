@@ -12,7 +12,8 @@ itertools = "0.13.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 stb = "0.3.2"
-x11 = "2.21.0"
+x11 = { git = "https://github.com/mororo18/x11-rs.git" }
+#x11 = "2.21.0"
 
 [rust]
 debug = true

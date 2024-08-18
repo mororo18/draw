@@ -6,6 +6,7 @@
 // input example -> https://who-t.blogspot.com/2009/05/xi2-recipes-part-1.html
 
 use x11::xlib;
+use x11::xinput2;
 use x11::keysym::*;
 use std::os::raw::*; 
 use std::mem::MaybeUninit;
@@ -32,20 +33,22 @@ enum Event {
     KeyPress(Key),
     KeyRelease(Key),
     RedimWindow,
+    MouseMotion(MouseInfo),
+}
+
+#[derive(Clone, PartialEq)]
+pub
+struct MouseInfo {
+    x:  i32,
+    y:  i32,
+    dx: i32,
+    dy: i32,
 }
 
 pub
-struct Window {
-    width:  usize,
-    height: usize,
-    min_width:  usize,
-    min_height: usize,
-    max_width:  usize,
-    max_height: usize,
-
+struct X11Info {
     pixel_bits:  usize,
     pixel_bytes: usize,
-
 
     display: *mut xlib::Display,
     root:               c_long,
@@ -63,12 +66,30 @@ struct Window {
     wm_delete_window:   xlib::Atom,
 }
 
+pub
+struct Window {
+    width:  usize,
+    height: usize,
+    min_width:  usize,
+    min_height: usize,
+    max_width:  usize,
+    max_height: usize,
+
+    x11:        X11Info,
+
+    mouse_grabbed:      bool,
+    mouse_info:     MouseInfo,
+}
+
 impl Window {
     pub 
     fn new (width: usize, height:usize) -> Self {
 
-        //let min_width    = 400;
-        //let min_height   = 300;
+        assert!(
+            env!("XDG_SESSION_TYPE") == "x11",
+            "Wayland is not supported."
+        );
+
         let min_width    = width as i32;
         let min_height   = height as i32;
         let max_width    = 0;
@@ -102,7 +123,8 @@ impl Window {
                                                             xlib::AllocNone)};
         window_attr.event_mask       = xlib::StructureNotifyMask 
                                     | xlib::KeyPressMask 
-                                    | xlib::KeyReleaseMask;
+                                    | xlib::KeyReleaseMask
+                                    | xlib::PointerMotionMask;
 
         /* tells the what attributes we are using */
         let attribute_mask           = xlib::CWBitGravity 
@@ -181,6 +203,23 @@ impl Window {
         };
         */
 
+        // https://github.com/glfw/glfw/blob/master/src/x11_window.c#L498
+        // Xinput Events 
+
+        unsafe {
+            let mut event_mask: xinput2::XIEventMask = MaybeUninit::<_>::zeroed().assume_init();
+
+            let mut mask = vec![0_u8; xinput2::XIMaskLen(xinput2::XI_RawMotion)];
+
+            event_mask.deviceid = xinput2::XIAllMasterDevices;
+            event_mask.mask_len = mask.len() as _;
+            event_mask.mask = mask.as_mut_slice().as_mut_ptr();
+            xinput2::XISetMask(&mut mask, xinput2::XI_RawMotion);
+
+            xinput2::XISelectEvents(display, root, &mut event_mask as *mut _, 1);
+
+        }
+
         /**/
         unsafe{xlib::XFlush(display);}
 
@@ -225,24 +264,28 @@ impl Window {
             min_height: min_height as _,
             max_height: max_height as _,
 
-            pixel_bits: pixel_bits as _,
-            pixel_bytes: pixel_bytes as _,
+            x11: X11Info {
+                pixel_bits: pixel_bits as _,
+                pixel_bytes: pixel_bytes as _,
 
+                display:            display,
+                root:               root as _,
+                screen:             default_screen,
+                screen_bit_depth:   screen_bit_depth,
+                visinfo:            visinfo,
 
-            display:            display,
-            root:               root as _,
-            screen:             default_screen,
-            screen_bit_depth:   screen_bit_depth,
-            visinfo:            visinfo,
+                window:             window,
+                window_attr:        window_attr,
+                window_buffer:      window_buffer,
+                window_buffer_size: window_buffer_size as _,
+                mem:                mem,
 
-            window:             window,
-            window_attr:        window_attr,
-            window_buffer:      window_buffer,
-            window_buffer_size: window_buffer_size as _,
-            mem:                mem,
+                default_gc:         default_gc,
+                wm_delete_window:   wm_delete_window,
+            },
 
-            default_gc:         default_gc,
-            wm_delete_window:   wm_delete_window,
+            mouse_grabbed:      false,
+            mouse_info:     MouseInfo {x: 0, y: 0, dx: 0, dy: 0},
         }
 
 
@@ -252,148 +295,248 @@ impl Window {
     //
     pub
     fn handle(&mut self) -> Vec<Event> {
-        unsafe{xlib::XPutImage(self.display, 
-            self.window,
-            self.default_gc, 
-            self.window_buffer, 0, 0, 0, 0,
+
+        unsafe{xlib::XPutImage(self.x11.display, 
+            self.x11.window,
+            self.x11.default_gc, 
+            self.x11.window_buffer, 0, 0, 0, 0,
             self.width as _, 
             self.height as _)};
 
         let mut ev = unsafe{MaybeUninit::<xlib::XEvent >::zeroed().assume_init()};
 
-        fn ptr_cast<T, U>(ev: &mut U) -> *mut T {
-            (ev as *mut U).cast::<T>()
-        }
-
         let mut size_change = false;
         let mut events: Vec<Event> = Vec::new();
 
-        while unsafe{xlib::XPending(self.display)} > 0 {
-            unsafe{xlib::XNextEvent(self.display, &mut ev as *mut _);}
+        while unsafe{xlib::XPending(self.x11.display)} > 0 {
+            unsafe{xlib::XNextEvent(self.x11.display, &mut ev);}
 
-            let kcode_left  = unsafe{xlib::XKeysymToKeycode(self.display, XK_Left.into()).into()};
-            let kcode_right = unsafe{xlib::XKeysymToKeycode(self.display, XK_Right.into()).into()};
-            let kcode_up    = unsafe{xlib::XKeysymToKeycode(self.display, XK_Up.into()).into()};
-            let kcode_down  = unsafe{xlib::XKeysymToKeycode(self.display, XK_Down.into()).into()};
+            let kcode_left  = unsafe{xlib::XKeysymToKeycode(self.x11.display, XK_Left.into()).into()};
+            let kcode_right = unsafe{xlib::XKeysymToKeycode(self.x11.display, XK_Right.into()).into()};
+            let kcode_up    = unsafe{xlib::XKeysymToKeycode(self.x11.display, XK_Up.into()).into()};
+            let kcode_down  = unsafe{xlib::XKeysymToKeycode(self.x11.display, XK_Down.into()).into()};
 
-            match unsafe {ev.type_} {
-                /*
-                   DestroyNotify => {
-                   println!("DestroyNotify");
-                   let e: *mut XDestroyWindowEvent =  (&mut ev as *mut XEvent).cast::<XDestroyWindowEvent>() ;
-                   if (*e).window == window {
-                   window_open = false;
-                   }
+            match ev.get_type() {
 
-                   break;
-                   },
-                   */
-
-                xlib::ClientMessage => {
-                    let e = ptr_cast::<xlib::XClientMessageEvent, _>(&mut ev);
-                    //let e: *mut xlib::XClientMessageEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XClientMessageEvent>();
-                    unsafe {
-                        if (*e).data.as_longs()[0] as xlib::Atom == self.wm_delete_window {
-                            xlib::XDestroyWindow(self.display, self.window);
-                        }
+                xlib::GenericEvent => {
+                    let mut cookie: xlib::XGenericEventCookie = From::from(ev);
+                    if unsafe { xlib::XGetEventData(self.x11.display, &mut cookie) } != xlib::True {
+                        println!("Failed to retrieve event data");
+                        continue;
                     }
 
-                    //break;
+                    match cookie.evtype {
+                        // exemplos
+                        // https://github.com/comex/Dolphin-work/blob/master/Source/Core/InputCommon/ControllerInterface/Xlib/XInput2.cpp#L257
+                        // https://docs.rs/x11/latest/src/input/input.rs.html#386
+                        xinput2::XI_RawMotion => {
+                            //println!("RawMotion");
+                            let raw_ev: &xinput2::XIRawEvent = unsafe { std::mem::transmute(cookie.data) };
+
+                            let mut delta_x = 0.0;
+                            let mut delta_y = 0.0;
+
+                            let mask =
+                                unsafe { std::slice::from_raw_parts(raw_ev.valuators.mask, raw_ev.valuators.mask_len as usize) };
+                            if xinput2::XIMaskIsSet(&mask, 0) {
+                                let delta_delta = unsafe {*raw_ev.raw_values.offset(0)};
+                                // test for inf and nan
+                                if delta_delta == delta_delta && 1.0+delta_delta != delta_delta {
+                                    delta_x += delta_delta;
+                                }
+                            }
+
+                            if xinput2::XIMaskIsSet(mask, 1) {
+                                let delta_delta = unsafe { *raw_ev.raw_values.offset(1) };
+                                // test for inf and nan
+                                if delta_delta == delta_delta && 1.0+delta_delta != delta_delta {
+                                    delta_y += delta_delta;
+                                }
+                            }
+
+                            //println!("raw delta ({delta_x}, {delta_y})");
+
+                            let mouse_info = MouseInfo {
+                                x: self.mouse_info.x, 
+                                y: self.mouse_info.y,
+                                dx: delta_x as i32,
+                                dy: delta_y as i32,
+                            };
+
+                            self.mouse_info = mouse_info.clone();
+
+                            events.push(Event::MouseMotion(mouse_info));
+
+                        },
+                        _ => println!("Unknown xinput evet {}", cookie.evtype),
+                    }
+                },
+
+                xlib::ClientMessage => {
+                    let e: xlib::XClientMessageEvent = From::from(ev);
+
+                    if e.data.get_long(0) as xlib::Atom == self.x11.wm_delete_window {
+                        unsafe{xlib::XDestroyWindow(self.x11.display, self.x11.window);}
+                    }
+
                     events.push(Event::CloseWindow);
                 },
 
                 xlib::ConfigureNotify => {
-                    let e = ptr_cast::<xlib::XConfigureEvent, _>(&mut ev);
-                    //let e: *mut xlib::XConfigureEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XConfigureEvent>();
+                    let e: xlib::XConfigureEvent = From::from(ev);
 
-                    unsafe {
-                        if self.width != (*e).width as _ ||
-                            self.height != (*e).height as _ 
-                        {
-                            self.width = (*e).width as _;
-                            self.height = (*e).height as _;
+                    if self.width != e.width as _ ||
+                        self.height != e.height as _ 
+                    {
+                        self.width = e.width as _;
+                        self.height = e.height as _;
 
-                            size_change = true;
-                            events.push(Event::RedimWindow);
+                        size_change = true;
+                        events.push(Event::RedimWindow);
 
-                        }
                     }
 
                 },
 
                 xlib::KeyPress => {
-                    //let e: *mut xlib::XKeyEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XKeyEvent>();
-                    let e = ptr_cast::<xlib::XKeyEvent, _>(&mut ev);
+                    let e: xlib::XKeyEvent = From::from(ev);
 
                     let mut key_press = Key::Unknown;
-                    unsafe {
-                        if (*e).keycode == kcode_left   {key_press = Key::LeftArrow;}
-                        if (*e).keycode == kcode_right   {key_press = Key::RightArrow;}
-                        if (*e).keycode == kcode_up   {key_press = Key::UpArrow;}
-                        if (*e).keycode == kcode_down   {key_press = Key::DownArrow;}
-                    }
+
+                    if e.keycode == kcode_left  {key_press = Key::LeftArrow;}
+                    if e.keycode == kcode_right {key_press = Key::RightArrow;}
+                    if e.keycode == kcode_up    {key_press = Key::UpArrow;}
+                    if e.keycode == kcode_down  {key_press = Key::DownArrow;}
 
                     events.push(Event::KeyPress(key_press));
                 },
 
                 xlib::KeyRelease => {
-                    //let e: *mut xlib::XKeyEvent = (&mut ev as *mut xlib::XEvent).cast::<xlib::XKeyEvent>();
-                    let e = ptr_cast::<xlib::XKeyEvent, _>(&mut ev);
-
+                    let e: xlib::XKeyEvent = From::from(ev);
 
                     let mut key_press = Key::Unknown;
-                    unsafe {
-                        if (*e).keycode == kcode_left   {key_press = Key::LeftArrow;}
-                        if (*e).keycode == kcode_right   {key_press = Key::RightArrow;}
-                        if (*e).keycode == kcode_up   {key_press = Key::UpArrow;}
-                        if (*e).keycode == kcode_down   {key_press = Key::DownArrow;}
-                    }
+
+                    if e.keycode == kcode_left  {key_press = Key::LeftArrow;}
+                    if e.keycode == kcode_right {key_press = Key::RightArrow;}
+                    if e.keycode == kcode_up    {key_press = Key::UpArrow;}
+                    if e.keycode == kcode_down  {key_press = Key::DownArrow;}
 
                     events.push(Event::KeyRelease(key_press));
+                },
+
+                xlib::MotionNotify => {
+                    let e: xlib::XMotionEvent = From::from(ev);
+
+                    //println!("motion Notify");
+                    // https://gitlab.winehq.org/wine/wine/-/blob/master/dlls/winex11.drv/mouse.c#L1405
+                    // https://github.com/blender/blender/blob/b04c0da6f04cbd3f38c0d8a5fd137375209a1fc1/intern/ghost/intern/GHOST_SystemX11.cc#L1756
+                    // https://github.com/glfw/glfw/blob/master/src/x11_window.c#L2851
+                    //
+                    //
+                    // libxi-dev
+                    // libxfixes-dev
+                    //
+                    //
+                    // desabilitar wayland
+                    // https://github.com/debauchee/barrier/issues/1659
+                    //
+                    // outra discussao interessante sobre wayland (GDK_BACKEND=x11) (echo $XDG_SESSION_TYPE)
+                    // https://forums.thedarkmod.com/index.php?/topic/21691-incorrect-mouse-movement-in-3d-2d-views-on-plasma-wayland/page/2/
+
+                    if self.mouse_info.x != e.x ||
+                        self.mouse_info.y != e.y
+                    {
+
+                        let mouse_info = MouseInfo {
+                            x: e.x, 
+                            y: e.y,
+                            dx: self.mouse_info.dx,
+                            dy: self.mouse_info.dy,
+                        };
+
+                        self.mouse_info = mouse_info.clone();
+
+                        events.push(Event::MouseMotion(mouse_info));
+                    }
+                    
                 },
 
                 xlib::ReparentNotify => println!("ReparentNotify"),
                 xlib::MapNotify => println!("MapNotify"),
 
-                _ => println!("Unknown notify {}", unsafe{ev.type_}),
+                _ => println!("Unknown notify {}", ev.get_type()),
             }
 
         }
 
         if size_change {
 
-            unsafe{xlib::XDestroyImage(self.window_buffer)}; // Free's the memory we malloced;
+            unsafe { xlib::XDestroyImage(self.x11.window_buffer) }; // Free's the memory we malloced;
 
             ////loop {}
 
             println!("{} x {}", self.width, self.height);
-            self.window_buffer_size = self.width * self.height * self.pixel_bytes;
-            let layout = Layout::array::<i8>(self.window_buffer_size as usize).expect("layout deu merda");
-            self.mem = unsafe{alloc_zeroed(layout)};
+            self.x11.window_buffer_size = (self.width * self.height * self.x11.pixel_bytes) as usize;
+            let layout = Layout::array::<i8>( self.x11.window_buffer_size ).expect("layout deu merda");
+            self.x11.mem = unsafe { alloc_zeroed(layout) };
 
-            self.window_buffer = unsafe{xlib::XCreateImage(self.display, 
-                self.visinfo.visual, 
-                self.visinfo.depth as u32,
-                xlib::ZPixmap, 
-                0, 
-                self.mem as *mut _, 
-                self.width as _, 
-                self.height as _,
-                self.pixel_bits as _, 
-                0)};
+            self.x11.window_buffer = unsafe {
+                xlib::XCreateImage(self.x11.display, 
+                    self.x11.visinfo.visual, 
+                    self.x11.visinfo.depth as u32,
+                    xlib::ZPixmap, 
+                    0, 
+                    self.x11.mem as *mut _, 
+                    self.width as _, 
+                    self.height as _,
+                    self.x11.pixel_bits as _, 
+                    0)
+            };
         }
 
         return events;
     }
 
+    pub
+    fn hide_mouse_cursor(&mut self) {
+        unsafe { x11::xfixes::XFixesHideCursor(self.x11.display, self.x11.window) };
+    }
+
+    pub
+    fn show_mouse_cursor(&mut self) {
+        unsafe { x11::xfixes::XFixesShowCursor(self.x11.display, self.x11.window) };
+        
+    }
+
+    pub
+    fn set_mouse_position(&mut self, x: i32, y: i32) {
+        assert!(0 <= x && x < self.width  as i32);
+        assert!(0 <= y && y < self.height as i32);
+
+        unsafe {
+            xlib::XWarpPointer(
+                self.x11.display, 
+                self.x11.window, 
+                self.x11.window, 
+                0, 0, 
+                0, 0, 
+                x, 
+                y
+            );
+
+            xlib::XFlush(self.x11.display);
+        }
+
+    }
+
     pub 
     fn write_frame_from_ptr(&mut self, src: *const u8, sz: usize) {
 
-        let mem_len = self.width * self.height * self.pixel_bytes;
+        let mem_len = self.width * self.height * self.x11.pixel_bytes;
         if src.is_null() || sz > mem_len {panic!("frame overflow");}
 
         unsafe {
-        self.mem.copy_from_nonoverlapping(src, sz);
+            self.x11.mem.copy_from_nonoverlapping(src, sz);
         }
     }
 

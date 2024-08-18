@@ -7,7 +7,7 @@ rendering from scratch (no graphics api)
 ### dependencies
 install the latest version of [rust](https://www.rust-lang.org/tools/install) and:
 ```console
-$ sudo apt install libx11-dev
+$ sudo apt install libx11-dev libxi-dev libxfixes-dev
 ```
 ### build and run
 ```console

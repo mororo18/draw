@@ -1,6 +1,9 @@
-pub mod window;
+mod window;
+mod gui;
 
 use crate::renderer::scene::Scene;
+
+use gui::*;
 
 use window::{
     Window,
@@ -11,8 +14,9 @@ use window::{
 
 pub
 struct Application {
-    scene: Scene,
+    gui: Gui,
     win: Window,
+    scene: Scene,
 }
 
 impl Application {
@@ -22,6 +26,7 @@ impl Application {
         let height = 600;
 
         Self {
+            gui:    Gui::new(),
             scene:  Scene::new(width, height),
             win:    Window::new(width, height),
         }
@@ -92,7 +97,11 @@ impl Application {
                 //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
                 let frame_slice = self.scene.frame_as_bytes_slice();
+
+                self.gui.render(frame_slice, &events, elapsed);
+
                 self.win.write_frame_from_slice(frame_slice);
+
             }
         }
     }

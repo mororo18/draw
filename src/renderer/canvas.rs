@@ -2,14 +2,14 @@ use itertools::Either;
 use std::ops::{Mul, Add, Sub};
 use std::cmp::Ordering;
 
-use crate::renderer::linalg::{
+use super::linalg::{
     Vec2,
     Vec3,
     Vec4,
 };
 
 // TODO: resolver dependencia cruzada :(
-use crate::renderer::scene::Texture;
+use super::scene::Texture;
 
 trait ColorOp {
     fn color_multiply(self, rhs: Self) -> Self;
@@ -40,7 +40,6 @@ enum Color {
 }
 
 impl Color {
-    pub
     fn as_pixel(&self) -> Pixel {
         match self {
             Color::White => Pixel::white(),
@@ -52,6 +51,11 @@ impl Color {
         }
     }
 
+    pub
+    fn as_slice(&self) -> [u8; 3] {
+        let pixel = self.as_pixel();
+        [pixel.r, pixel.g, pixel.b]
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +65,7 @@ struct Pixel {
     g:  u8,
     r:  u8,
 
+    #[allow(dead_code)]
     padd: u8,
 }
 
@@ -166,9 +171,10 @@ impl Mul<Pixel> for f32 {
     }
 }
 
+pub
 struct PixelPos {
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 #[derive(Debug, Copy, Clone)]

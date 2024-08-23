@@ -527,6 +527,15 @@ impl Window {
             xlib::XFlush(self.x11.display);
         }
 
+        // emular mouse warp no wayland
+        // https://github.com/libsdl-org/SDL/commit/ad29875ee692deb9a3517f4d470bde4a83ff76ad
+        // https://github.com/libsdl-org/SDL/commit/3a6d9c59f45a48d8d5a07e6f9428d45aa2069387
+        // https://github.com/libsdl-org/SDL/issues/9793
+        //
+        // gambiarra Xwayland
+        // https://github.com/libsdl-org/SDL/pull/9549
+        // https://projects.blender.org/blender/blender/issues/53004#issuecomment-551561
+
     }
 
     pub 

@@ -1,10 +1,10 @@
-use crate::renderer::canvas::{
+use super::canvas::{
     Canvas,
     Color,
     VertexAttributes,
 };
 
-use crate::renderer::linalg::{
+use super::linalg::{
     Vec2,
     Vec3,
     Vec4,
@@ -274,10 +274,10 @@ impl TextureMap {
     pub
     fn default () -> Self {
         Self ::new(
-            Vec::from([255, 255, 255]),
-            1, 
-            1,
-            3,
+            Vec::from(Color::White.as_slice()),
+            1,  // width
+            1,  // height
+            3,  // components
         )
     }
 
@@ -310,7 +310,6 @@ impl TextureMap {
     fn load_from_file (file_path: &std::path::PathBuf) -> Self {
         use std::fs::File;
         use std::io::Seek;
-        use std::path::Path;
         use stb::image::stbi_load_from_reader;
         use stb::image::stbi_info_from_reader;
         use stb::image::Channels;
@@ -321,7 +320,7 @@ impl TextureMap {
         let pre_info = stbi_info_from_reader(&mut file)
                             .expect("Deu errado ler a textura");
 
-        file.rewind();
+        _ = file.rewind();
 
         let channels = match dbg!(pre_info.components) {
             3 => Channels::Rgb,
@@ -521,7 +520,7 @@ impl Object {
                 let fname = mtllib.filename.as_str();
                 let file = File::open(&mtl_path);
                 assert!(file.is_ok(), "Unable to open file {}", fname);
-                mtllib.reload(file.unwrap());
+                _ = mtllib.reload(file.unwrap());
             }
         );
 
@@ -561,6 +560,8 @@ impl Object {
                 let ka = material.ka.as_ref().unwrap();
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
+                let alpha = material.d.as_ref().unwrap_or_else(|| &1.0);
+
                 let map_ka = 
                     if let Some(map_ka_filename) = material.map_ka.as_ref() {
                         println!("{}", map_ka_filename);
@@ -579,7 +580,6 @@ impl Object {
                         TextureMap::default()
                     };
 
-                let alpha = material.d.as_ref().unwrap();
 
                 println!("ambient {:?}", ka);
                 println!("difuse {:?}", kd);
@@ -960,7 +960,7 @@ impl Camera {
 
         Self {
             position:    pos,
-            direction:   dir,
+            direction:   dir.normalized(),
             window_view: CameraWindow {
                 top:    top,
                 bottom: bottom,
@@ -1022,6 +1022,12 @@ impl Camera {
             [u.z(), v.z(),  w.z(), 0.0],
             [0.0,     0.0,    0.0, 1.0]
         ])
+    }
+
+    pub
+    fn set_screen_direction(&mut self, dx: f32, dy: f32) {
+        self.direction = self.direction 
+            + (self.u.normalized() * dx + self.v.normalized() * dy);
     }
 
     pub
@@ -1419,7 +1425,7 @@ impl Scene {
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
         //let camera_pos = Vec3::new([0., 300., 630.0]); // Aviao ae
-        let camera_pos = Vec3::new([0., 50., 70.0]);
+        let camera_pos = Vec3::new([0., 100., 140.0]);
         let camera_dir = Vec3::new([0., -0.3, -1.0]);
 
         let light_source = Vec3::new([0., 300., 300.]);
@@ -1430,25 +1436,40 @@ impl Scene {
 
         let mut canvas = Canvas::new(width, height);
         canvas.init_depth(100000.0);
+
+        // alguns modelos classicos
+        // https://casual-effects.com/data/
+
         //let obj = Object::inv_piramid(Vec3::zeros());
         //let obj = Object::load_from_file("Glass Bowl with Cloth Towel.obj");
         //let obj = Object::load_from_file("models/donut/donut.obj");
         //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
-        let obj = Object::load_from_file("models/lemur/lemur.obj");
+        //let obj = Object::load_from_file("models/g_soldier1/soldier1.obj");
+        //let obj = Object::load_from_file("models/lemur/lemur.obj");
         //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
+        let obj = Object::load_from_file("models/CornellBox/CornellBox-Original.obj");
 
-        let obj_vec = Object::load_from_directory("models/dungeon_set/");
+        //let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
             canvas:   canvas,
             width:   width,
             height:  height,
             camera:  camera,
-            objects: obj_vec,
-            //objects: vec![obj],
+            //objects: obj_vec,
+            objects: vec![obj],
 
             light_source: light_source,
         }
+    }
+
+    pub
+    fn move_camera_directon(&mut self, dx: f32, dy: f32) {
+        assert!(dx < self.width  as f32);
+        assert!(dy < self.height as f32);
+
+        println!("{} {}", dx, dy);
+        self.camera.set_screen_direction(dx, dy);
     }
 
     pub

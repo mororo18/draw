@@ -27,6 +27,39 @@ enum Key {
 }
 
 #[derive(PartialEq)]
+pub enum MouseCursor {
+    Arrow,
+    TextInput,
+    ResizeAll,
+    ResizeNS,
+    ResizeEW,
+    ResizeNESW,
+    ResizeNWSE,
+    Hand,
+    NotAllowed,
+}
+
+impl MouseCursor {
+    fn as_c_str(self) -> *const i8 {
+
+        match self {
+            MouseCursor::Arrow      => c"arrow".as_ptr(),
+            MouseCursor::TextInput  => c"xterm".as_ptr(),
+            MouseCursor::ResizeAll  => c"fleur".as_ptr(),
+            MouseCursor::ResizeNS   => c"sb_v_double_arrow".as_ptr(),
+            MouseCursor::ResizeEW   => c"sb_h_double_arrow".as_ptr(),
+            MouseCursor::ResizeNESW => c"bottom_left_corner".as_ptr(),
+            MouseCursor::ResizeNWSE => c"bottom_right_corner".as_ptr(),
+            MouseCursor::Hand       => c"hand1".as_ptr(),
+            MouseCursor::NotAllowed => c"circle".as_ptr(),
+        }
+
+    }
+}
+
+
+
+#[derive(PartialEq)]
 pub
 enum Event {
     CloseWindow,
@@ -500,13 +533,22 @@ impl Window {
     pub
     fn hide_mouse_cursor(&mut self) {
         unsafe { x11::xfixes::XFixesHideCursor(self.x11.display, self.x11.window) };
+        unsafe { xlib::XFlush(self.x11.display); }
     }
 
     pub
     fn show_mouse_cursor(&mut self) {
         unsafe { x11::xfixes::XFixesShowCursor(self.x11.display, self.x11.window) };
-        
+        unsafe { xlib::XFlush(self.x11.display); }
     }
+
+    pub
+    fn update_mouse_cursor(&mut self, cursor: MouseCursor) {
+        let xlib_cursor: xlib::Cursor = unsafe { x11::xcursor::XcursorLibraryLoadCursor(self.x11.display, cursor.as_c_str()) };
+        unsafe { xlib::XDefineCursor (self.x11.display, self.x11.window, xlib_cursor); }
+        unsafe { xlib::XFlush(self.x11.display); }
+    }
+
 
     pub
     fn set_mouse_position(&mut self, x: i32, y: i32) {

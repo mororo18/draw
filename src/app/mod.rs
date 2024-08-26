@@ -48,6 +48,8 @@ impl Application {
 
         let mut window_open = true;
 
+        let mut frame_events: Vec<Event> = vec![];
+
         while window_open {
             let events: Vec<Event> = self.win.handle();
 
@@ -91,18 +93,22 @@ impl Application {
             }
 
 
+            frame_events.extend(events);
 
-            let elapsed = now.elapsed().as_millis() as f32;
-            if elapsed > dt_ms {
+            let elapsed = now.elapsed();
+            let ms_elapsed = elapsed.as_millis() as f32;
+            if ms_elapsed > dt_ms {
                 now = std::time::Instant::now();
-                println!("FPS {}", 1000.0 / elapsed);
+                println!("FPS {}", 1000.0 / ms_elapsed);
                 //scene.camera_right();
 
                 self.scene.render(&mut self.canvas);
                 //let render_elapsed = now.elapsed().as_millis() as f32;
                 //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
-                self.gui.render(&mut self.canvas, &events, elapsed);
+                self.gui.new_frame(&mut self.win, &frame_events, elapsed); 
+                self.gui.render(&mut self.canvas);
+                frame_events.clear();
 
                 let frame_slice = self.canvas.as_bytes_slice();
                 self.win.write_frame_from_slice(frame_slice);

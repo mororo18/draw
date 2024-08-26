@@ -1,8 +1,10 @@
 use imgui as ig;
 use stb;
 use super::window::{
+    Window,
     Event,
     Key,
+    MouseCursor,
 };
 
 use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color};
@@ -15,6 +17,9 @@ struct Gui {
     width: usize,
     height: usize,
     font_texture: Texture,
+
+    hide_native_cursor: bool,
+    custom_mouse_cursor: Option<ig::MouseCursor>,
 }
 
 impl Gui {
@@ -39,23 +44,15 @@ impl Gui {
         let font_atlas = imgui.fonts(); 
 
         font_atlas.add_font(&[
-            /*
             ig::FontSource::DefaultFontData {
                 config: Some(ig::FontConfig {
-                    // As imgui-glium-renderer isn't gamma-correct with
-                    // it's font rendering, we apply an arbitrary
-                    // multiplier to make the font a bit "heavier". With
-                    // default imgui-glow-renderer this is unnecessary.
                     rasterizer_multiply: 1.5,
-                    // Oversampling font helps improve text rendering at
-                    // expense of larger font atlas texture.
                     oversample_h: 4,
                     oversample_v: 4,
-
                     ..ig::FontConfig::default()
                 }),
             },
-            */
+            /*
             ig::FontSource::TtfData {
                 data: include_bytes!("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf"),
                 size_pixels: Self::FONT_SIZE,
@@ -66,6 +63,7 @@ impl Gui {
                     ..ig::FontConfig::default()
                 }),
             },
+            */
         ]);
 
         let font_atlas_texture = font_atlas.build_rgba32_texture();
@@ -97,34 +95,74 @@ impl Gui {
             height: height,
             imgui: imgui,
             font_texture: f_texture,
+
+            hide_native_cursor: false,
+            custom_mouse_cursor: None,
+        }
+    }
+
+    fn io(&mut self) -> &mut ig::Io {
+        self.imgui.io_mut()
+    }
+
+    fn update_mouse_cursor(&mut self, win: &mut Window) {
+
+        if self.hide_native_cursor != self.io().mouse_draw_cursor {
+            self.hide_native_cursor = self.io().mouse_draw_cursor;
+
+            if self.hide_native_cursor {
+                win.hide_mouse_cursor();
+            } else {
+                win.show_mouse_cursor();
+            }
+        }
+
+        if self.custom_mouse_cursor != self.imgui.mouse_cursor() {
+            self.custom_mouse_cursor = self.imgui.mouse_cursor();
+
+            if let Some(cursor) = self.custom_mouse_cursor {
+                let native_cursor = match cursor {
+                    ig::MouseCursor::Arrow      => MouseCursor::Arrow,
+                    ig::MouseCursor::TextInput  => MouseCursor::TextInput,
+                    ig::MouseCursor::ResizeAll  => MouseCursor::ResizeAll,
+                    ig::MouseCursor::ResizeNS   => MouseCursor::ResizeNS,
+                    ig::MouseCursor::ResizeEW   => MouseCursor::ResizeEW,
+                    ig::MouseCursor::ResizeNESW => MouseCursor::ResizeNESW,
+                    ig::MouseCursor::ResizeNWSE => MouseCursor::ResizeNWSE,
+                    ig::MouseCursor::Hand       => MouseCursor::Hand,
+                    ig::MouseCursor::NotAllowed => MouseCursor::NotAllowed,
+                };
+
+                win.update_mouse_cursor(native_cursor);
+            }
         }
     }
 
     pub
-    fn render(&mut self, canvas: &mut Canvas, events: &Vec<Event>, delta_time: f32) {
-        canvas.disable_depth_update();
+    fn new_frame(&mut self, win: &mut Window, events: &Vec<Event>, delta_time: std::time::Duration) {
+        let io = self.io();
 
+        io.update_delta_time(delta_time);
+
+        self.update_mouse_cursor(win);
+    }
+
+    pub
+    fn render(&mut self, canvas: &mut Canvas) {
+
+
+        canvas.disable_depth_update();
         let ui = self.imgui.new_frame();
 
         ui.separator();
         ui.button("finalmente");
 
-        /*
-        {
-        let mut vp = self.imgui.main_viewport_mut();
-        println!("view port position {:?}", vp.pos);
-        println!("view port size     {:?}", vp.size);
-        }
-
-        assert!(false);
-        */
-
         let draw_data = self.imgui.render();
 
+        /*
         let n_x: f32 = self.width as _;
         let n_y: f32 = self.height as _;
 
-        /*
         let n = 1.0;
         let f = -1.0;
 
@@ -135,14 +173,14 @@ impl Gui {
         let b = camera_window.bottom;
         */
 
+
+        /*
         let matrix_viewport = Matrix4::new([
             [n_x / 2.0,        0.0,  0.0,  (n_x-1.0) / 2.0],
             [      0.0,  n_y / 2.0,  0.0,  (n_y-1.0) / 2.0],
             [      0.0,        0.0,  1.0,              0.0],
             [      0.0,        0.0,  0.0,              1.0]
         ]);
-
-        /*
         let matrix_orth = Matrix4::new([
             [2.0 / (r-l),          0.0,          0.0,  -(r+l) / (r-l)],
             [        0.0,  2.0 / (t-b),          0.0,  -(t+b) / (t-b)],

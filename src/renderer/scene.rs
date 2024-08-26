@@ -282,6 +282,27 @@ impl TextureMap {
     }
 
     pub
+    fn get_rgba_slice(&self, u: f32, v: f32) -> [u8; 4] {
+        debug_assert!(0.0 <= u && u <= 1.0);
+        debug_assert!(0.0 <= v && v <= 1.0);
+        debug_assert!(self.components == 4);
+
+        let u_idx =                  (u * self.f_width).floor()  as usize;
+        let v_idx = self.height -1 - (v * self.f_height).floor() as usize;
+        
+        let offset = (v_idx * self.width + u_idx) * self.components;
+
+        debug_assert!(offset     <  self.img.len());
+        debug_assert!(offset + 4 <= self.img.len());
+
+        self.img[
+            (offset) ..
+            (offset) + 4
+        ].try_into().unwrap()
+    }
+
+
+    pub
     fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
         debug_assert!(0.0 <= u && u <= 1.0);
         debug_assert!(0.0 <= v && v <= 1.0);
@@ -359,6 +380,25 @@ struct Texture {
 }
 
 impl Texture {
+    pub
+    fn with_diffuse_map(diff_map: TextureMap) -> Self {
+        let map_ka = TextureMap::default();
+        let map_kd = diff_map;
+
+        Self {
+            name: String::from("default"),
+            ka: Vec3::new([1.0, 1.0, 1.0]),
+            kd: Vec3::new([1.0, 1.0, 1.0]),
+            ks: Vec3::new([1.0, 1.0, 1.0]),
+
+            alpha: 1.0,
+
+            map_ka: map_ka,
+            map_kd: map_kd,
+        }
+    }
+
+    pub
     fn default() -> Self {
         let map_ka = TextureMap::default();
         let map_kd = TextureMap::default();
@@ -1409,7 +1449,6 @@ impl ViewPlane {
 
 pub
 struct Scene {
-    canvas: Canvas,
     width: usize,
     height: usize,
     camera: Camera,
@@ -1433,10 +1472,6 @@ impl Scene {
         let ratio = (width as f32) / (height as f32);
         let camera = Camera::new(camera_pos, camera_dir, ratio);
 
-
-        let mut canvas = Canvas::new(width, height);
-        canvas.init_depth(100000.0);
-
         // alguns modelos classicos
         // https://casual-effects.com/data/
 
@@ -1452,7 +1487,6 @@ impl Scene {
         //let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
-            canvas:   canvas,
             width:   width,
             height:  height,
             camera:  camera,
@@ -1556,9 +1590,9 @@ impl Scene {
     }
 
     pub
-    fn render (&mut self) {
+    fn render (&mut self, canvas: &mut Canvas) {
 
-        self.canvas.clear();
+        canvas.clear();
 
         let matrix_transf = self.gen_transformation_matrix();
 
@@ -1586,7 +1620,7 @@ impl Scene {
             }
 
 
-            self.canvas.enable_depth_update();
+            canvas.enable_depth_update();
             for obj_mesh in obj.opaque_meshes.iter() {
                 let mesh_texture_idx = obj_mesh.texture_idx.unwrap();
                 // TODO: ta meio feio isso aq, tem que embelezar.
@@ -1741,7 +1775,7 @@ impl Scene {
                             None          => &Texture::default(),
                         };
 
-                        self.canvas.draw_triangle_with_attributes(
+                        canvas.draw_triangle_with_attributes(
                             &clip_tri_vert_attr[0],
                             &clip_tri_vert_attr[1],
                             &clip_tri_vert_attr[2],
@@ -1752,7 +1786,7 @@ impl Scene {
                 }
             }
 
-            self.canvas.disable_depth_update();
+            canvas.disable_depth_update();
 
 
             for obj_mesh in obj.transparent_meshes.iter_mut() {
@@ -1930,7 +1964,7 @@ impl Scene {
                             None          => &Texture::default(),
                         };
 
-                        self.canvas.draw_triangle_with_attributes(
+                        canvas.draw_triangle_with_attributes(
                             &clip_tri_vert_attr[0],
                             &clip_tri_vert_attr[1],
                             &clip_tri_vert_attr[2],
@@ -1945,11 +1979,6 @@ impl Scene {
 
     pub
     fn draw_indexed_mesh (&mut self, mesh: &IndexedMesh) {
-    }
-
-    pub
-    fn frame_as_bytes_slice(&self) -> &[u8] {
-        self.canvas.as_bytes_slice()
     }
 
 }

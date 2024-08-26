@@ -2,6 +2,7 @@ mod window;
 mod gui;
 
 use crate::renderer::scene::Scene;
+use crate::renderer::canvas::Canvas;
 
 use gui::*;
 
@@ -17,6 +18,7 @@ struct Application {
     gui: Gui,
     win: Window,
     scene: Scene,
+    canvas: Canvas,
 }
 
 impl Application {
@@ -24,11 +26,15 @@ impl Application {
     fn new () -> Self {
         let width = 800;
         let height = 600;
+        let mut canvas = Canvas::new(width, height);
+        canvas.init_depth(100000.0);
+
 
         Self {
             gui:    Gui::new(),
             scene:  Scene::new(width, height),
             win:    Window::new(width, height),
+            canvas: canvas,
         }
     }
 
@@ -92,14 +98,13 @@ impl Application {
                 println!("FPS {}", 1000.0 / elapsed);
                 //scene.camera_right();
 
-                self.scene.render();
+                self.scene.render(&mut self.canvas);
                 //let render_elapsed = now.elapsed().as_millis() as f32;
                 //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
-                let frame_slice = self.scene.frame_as_bytes_slice();
+                self.gui.render(&mut self.canvas, &events, elapsed);
 
-                self.gui.render(frame_slice, &events, elapsed);
-
+                let frame_slice = self.canvas.as_bytes_slice();
                 self.win.write_frame_from_slice(frame_slice);
 
             }

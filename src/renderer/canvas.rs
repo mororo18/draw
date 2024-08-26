@@ -36,18 +36,20 @@ enum Color {
     Green,
     Blue,
 
-    Grey
+    Grey,
+    Custom([u8; 3]),
 }
 
 impl Color {
     fn as_pixel(&self) -> Pixel {
         match self {
-            Color::White => Pixel::white(),
-            Color::Black => Pixel::black(),
-            Color::Red   => Pixel::red(),
-            Color::Green => Pixel::green(),
-            Color::Blue  => Pixel::blue(),
-            Color::Grey  => Pixel::new(128, 128, 128),
+            Color::White        => Pixel::white(),
+            Color::Black        => Pixel::black(),
+            Color::Red          => Pixel::red(),
+            Color::Green        => Pixel::green(),
+            Color::Blue         => Pixel::blue(),
+            Color::Grey         => Pixel::new(128, 128, 128),
+            Color::Custom(col)  => Pixel::new(col[0], col[1], col[2]),
         }
     }
 
@@ -58,7 +60,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Pixel {
     // little endian
     b:  u8,
@@ -176,6 +178,16 @@ struct PixelPos {
     pub x: usize,
     pub y: usize,
 }
+
+#[derive(Debug, Copy, Clone)]
+pub
+struct VertexSimpleAttributes {
+    pub screen_coord:   Vec2,
+    pub texture_coord:  Vec2,
+    pub color:  Color,
+    pub alpha: f32,
+}
+
 
 #[derive(Debug, Copy, Clone)]
 pub
@@ -378,20 +390,31 @@ impl Canvas {
         let v_a = vertex_list[0];
         let v_b = vertex_list[1];
 
-        self.draw_triangle(vertex_x_min, v_a, v_b);
-        self.draw_triangle(vertex_further, v_a, v_b);
+        //self.draw_triangle(vertex_x_min, v_a, v_b);
+        //self.draw_triangle(vertex_further, v_a, v_b);
     }
 
     pub
-    fn draw_triangle(&mut self, a_vertex: Vec2, b_vertex: Vec2, c_vertex: Vec2) {
+    fn draw_triangle(&mut self, a_vertex: VertexSimpleAttributes, 
+                                b_vertex: VertexSimpleAttributes,
+                                c_vertex: VertexSimpleAttributes,
+                                texture:  Option<&Texture>) {
+        let default = &Texture::default();
+        let texture = texture.unwrap_or_else(move || {assert!(false); default});
+        let diffuse_map = &texture.map_kd;
 
-        let a_center = self.pos_map_center(a_vertex);
-        let b_center = self.pos_map_center(b_vertex);
-        let c_center = self.pos_map_center(c_vertex);
+        let a_center = self.pos_map_center(a_vertex.screen_coord);
+        let b_center = self.pos_map_center(b_vertex.screen_coord);
+        let c_center = self.pos_map_center(c_vertex.screen_coord);
 
-        let color_a = Pixel::red();
-        let color_b = Pixel::green();
-        let color_c = Pixel::blue();
+        let a_uv = a_vertex.texture_coord;
+        let b_uv = b_vertex.texture_coord;
+        let c_uv = c_vertex.texture_coord;
+
+
+        let color_a = a_vertex.color.as_pixel();
+        let color_b = b_vertex.color.as_pixel();
+        let color_c = c_vertex.color.as_pixel();
 
         let f_ab = |x: f32, y:f32| -> f32 {
             (a_center.y - b_center.y) * x + 
@@ -416,7 +439,7 @@ impl Canvas {
 
         let min = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = f32::INFINITY;
-            vec![x, y, z].iter()
+            [x, y, z].iter()
                 .for_each(|v| if *v < ret {ret = *v;});
 
             ret
@@ -424,7 +447,7 @@ impl Canvas {
 
         let max = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = -f32::INFINITY;
-            vec![x, y, z].iter()
+            [x, y, z].iter()
                 .for_each(|v| if *v > ret {ret = *v;});
 
             ret
@@ -462,11 +485,37 @@ impl Canvas {
                        (gama > 0.0  || f_gama  * f_gama_outside > 0.0)
 
                     {
-                        let color_pixel = (alpha * color_a) +
-                                          (beta  * color_b) +
-                                          (gama  * color_c);
+                        let mut color_pixel = (alpha * color_a) +
+                                              (beta  * color_b) +
+                                              (gama  * color_c);
 
-                        self.draw_pixel_coord(x, y, color_pixel);
+                        let color_alpha = (alpha * a_vertex.alpha) +
+                                          (beta  * b_vertex.alpha) +
+                                          (gama  * c_vertex.alpha);
+
+                        let color_uv = (a_uv * alpha) +
+                                       (b_uv * beta)  +
+                                       (c_uv * gama);
+
+
+                        let color_rgba_slice = diffuse_map.get_rgba_slice(color_uv.x, color_uv.y);
+                        let texture_alpha = (color_rgba_slice[3] as f32) / 255.0;
+                        assert!((0.0..=1.0).contains(&texture_alpha));
+
+                        let color_texture = Color::Custom(
+                            color_rgba_slice[..3].try_into().unwrap()
+                        ).as_pixel();
+
+                        //color_pixel = Pixel::blend(color_pixel, color_texture);
+                        color_pixel = color_pixel * texture_alpha + color_texture * (1.0 - texture_alpha);
+
+                        // Alpha resultante após combinação
+                        let final_alpha = color_alpha * texture_alpha;
+
+                        let y_inv = self.height - y -1;
+                        //self.draw_pixel_coord(x, y_inv, color_pixel);
+                        self.draw_pixel_coord_with_depth(x, y_inv, color_pixel,   final_alpha,   0.0);
+                        //self.draw_pixel_coord_with_depth(x, y_inv, color_texture, texture_alpha, 0.0);
                     }
                 }
             }
@@ -518,7 +567,7 @@ impl Canvas {
 
         let min = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = f32::INFINITY;
-            vec![x, y, z].iter()
+            [x, y, z].iter()
                 .for_each(|v| if *v < ret {ret = *v;});
 
             ret
@@ -526,7 +575,7 @@ impl Canvas {
 
         let max = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = -f32::INFINITY;
-            vec![x, y, z].iter()
+            [x, y, z].iter()
                 .for_each(|v| if *v > ret {ret = *v;});
 
             ret

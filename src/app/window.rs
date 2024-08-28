@@ -27,6 +27,16 @@ enum Key {
 }
 
 #[derive(PartialEq)]
+pub
+enum Button {
+    MouseLeft,
+    MouseRight,
+    MouseMiddle,
+    WheelUp,
+    WheelDown,
+}
+
+#[derive(PartialEq)]
 pub enum MouseCursor {
     Arrow,
     TextInput,
@@ -65,6 +75,10 @@ enum Event {
     CloseWindow,
     KeyPress(Key),
     KeyRelease(Key),
+
+    ButtonPress(Button),
+    ButtonRelease(Button),
+
     RedimWindow,
     MouseMotion(MouseInfo),
 }
@@ -72,10 +86,10 @@ enum Event {
 #[derive(Clone, PartialEq)]
 pub
 struct MouseInfo {
-    x:  i32,
-    y:  i32,
-    dx: i32,
-    dy: i32,
+    pub x:  i32,
+    pub y:  i32,
+    pub dx: i32,
+    pub dy: i32,
 }
 
 pub
@@ -157,7 +171,9 @@ impl Window {
         window_attr.event_mask       = xlib::StructureNotifyMask 
                                     | xlib::KeyPressMask 
                                     | xlib::KeyReleaseMask
-                                    | xlib::PointerMotionMask;
+                                    | xlib::PointerMotionMask
+                                    | xlib::ButtonPressMask
+                                    | xlib::ButtonReleaseMask;
 
         /* tells the what attributes we are using */
         let attribute_mask           = xlib::CWBitGravity 
@@ -405,6 +421,42 @@ impl Window {
                     }
                 },
 
+                xlib::ButtonPress => {
+                    let e: xlib::XButtonEvent = From::from(ev);
+                    println!("Press");
+
+                    let button_event = 
+                    match e.button {
+                        xlib::Button1 => {println!(" Mouse Left "); Event::ButtonPress(Button::MouseLeft)},
+                        xlib::Button2 => {println!(" Wheel Click ");Event::ButtonPress(Button::MouseMiddle)},
+                        xlib::Button3 => {println!(" Mouse Right ");Event::ButtonPress(Button::MouseRight)},
+                        xlib::Button4 => {println!(" Wheel Up ");   Event::ButtonPress(Button::WheelUp)},
+                        xlib::Button5 => {println!(" Wheel Down "); Event::ButtonPress(Button::WheelDown)},
+                        _ => Event::KeyPress(Key::Unknown),
+                    };
+
+                    events.push(button_event);
+
+                },
+
+                xlib::ButtonRelease => {
+                    let e: xlib::XButtonEvent = From::from(ev);
+                    println!("Release");
+
+                    let button_event = 
+                    match e.button {
+                        xlib::Button1 => {println!(" Mouse Left "); Event::ButtonRelease(Button::MouseLeft)},
+                        xlib::Button2 => {println!(" Wheel Click ");Event::ButtonRelease(Button::MouseMiddle)},
+                        xlib::Button3 => {println!(" Mouse Right ");Event::ButtonRelease(Button::MouseRight)},
+                        xlib::Button4 => {println!(" Wheel Up ");   Event::ButtonRelease(Button::WheelUp)},
+                        xlib::Button5 => {println!(" Wheel Down "); Event::ButtonRelease(Button::WheelDown)},
+                        _ => Event::KeyRelease(Key::Unknown),
+                    };
+
+                    events.push(button_event);
+
+                },
+
                 xlib::ClientMessage => {
                     let e: xlib::XClientMessageEvent = From::from(ev);
 
@@ -458,7 +510,7 @@ impl Window {
                 },
 
                 xlib::MotionNotify => {
-                    let e: xlib::XMotionEvent = From::from(ev);
+                    let e: xlib::XPointerMovedEvent = From::from(ev);
 
                     //println!("motion Notify");
                     // https://gitlab.winehq.org/wine/wine/-/blob/master/dlls/winex11.drv/mouse.c#L1405

@@ -99,7 +99,7 @@ impl Application {
             let ms_elapsed = elapsed.as_millis() as f32;
             if ms_elapsed > dt_ms {
                 now = std::time::Instant::now();
-                println!("FPS {}", 1000.0 / ms_elapsed);
+                //println!("FPS {}", 1000.0 / ms_elapsed);
                 //scene.camera_right();
 
                 self.scene.render(&mut self.canvas);

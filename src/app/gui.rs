@@ -4,6 +4,7 @@ use super::window::{
     Window,
     Event,
     Key,
+    Button,
     MouseCursor,
 };
 
@@ -141,8 +142,38 @@ impl Gui {
     pub
     fn new_frame(&mut self, win: &mut Window, events: &Vec<Event>, delta_time: std::time::Duration) {
         let io = self.io();
-
         io.update_delta_time(delta_time);
+
+        for event in events.iter() {
+            match event {
+                Event::MouseMotion(mouse_info) => {
+                    io.mouse_pos = [mouse_info.x as f32, mouse_info.y as f32];
+                },
+                Event::ButtonPress(button_event) => {
+                    let idx = match button_event {
+                        Button::MouseLeft   => 0,
+                        Button::MouseRight  => 1,
+                        Button::MouseMiddle => 2,
+                        _ => 0,
+                    };
+
+                    io.mouse_down[idx] = true;
+                },
+
+                Event::ButtonRelease(button_event) => {
+
+                    let idx = match button_event {
+                        Button::MouseLeft   => 0,
+                        Button::MouseRight  => 1,
+                        Button::MouseMiddle => 2,
+                        _ => 0,
+                    };
+
+                    io.mouse_down[idx] = false;
+                },
+                _ => {},
+            }
+        }
 
         self.update_mouse_cursor(win);
     }
@@ -198,9 +229,9 @@ impl Gui {
             String::from(std::any::type_name::<T>())
         }
 
-        println!("draw data display size     {:?}", draw_data.display_size);
-        println!("draw data display position {:?}", draw_data.display_pos);
-        println!("draw data frame buff scale {:?}", draw_data.framebuffer_scale);
+        // println!("draw data display size     {:?}", draw_data.display_size);
+        // println!("draw data display position {:?}", draw_data.display_pos);
+        // println!("draw data frame buff scale {:?}", draw_data.framebuffer_scale);
 
         for draw_list in draw_data.draw_lists() {
 

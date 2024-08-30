@@ -173,6 +173,7 @@ impl Mul<Pixel> for f32 {
     }
 }
 
+#[derive(Debug, Clone)]
 pub
 struct PixelPos {
     pub x: usize,
@@ -295,6 +296,58 @@ impl Mul<f32> for VertexAttributes {
     }
 }
 
+#[derive(Debug, Clone)]
+pub
+struct Rectangle {
+    pub pos:  PixelPos,
+    pub height: usize,
+    pub width: usize,
+}
+
+impl Rectangle {
+    pub
+    fn x_min (&self) -> usize { self.pos.x }
+    fn y_min (&self) -> usize { self.pos.y }
+
+    fn x_max (&self) -> usize { self.pos.x + self.width  }
+    fn y_max (&self) -> usize { self.pos.y + self.height }
+
+    pub
+    fn from_coords (x0: usize, y0: usize, x1: usize, y1: usize) -> Self {
+        use std::cmp;
+
+        let x_min = cmp::min(x0, x1);
+        let y_min = cmp::min(y0, y1);
+
+        let x_max = cmp::max(x0, x1);
+        let y_max = cmp::max(y0, y1);
+        
+        Self {
+            pos: PixelPos {
+                x: x_min, 
+                y: y_min, 
+            },
+
+            height: y_max - y_min,
+            width:  x_max - x_min,
+        }
+    }
+
+    pub
+    fn clip (a: Self, b: Self) -> Self {
+        use std::cmp;
+        let mut x_min = cmp::max(a.pos.x, b.pos.x);
+        let mut y_min = cmp::max(a.pos.y, b.pos.y);
+
+        let mut x_max = cmp::min(a.pos.x + a.width,  b.pos.x + b.width);
+        let mut y_max = cmp::min(a.pos.y + a.height, b.pos.y + b.height);
+
+        if x_min > x_max { x_min = 0; x_max = 0; }
+        if y_min > y_max { y_min = 0; y_max = 0; }
+
+        Self::from_coords(x_min, y_min, x_max, y_max)
+    }
+}
 
 pub
 struct Canvas {
@@ -395,10 +448,13 @@ impl Canvas {
     }
 
     pub
-    fn draw_triangle(&mut self, a_vertex: VertexSimpleAttributes, 
-                                b_vertex: VertexSimpleAttributes,
-                                c_vertex: VertexSimpleAttributes,
-                                texture:  Option<&Texture>) {
+    fn draw_triangle (&mut self, 
+        a_vertex: VertexSimpleAttributes, 
+        b_vertex: VertexSimpleAttributes,
+        c_vertex: VertexSimpleAttributes,
+        texture:  Option<&Texture>,
+        clipping_rect: Option<Rectangle>,
+    ) {
         let default = &Texture::default();
         let texture = texture.unwrap_or_else(move || {assert!(false); default});
         let diffuse_map = &texture.map_kd;
@@ -453,12 +509,31 @@ impl Canvas {
             ret
         };
 
-        let x_min = min(a_center.x, b_center.x, c_center.x) as usize;
-        let y_min = min(a_center.y, b_center.y, c_center.y) as usize;
+        let mut x_min = min(a_center.x, b_center.x, c_center.x) as usize;
+        let mut y_min = min(a_center.y, b_center.y, c_center.y) as usize;
 
-        let x_max = max(a_center.x, b_center.x, c_center.x) as usize;
-        let y_max = max(a_center.y, b_center.y, c_center.y) as usize;
+        let mut x_max = max(a_center.x, b_center.x, c_center.x) as usize;
+        let mut y_max = max(a_center.y, b_center.y, c_center.y) as usize;
 
+        let mut drawable_rect = Rectangle::from_coords(x_min, y_min, x_max, y_max);
+        let     screen_rect   = Rectangle::from_coords(0, 0, self.width-1, self.height-1);
+
+        drawable_rect = Rectangle::clip(
+            drawable_rect, 
+            screen_rect.clone()
+        );
+
+        let valid_rect = Rectangle::clip(
+            clipping_rect.unwrap_or_else(|| screen_rect),
+            drawable_rect,
+        );
+        
+        x_min = valid_rect.x_min();
+        y_min = valid_rect.y_min();
+                
+        x_max = valid_rect.x_max();
+        y_max = valid_rect.y_max();
+        
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta  = f_ca(b_center.x, b_center.y);
         let f_gama  = f_ab(c_center.x, c_center.y);
@@ -506,16 +581,13 @@ impl Canvas {
                             color_rgba_slice[..3].try_into().unwrap()
                         ).as_pixel();
 
-                        //color_pixel = Pixel::blend(color_pixel, color_texture);
+                        // color blending
                         color_pixel = color_pixel * texture_alpha + color_texture * (1.0 - texture_alpha);
 
                         // Alpha resultante após combinação
                         let final_alpha = color_alpha * texture_alpha;
 
-                        let y_inv = self.height - y -1;
-                        //self.draw_pixel_coord(x, y_inv, color_pixel);
-                        self.draw_pixel_coord_with_depth(x, y_inv, color_pixel,   final_alpha,   0.0);
-                        //self.draw_pixel_coord_with_depth(x, y_inv, color_texture, texture_alpha, 0.0);
+                        self.draw_pixel_coord_with_depth(x, y, color_pixel,   final_alpha,   0.0);
                     }
                 }
             }
@@ -726,7 +798,35 @@ impl Canvas {
     }
 
     pub
-    fn draw_line(&mut self, a: Vec2, b: Vec2) {
+    fn draw_rect(&mut self, rect: Rectangle, color: Color) {
+        let a = Vec2::new(
+            rect.x_min() as _,
+            rect.y_min() as _,
+        );
+
+        let b = Vec2::new(
+            rect.x_max() as _,
+            rect.y_min() as _,
+        );
+
+        let c = Vec2::new(
+            rect.x_max() as _,
+            rect.y_max() as _,
+        );
+
+        let d = Vec2::new(
+            rect.x_min() as _,
+            rect.y_max() as _,
+        );
+
+        self.draw_line(a, b, color);
+        self.draw_line(b, c, color);
+        self.draw_line(c, d, color);
+        self.draw_line(d, a, color);
+    }
+
+    pub
+    fn draw_line(&mut self, a: Vec2, b: Vec2, color: Color) {
         let a_center = self.pos_map_center(a);
         let b_center = self.pos_map_center(b);
 
@@ -734,17 +834,17 @@ impl Canvas {
 
         //println!("m = {m}");
         if 1.0 < m {
-            self.midpoint_draw(a_center, b_center, 0);
+            self.midpoint_draw(a_center, b_center, 0, color);
         } else if 0.0 < m && m <= 1.0 {
-            self.midpoint_draw(a_center, b_center, 1);
+            self.midpoint_draw(a_center, b_center, 1, color);
         } else if -1.0 < m && m <= 0.0 {
-            self.midpoint_draw(a_center, b_center, 2);
+            self.midpoint_draw(a_center, b_center, 2, color);
         } else if m <= -1.0 {
-            self.midpoint_draw(a_center, b_center, 3);
+            self.midpoint_draw(a_center, b_center, 3, color);
         }
     }
 
-    fn midpoint_draw(&mut self, _a_center: Vec2, _b_center: Vec2, idx: usize) {
+    fn midpoint_draw(&mut self, _a_center: Vec2, _b_center: Vec2, idx: usize, color: Color) {
         // idx      m \in
         // ===================
         // 0        (1,   inf]      
@@ -840,7 +940,7 @@ impl Canvas {
                 _ => (0, 0),
             };
 
-            self.draw_pixel_coord(x as usize, y as usize, Pixel::white());
+            self.draw_pixel_coord(x as usize, y as usize, color.as_pixel());
 
             let d_cond = match idx {
                 0 => d > 0.0,
@@ -880,18 +980,8 @@ impl Canvas {
 
     pub 
     fn pos_map_center (&self, pos: Vec2) -> Vec2 {
-        let w_f32 = self.width  as f32 - 1.0;
-        let h_f32 = self.height as f32 - 1.0;
-
         let x_center = (pos.x + 0.5).floor();
         let y_center = (pos.y + 0.5).floor();
-
-        // Debug
-        debug_assert!(
-            x_center >= 0.0 && x_center <= w_f32 &&
-            y_center >= 0.0 && y_center <= h_f32, 
-            "posicao invalida ({x_center}, {y_center}) "
-        );
 
         Vec2 {
             x: x_center,

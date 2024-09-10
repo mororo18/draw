@@ -448,7 +448,8 @@ impl Canvas {
     }
 
     pub
-    fn draw_triangle (&mut self, 
+    fn draw_triangle (
+        &mut self, 
         a_vertex: VertexSimpleAttributes, 
         b_vertex: VertexSimpleAttributes,
         c_vertex: VertexSimpleAttributes,
@@ -597,12 +598,14 @@ impl Canvas {
     }
 
     pub
-    fn draw_triangle_with_attributes(&mut self,
-                                   a_attr: &VertexAttributes,
-                                   b_attr: &VertexAttributes,
-                                   c_attr: &VertexAttributes,
-                                   texture: &Texture)
-    {
+    fn draw_triangle_with_attributes (
+        &mut self,
+        a_attr: &VertexAttributes,
+        b_attr: &VertexAttributes,
+        c_attr: &VertexAttributes,
+        texture: &Texture,
+        clipping_rect: Option<Rectangle>,
+    ) {
 
         let a_center = self.pos_map_center(a_attr.screen_coord);
         let b_center = self.pos_map_center(b_attr.screen_coord);
@@ -653,11 +656,30 @@ impl Canvas {
             ret
         };
 
-        let x_min = min(a_center.x, b_center.x, c_center.x) as usize;
-        let y_min = min(a_center.y, b_center.y, c_center.y) as usize;
+        let mut x_min = min(a_center.x, b_center.x, c_center.x) as usize;
+        let mut y_min = min(a_center.y, b_center.y, c_center.y) as usize;
 
-        let x_max = max(a_center.x, b_center.x, c_center.x) as usize;
-        let y_max = max(a_center.y, b_center.y, c_center.y) as usize;
+        let mut x_max = max(a_center.x, b_center.x, c_center.x) as usize;
+        let mut y_max = max(a_center.y, b_center.y, c_center.y) as usize;
+
+        let mut drawable_rect = Rectangle::from_coords(x_min, y_min, x_max, y_max);
+        let     screen_rect   = Rectangle::from_coords(0, 0, self.width-1, self.height-1);
+
+        drawable_rect = Rectangle::clip(
+            drawable_rect, 
+            screen_rect.clone()
+        );
+
+        let valid_rect = Rectangle::clip(
+            clipping_rect.unwrap_or_else(|| screen_rect),
+            drawable_rect,
+        );
+        
+        x_min = valid_rect.x_min();
+        y_min = valid_rect.y_min();
+                
+        x_max = valid_rect.x_max();
+        y_max = valid_rect.y_max();
 
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta  = f_ca(b_center.x, b_center.y);

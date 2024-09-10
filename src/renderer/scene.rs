@@ -72,27 +72,36 @@ impl Triangle {
     }
 
     pub
-    fn clip_against_planes(&self, view_planes: &[ViewPlane], tri_pool_ret: &mut [Triangle]) -> usize
+    fn clip_against_planes(&self, view_planes: &([ViewPlane; 2], [ViewPlane; 4]), tri_pool_ret: &mut [Triangle]) -> usize
     {
+
+        let depth_planes = &view_planes.0;
+        let lateral_planes = &view_planes.1;
 
         let mut tri_pool_size: usize = 0;
 
-        tri_pool_ret[tri_pool_size] = self.clone();
-        tri_pool_size += 1;
+        // the lateral planes (right, left, top, bot) will just clip the triangles that are
+        // completly outside of the view volume. The triangles that are partially outside will
+        // be clipped during the rasterization.
+        if lateral_planes[0].partially_visible(&self) &&
+           lateral_planes[1].partially_visible(&self) &&
+           lateral_planes[2].partially_visible(&self) &&
+           lateral_planes[3].partially_visible(&self)
+        {
+            tri_pool_ret[0] = self.clone();
+            tri_pool_size = 1;
+        }
 
-        assert!(tri_pool_ret.len() >= 12);
-        //let mut new_tri_pool: [Triangle; 8] = [Triangle::zeroed(); 8];
-        let mut new_tri_pool: [Triangle; 12] = unsafe {std::mem::MaybeUninit::<[Triangle; 12]>::zeroed().assume_init()};
-        
-        // TODO: otimizar isso aq dsp (tlvz substituir por MaybeUninit zeroed etc tqv)
-        //new_tri_pool.copy_from_slice(tri_pool_ret);
+        let mut new_tri_pool: [Triangle; 12] = unsafe {
+            std::mem::MaybeUninit::<[Triangle; 12]>::zeroed().assume_init()
+        };
 
         let mut tri_pool_ref: &mut [Triangle] = tri_pool_ret;
         let mut new_pool_ref: &mut [Triangle] = new_tri_pool.as_mut();
-
-        for plane in view_planes.iter() {
+        
+        // the 'far' and 'near' planes will apply the complete clipping method in the triangles.
+        for plane in depth_planes.iter() {
             let mut new_tri_pool_size: usize = 0;
-            //let mut new_tri_pool:  Vec<Self> = Vec::with_capacity(tri_pool.len() * 2);
 
             for tri in tri_pool_ref[0..tri_pool_size].iter() {
 
@@ -101,19 +110,6 @@ impl Triangle {
                 new_tri_pool_size += clipped_count;
             }
 
-            /*
-            for tri in tri_pool.iter() {
-                let mut clipped_triangles = plane.clip(tri);
-                new_tri_pool.append(&mut clipped_triangles);
-            }
-            */
-
-
-
-
-            //tri_pool_ret[..new_tri_pool_size].copy_from_slice(new_tri_pool[..new_tri_pool_size].as_mut());
-            //tri_pool_size = new_tri_pool_size;
-            
             std::mem::swap(&mut tri_pool_ref, &mut new_pool_ref);
             std::mem::swap(&mut tri_pool_size, &mut new_tri_pool_size);
         }
@@ -1107,7 +1103,7 @@ impl Camera {
         matrix_cam
     }
 
-    fn gen_view_planes(&mut self) -> [ViewPlane; 6] {
+    fn gen_view_planes(&mut self) -> ([ViewPlane; 2] , [ViewPlane; 4]) {
         self.update_basis();
         let matrix_basis =  self.get_basis_matrix();
         let camera_pos = self.get_pos();
@@ -1188,7 +1184,7 @@ impl Camera {
 
         let visible_point = (a_point + bottom_further_point) / 2.0;
 
-        let mut func_planes = [
+        let depth_planes = [
             ViewPlane::new(
                 [
                     a_point,
@@ -1196,7 +1192,7 @@ impl Camera {
                     c_point
                 ], 
                 visible_point, 
-                "perto"
+                "near"
             ),
             ViewPlane::new(
                 [
@@ -1205,9 +1201,11 @@ impl Camera {
                     top_further_point
                 ],
                 visible_point, 
-                "longe"
-            ),
+                "far"
+            )
+        ];
 
+        let lateral_planes = [
             ViewPlane::new(
                 [
                     right_further_point,
@@ -1215,7 +1213,7 @@ impl Camera {
                     b_point
                 ],
                 visible_point, 
-                "direita"
+                "right"
             ),
             ViewPlane::new(
                 [
@@ -1224,7 +1222,7 @@ impl Camera {
                     d_point
                 ],
                 visible_point,
-                "esquerda"
+                "left"
             ),
 
             ViewPlane::new(
@@ -1234,7 +1232,7 @@ impl Camera {
                     a_point
                 ],
                 visible_point,
-                "topo"
+                "top"
             ),
             ViewPlane::new(
                 [
@@ -1243,11 +1241,11 @@ impl Camera {
                     b_point
                 ],
                 visible_point, 
-                "piso"
+                "bottom"
             )
         ];
 
-            func_planes
+        (depth_planes, lateral_planes)
     }
 }
 
@@ -1310,6 +1308,35 @@ impl ViewPlane {
     pub
     fn normal (&self) -> Vec3 {
         self.normal
+    }
+    pub
+    fn partially_visible (&self, tri: &Triangle) -> bool {
+        let a_vertex = tri.vertices[0];
+        let b_vertex = tri.vertices[1];
+        let c_vertex = tri.vertices[2];
+
+
+        let f_a = self.func(a_vertex);
+        let f_b = self.func(b_vertex);
+        let f_c = self.func(c_vertex);
+
+        if f_a > 0.0 && 
+           f_b > 0.0 && 
+           f_c > 0.0 
+        {
+            // completly visible
+            return true;
+        } else
+        if f_a <= 0.0 && 
+           f_b <= 0.0 && 
+           f_c <= 0.0 
+        {
+            // not visible
+            return false;
+        } else {
+            // partially visible
+            return true;
+        }
     }
 
     pub
@@ -1480,8 +1507,8 @@ impl Scene {
         //let obj = Object::load_from_file("models/donut/donut.obj");
         //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
         //let obj = Object::load_from_file("models/g_soldier1/soldier1.obj");
-        let obj = Object::load_from_file("models/lemur/lemur.obj");
-        //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
+        //let obj = Object::load_from_file("models/lemur/lemur.obj");
+        let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
         //let obj = Object::load_from_file("models/CornellBox/CornellBox-Original.obj");
 
         //let obj_vec = Object::load_from_directory("models/dungeon_set/");
@@ -1780,7 +1807,8 @@ impl Scene {
                             &clip_tri_vert_attr[1],
                             &clip_tri_vert_attr[2],
 
-                            mesh_texture
+                            mesh_texture,
+                            None
                         );
                     }
                 }
@@ -1969,7 +1997,8 @@ impl Scene {
                             &clip_tri_vert_attr[1],
                             &clip_tri_vert_attr[2],
 
-                            mesh_texture
+                            mesh_texture,
+                            None
                         );
                     }
                 }

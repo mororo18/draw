@@ -46,9 +46,9 @@ impl Gui {
         font_atlas.add_font(&[
             ig::FontSource::DefaultFontData {
                 config: Some(ig::FontConfig {
-                    rasterizer_multiply: 1.5,
-                    oversample_h: 4,
-                    oversample_v: 4,
+                    //rasterizer_multiply: 1.4,
+                    //oversample_h: 4,
+                    //oversample_v: 4,
                     ..ig::FontConfig::default()
                 }),
             },
@@ -172,8 +172,9 @@ impl Gui {
         canvas.disable_depth_update();
         let ui = self.imgui.new_frame();
 
-        ui.separator();
-        ui.button("finalmente");
+        //ui.separator();
+        //ui.button("finalmente");
+        ui.show_metrics_window(&mut false);
 
         let draw_data = self.imgui.render();
 

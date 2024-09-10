@@ -97,7 +97,8 @@ impl Application {
 
             let elapsed = now.elapsed();
             let ms_elapsed = elapsed.as_millis() as f32;
-            if ms_elapsed > dt_ms {
+            //if ms_elapsed > dt_ms {
+            if true {
                 now = std::time::Instant::now();
                 //println!("FPS {}", 1000.0 / ms_elapsed);
                 //scene.camera_right();

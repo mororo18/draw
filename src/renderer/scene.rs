@@ -14,47 +14,29 @@ use super::linalg::{
 
 use obj;
 
-
 #[derive(Clone, Copy, Debug)]
 struct Triangle {
     vertices:       [Vec3; 3],
     vertices_attr:  [VertexAttributes; 3],
-    //normal:         Vec3,
-    //color:          Color,
 }
 
 impl Triangle {
     pub
-    fn new (vertices:      [Vec3; 3],
-            vertices_attr: [VertexAttributes; 3], 
-            //color: Color
-            ) -> Self
+    fn new (
+        vertices:      [Vec3; 3],
+        vertices_attr: [VertexAttributes; 3], 
+    ) -> Self 
     {
         Self {
-            vertices:       vertices,
-            vertices_attr:  vertices_attr,
-            //color:          color,
-            //normal:         Vec3::zeros(),
+            vertices,
+            vertices_attr,
         }
     }
 
     fn zeroed () -> Self {
-        unsafe {std::mem::MaybeUninit::<Triangle>::zeroed().assume_init()}
-        /*
-        Triangle::new(
-            [
-                Vec3::zeros(), 
-                Vec3::zeros(), 
-                Vec3::zeros()
-            ],
-            [
-                VertexAttributes::zeros(), 
-                VertexAttributes::zeros(), 
-                VertexAttributes::zeros()
-            ],
-            Color::White,
-        )
-        */
+        unsafe {
+            std::mem::MaybeUninit::<Triangle>::zeroed().assume_init()
+        }
     }
     
     pub
@@ -157,65 +139,10 @@ impl IndexedTriangleNormal for IndexedTriangle {
 pub
 struct IndexedMesh {
     triangles:  Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)>,
-  //triangles:          Vec<IndexedTriangle>,
-  //texture_triangles:  Vec<IndexedTriangle>,
-  //normals_triangles:  Vec<IndexedTriangle>,
-
-
     texture_idx:       Option<usize>,
 }
 
 impl IndexedMesh {
-    /*
-    pub
-    fn new (tri_vec: &Vec<(IndexedTriangle, IndexedTriangle, IndexedTriangle)>, vertex_vec: &Vec<Vec3>, text_idx: usize) -> Self {
-        // se algum triangulo nao possuir textura entao -> texture_idx = None
-        //
-    }
-        todo!();
-        let normals = vec![Vec3::zeros(); vert_vec.len()];
-
-        let mut ret = Self {
-            triangles: tri_vec.clone(),
-            vertices: vert_vec,
-
-
-            normals_triangles: vec![],
-            normals_vertices: normals,
-
-            texture_triangles: vec![],
-            texture_vertices: vec![],
-        };
-
-        for (tri_idx, indexed_tri) in tri_vec.iter().enumerate() {
-            let tri_vertices = ret.vertices_from_indexed(tri_idx);
-
-            let tri = Triangle::new(
-                [
-                    tri_vertices[0],
-                    tri_vertices[1],
-                    tri_vertices[2],
-                ],
-                Color::Green,
-                "",
-            );
-
-            let normal = Triangle::calc_normal(tri);
-
-            for vert_idx in indexed_tri {
-                //let v_norm = vert_normals[vert_idx];
-                ret.normals_vertices[*vert_idx] = ret.normals_vertices[*vert_idx] + normal;
-            }
-        }
-
-        for normal in ret.normals_vertices.iter_mut() {
-            *normal = normal.normalized();
-        }
-
-        return ret;
-    }
-    */
-
     pub
     fn vec3_list_from_indexed(indexed_tri: IndexedTriangle, vert_list: &Vec<Vec3>) -> [Vec3; 3] {
         let a_idx = indexed_tri[0];
@@ -257,10 +184,10 @@ impl TextureMap {
         assert!(img.len() / components == width * height);
 
         Self {
-            img:        img,
-            width:      width,
-            height:     height,
-            components: components,
+            img,
+            width,
+            height,
+            components,
 
             f_width:  ( width -1) as f32,
             f_height: ( height-1) as f32,
@@ -331,8 +258,6 @@ impl TextureMap {
         use stb::image::stbi_info_from_reader;
         use stb::image::Channels;
 
-        //let path = Path::new(filename);
-
         let mut file = File::open(file_path).expect("Unable to open file");
         let pre_info = stbi_info_from_reader(&mut file)
                             .expect("Deu errado ler a textura");
@@ -360,8 +285,6 @@ impl TextureMap {
 }
 
 // https://paulbourke.net/dataformats/mtl/
-
-// isso eh um obj mtl
 pub
 struct Texture {
     pub name: String,
@@ -389,8 +312,8 @@ impl Texture {
 
             alpha: 1.0,
 
-            map_ka: map_ka,
-            map_kd: map_kd,
+            map_ka,
+            map_kd,
         }
     }
 
@@ -407,8 +330,8 @@ impl Texture {
 
             alpha: 1.0,
 
-            map_ka: map_ka,
-            map_kd: map_kd,
+            map_ka,
+            map_kd,
         }
     }
 }
@@ -432,15 +355,9 @@ impl VertexVisual {
     }
 }
 
-// 1. conter no obeto vetor de meshes de triangulos
-// 2. cada mesh pode referenciar um meterial especifico
-// 3. os dados dos vetores/vertices/texturas serao armazenados pelo struct Object
-// 4. as malhas armazenar'ao as infos de materiasi e os indices de vetores/vertices/textura
-
 pub
 struct Object {
     vertices:           Vec<Vec3>,
-
     normals_vertices:   Vec<Vec3>,
     texture_vertices:   Option<Vec<Vec3>>,
 
@@ -477,16 +394,16 @@ impl Object {
         let vert_total = vertices.len();
 
         Self {
-            vertices:           vertices,
-            normals_vertices:   normals_vertices,
-            texture_vertices:   texture_vertices,
+            vertices,
+            normals_vertices,
+            texture_vertices,
 
             vertices_visual_info: vec![VertexVisual::zeroed(); vert_total],
 
             opaque_meshes:      opaque,
             transparent_meshes: transparent,
 
-            textures:           textures,
+            textures,
         }
     }
 
@@ -527,7 +444,7 @@ impl Object {
     pub
     fn load_from_file(filename: &str) -> Self {
         use std::fs::File;
-        use std::io::{BufRead, BufReader};
+        use std::io::BufReader;
         use std::path::{Path, PathBuf};
 
         let path = Path::new(filename);
@@ -568,6 +485,7 @@ impl Object {
 
 
         // rescaling test
+        if false {
         let mut vertices_sorted = 
         obj_vertices.iter()
                     .map(|e| e.norm())
@@ -581,6 +499,7 @@ impl Object {
         let factor = scale / vertex_max;
         obj_vertices.iter_mut().for_each(|e| *e = *e * factor);
                     
+        }
 
 
         let mut textures: Vec<Texture> = Vec::from([Texture::default()]);
@@ -624,7 +543,7 @@ impl Object {
 
                 textures.push(
                     Texture {
-                        name: name,
+                        name,
 
                         ka: Vec3::new(*ka),
                         kd: Vec3::new(*kd),
@@ -632,32 +551,24 @@ impl Object {
 
                         alpha: *alpha,
 
-                        map_ka: map_ka,
-                        map_kd: map_kd,
+                        map_ka,
+                        map_kd,
                     }
                 );
-                
-                //let _ = material.map_kd.as_ref().unwrap();
-
             }
         }
-
-        //unreachable!();
 
         for obj in obj_data.objects.iter() {
             println!("Object {}", obj.name);
 
 
             for group in obj.groups.iter() {
-                // Group doesnt has faces
+                // Group doesnt have faces
                 if group.polys.is_empty() {
                     continue;
                 }
 
                 let mut group_mesh_triangles: Vec<(IndexedTriangle, Option<IndexedTriangle>, Option<IndexedTriangle>)> = Vec::new();
-              //let mut mesh_faces:         Vec<IndexedTriangle> = Vec::new();
-              //let mut mesh_texture_faces: Vec<IndexedTriangle> = Vec::new();
-              //let mut mesh_normals_faces: Vec<IndexedTriangle> = Vec::new();
 
                 println!("\t Group name     {}", group.name);
                 println!("\t Group material {:?}", group.material);
@@ -666,19 +577,15 @@ impl Object {
                 if let Some(material) = &group.material {
                     match material {
                         obj::ObjMaterial::Ref(material_name) => {
-                            //println!("\tGroup material (Ref) {:?}", material_name);
                             material_name.clone()
                             
                         },
 
                         obj::ObjMaterial::Mtl(material_arc) => {
-                            //println!("\tGroup material (Arc) {:?}", material_arc.name);
                             material_arc.name.clone()
                         },
                     }
                 } else {
-                    //unreachable!();
-
                     String::from("default")
                 };
 
@@ -828,20 +735,15 @@ impl Object {
 
                 }
 
-                // TODO: mudar struct Texture para Material
-                {
-                    
-                    // determinar texture_idx 
-                    for (text_idx, texture) in textures.iter().enumerate() {
-                        if texture.name == material_name {
-                            texture_idx_match = Some(text_idx);
-                            break;
-                        }
+                // determinar texture_idx 
+                for (text_idx, texture) in textures.iter().enumerate() {
+                    if texture.name == material_name {
+                        texture_idx_match = Some(text_idx);
+                        break;
                     }
                 }
 
                 if mesh_missing_normals {
-                    //println!("{:#?}", group_mesh_triangles);
 
                     // calc normals
                     let mut gen_normals: Vec<Vec3> = vec![Vec3::zeros(); obj_vertices.len()];
@@ -856,20 +758,6 @@ impl Object {
                         gen_normals[b_idx] = gen_normals[b_idx] + normal;
                         gen_normals[c_idx] = gen_normals[c_idx] + normal;
                     }
-
-                    /*
-                    if gen_normals.contains(&Vec3::zeros()) { 
-                        let mut sum = 0;
-                        for norm in gen_normals.iter() {
-                            if *norm == Vec3::zeros() {
-                                sum += 1;
-                            }
-                        }
-
-                        println!("foun {sum} of {}", gen_normals.len());
-                        panic!("The normal vectors can't be calculated properly.");
-                    }
-                    */
 
                     for normal in gen_normals.iter_mut() {
                         *normal = normal.normalized();
@@ -911,9 +799,6 @@ impl Object {
 
                     IndexedMesh {
                         triangles:  mesh_triangles,
-                      //triangles:              mesh_faces,
-                      //normals_triangles:      mesh_normals_faces,
-                      //texture_triangles:      mesh_texture_faces,
                         texture_idx: texture_idx_match,
                     }
                 );
@@ -927,7 +812,6 @@ impl Object {
           obj_normals,
           Some(obj_texture_uv),
           meshes,
-          //Some(materials),
           textures,             // Option<Vec<TextureMap>>
         )
 
@@ -992,16 +876,14 @@ impl Camera {
 
         println!("CameraWindow dimension ({} x {})", right-left, top-bottom);
 
-        // nearest face of the view volume
-
         Self {
             position:    pos,
             direction:   dir.normalized(),
             window_view: CameraWindow {
-                top:    top,
-                bottom: bottom,
-                right:  right,
-                left:   left,
+                top,
+                bottom,
+                right,
+                left,
             },
 
             min_view_dist: n,
@@ -1068,8 +950,7 @@ impl Camera {
 
     pub
     fn update_basis(&mut self) {
-        let pos = self.position;
-        let g   = self.direction;
+        let g = self.direction;
         let top_dir = Vec3::new([0.,  1.,  0.]);
 
         let w = (g / g.norm()) * (-1.0);
@@ -1124,7 +1005,7 @@ impl Camera {
         let d_cam = Vec3::new([ l, t, n]).as_vec4();     
 
         // window view
-        let a_vec4 = matrix_basis * a_cam;      // direita superior frente
+        let a_vec4 = matrix_basis * a_cam;
         let b_vec4 = matrix_basis * b_cam;
         let c_vec4 = matrix_basis * c_cam;
         let d_vec4 = matrix_basis * d_cam;
@@ -1250,15 +1131,14 @@ impl Camera {
 }
 
 struct ViewPlane {
-    //points: [Vec3; 3],
     normal: Vec3,
     k: f32,
-    //label: String,
+    label: String,
 }
 
 impl ViewPlane {
     pub
-    fn new (points: [Vec3; 3], visible_point: Vec3, _label: &str) -> Self {
+    fn new (points: [Vec3; 3], visible_point: Vec3, label: &str) -> Self {
         let a_point = points[0];
         let b_point = points[1];
         let c_point = points[2];
@@ -1283,26 +1163,15 @@ impl ViewPlane {
         }
 
         Self {
-            //points: points,
-            normal: normal,
-            k: k,
-            //label: String::from(label),
+            normal,
+            k,
+            label: label.to_string(),
         }
     }
 
     pub
     fn func(&self, point: Vec3) -> f32 {
-        // essa constante subtraindo serve para que os triangulos sejam
-        // clipados um pouquinho antes do plano real, de modo que
-        // n'ao exista chance de calcular coordenadas invalidas
-        // apos as transformacoes devido 'a imprecisao do float
-        
-        // TODO: encontrar relação de proporcionalidade entre essa
-        // constante e as dimensões do cenário renderizado.
-
-        let delta = 500.0;
-
-        self.normal.dot(point) + self.k - delta
+        self.normal.dot(point) + self.k
     }
 
     pub
@@ -1359,7 +1228,6 @@ impl ViewPlane {
            f_b > 0.0 && 
            f_c > 0.0 
         {
-            //return Vec::from([tri.clone()]);
             tri_pool_ret[0] = tri.clone();
             return 1;
         } else
@@ -1367,7 +1235,6 @@ impl ViewPlane {
            f_b <= 0.0 && 
            f_c <= 0.0 
         {
-            //return Vec::new();
             return 0;
         }
 
@@ -1397,7 +1264,6 @@ impl ViewPlane {
             swap(&mut a_attr,   &mut b_attr);
         }
 
-        //  resolvendo para t onde p pertence ao plano
         //  p = in + t * (out - in)
 
         let t_a = self.func(a_vertex) /
@@ -1410,11 +1276,6 @@ impl ViewPlane {
             self.normal().dot(b_vertex - c_vertex) - EPS;
         let new_vertex_b = b_vertex + (c_vertex - b_vertex) * t_b;
         let new_b_attr   = b_attr   + (c_attr   - b_attr)   * t_b;
-
-
-        if tri_pool_ret.is_empty() {
-            println!("eita minino");
-        }
 
 
         if f_c <= 0.0 {
@@ -1443,10 +1304,8 @@ impl ViewPlane {
                     b_attr,
                     new_b_attr
                 ],
-                //tri.color,
             );
 
-            //return Vec::from([new_triangle_a, new_triangle_b]);
             tri_pool_ret[0] = new_triangle_a;
             tri_pool_ret[1] = new_triangle_b;
             return 2;
@@ -1463,7 +1322,6 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                //tri.color,
             );
 
             tri_pool_ret[0] = new_triangle_c;
@@ -1507,20 +1365,19 @@ impl Scene {
         //let obj = Object::load_from_file("models/donut/donut.obj");
         //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
         //let obj = Object::load_from_file("models/g_soldier1/soldier1.obj");
-        //let obj = Object::load_from_file("models/lemur/lemur.obj");
-        let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
+        let obj = Object::load_from_file("models/lemur/lemur.obj");
+        //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
         //let obj = Object::load_from_file("models/CornellBox/CornellBox-Original.obj");
-
         //let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
-            width:   width,
-            height:  height,
-            camera:  camera,
+            width,
+            height,
+            camera,
             //objects: obj_vec,
             objects: vec![obj],
 
-            light_source: light_source,
+            light_source,
         }
     }
 

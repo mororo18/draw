@@ -11,7 +11,7 @@ use super::window::{
 
 use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
-use crate::renderer::linalg::{Vec2, Vec3, Vec4, Matrix4};
+use crate::renderer::linalg::Vec2;
 
 pub
 struct Gui {

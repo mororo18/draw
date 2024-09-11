@@ -1,6 +1,5 @@
 use itertools::Either;
 use std::ops::{Mul, Add, Sub};
-use std::cmp::Ordering;
 
 use super::linalg::{
     Vec2,
@@ -62,7 +61,6 @@ impl Color {
 
 #[derive(Clone, Copy, Debug)]
 struct Pixel {
-    // little endian
     b:  u8,
     g:  u8,
     r:  u8,
@@ -423,31 +421,6 @@ impl Canvas {
     }
 
     pub
-    fn draw_quadrilat(&mut self, a: Vec2, b: Vec2, c: Vec2, d: Vec2) {
-        let a_center = self.pos_map_center(a);
-        let b_center = self.pos_map_center(b);
-        let c_center = self.pos_map_center(c);
-        let d_center = self.pos_map_center(d);
-
-        let mut vertex_list = vec![a_center, b_center, c_center, d_center];
-        vertex_list.as_mut_slice()
-                    .sort_by(|a, b| 
-                        if a.x > b.x {Ordering::Less}
-                        else         {Ordering::Greater});
-
-        let vertex_x_min = vertex_list.pop().expect("");
-        vertex_list.as_mut_slice()
-                    .sort_by_key(|v| (v.dist(vertex_x_min) * 100.0) as usize);
-        let vertex_further = vertex_list.pop().expect("");
-
-        let v_a = vertex_list[0];
-        let v_b = vertex_list[1];
-
-        //self.draw_triangle(vertex_x_min, v_a, v_b);
-        //self.draw_triangle(vertex_further, v_a, v_b);
-    }
-
-    pub
     fn draw_triangle (
         &mut self, 
         a_vertex: VertexSimpleAttributes, 
@@ -708,36 +681,14 @@ impl Canvas {
 
                     {
 
-
-
-
-
-                        fn h_compute(light: Vec3, eye: Vec3) -> Vec3 {
-                            let sum = light + eye;
-                            sum.normalized()
-                        }
-
-                        fn cmp_max (a: f32, b: f32) -> f32 {
-                            if a > b {return a;}
-                            else     {return b;}
-                        }
-
-
                         let pixel_depth = (alpha * a_depth) +
                                           (beta  * b_depth) +
                                           (gama  * c_depth);
 
-                        /*
-                        let pixel_color = (alpha * a_pixel_color) +
-                                          (beta  * b_pixel_color) +
-                                          (gama  * c_pixel_color);
-                        */
-
                         // Texturasss ????
-                        let pixel_texture_coord = 
-                                          (a_attr.texture_coord * alpha) +
-                                          (b_attr.texture_coord * beta) +
-                                          (c_attr.texture_coord * gama);
+                        let pixel_texture_coord = (a_attr.texture_coord * alpha) +
+                                                (b_attr.texture_coord * beta)  +
+                                                (c_attr.texture_coord * gama);
 
                         let diffuse_color_slice = texture.map_kd.get_rgb_slice(
                                                     pixel_texture_coord.x(),
@@ -762,28 +713,18 @@ impl Canvas {
                                             ).normalized_as_vec3();
 
                         // phong shadding ??
-
                         // TODO: Transformar isso aq em operacao matricial + utilizar SIMD
                         let pixel_normal = (a_attr.normal * alpha) +
-                                           (b_attr.normal * beta) +
+                                           (b_attr.normal * beta)  +
                                            (c_attr.normal * gama);
 
                         let pixel_light = (a_attr.light * alpha) +
-                                          (b_attr.light * beta) +
+                                          (b_attr.light * beta)  +
                                           (c_attr.light * gama);
 
-
-                        /*
-                        let pixel_eye = (a_attr.eye * alpha) +
-                                        (b_attr.eye * beta) +
-                                        (c_attr.eye * gama);
-                        */
-
-                        let pixel_halfway    = (a_attr.halfway * alpha) +
-                                        (b_attr.halfway * beta) +
-                                        (c_attr.halfway * gama);
-
-                        //let pixel_halfway = h_compute(pixel_light, pixel_eye);
+                        let pixel_halfway = (a_attr.halfway * alpha) +
+                                            (b_attr.halfway * beta)  +
+                                            (c_attr.halfway * gama);
 
                         let power = 2;
 
@@ -797,12 +738,10 @@ impl Canvas {
                         let c_r = diffuse_color.color_multiply( texture.kd);       // diffuse reflectance
                         let c_a = ambient_color.color_multiply( texture.ka);       // ambient term
 
-                        //dbg!(texture.kd);
-                        //dbg!(c_a);
-                        //debug_assert!(c_l + c_a <= 1.0);
-
-                        let color_normalized = c_r.color_multiply(c_a + c_l * (1.0 -  cmp_max(0.0 , pixel_light.dot(pixel_normal))) )
-                                        + c_l * (pixel_halfway.dot(pixel_normal).powi(power));
+                        let color_normalized = c_r.color_multiply(
+                            c_a + 
+                            c_l * ( 1.0 - 0.0_f32.max( pixel_light.dot(pixel_normal) ) )
+                        ) + c_l * pixel_halfway.dot(pixel_normal).powi(power);
 
                         let color = Pixel::from_normalized_vec3(color_normalized);
 
@@ -814,8 +753,6 @@ impl Canvas {
                 }
             }
         }
-
-
 
     }
 
@@ -847,6 +784,7 @@ impl Canvas {
         self.draw_line(d, a, color);
     }
 
+    // TODO: rewrite!!!
     pub
     fn draw_line(&mut self, a: Vec2, b: Vec2, color: Color) {
         let a_center = self.pos_map_center(a);
@@ -866,6 +804,7 @@ impl Canvas {
         }
     }
 
+    // TODO: rewrite!!!
     fn midpoint_draw(&mut self, _a_center: Vec2, _b_center: Vec2, idx: usize, color: Color) {
         // idx      m \in
         // ===================
@@ -875,7 +814,6 @@ impl Canvas {
         // 3        (-inf, -1]      
 
         // Eh necessario que  a_center.x < b_center.x 
-        //println!("idx = {idx}");
 
         let (a_center, b_center) = 
             match _a_center.x <= _b_center.x {
@@ -948,7 +886,6 @@ impl Canvas {
             else        {Either::Left(first..=last)}
         }
 
-        //println!("firs = {}\n last = {}", iter_axis_first[idx], iter_axis_last[idx]);
         // tem que arrumar essa gambiarra aq
         for iter_axis in iter_range(iter_axis_first[idx], iter_axis_last[idx], idx==3) {
 
@@ -988,18 +925,6 @@ impl Canvas {
         }
     }
 
-    pub
-    fn draw_dot (&mut self, pos: Vec2, color: Pixel) {
-        let pixel_pos = self.img_map(pos);
-        self.draw_pixel(pixel_pos, color);
-    }
-
-    pub
-    fn draw_white_dot (&mut self, pos: Vec2) {
-        let pixel_pos = self.img_map(pos);
-        self.draw_pixel(pixel_pos, Pixel::white());
-    }
-
     pub 
     fn pos_map_center (&self, pos: Vec2) -> Vec2 {
         let x_center = (pos.x + 0.5).floor();
@@ -1011,21 +936,15 @@ impl Canvas {
         }
     }
 
-    fn img_map (&self, pos: Vec2) -> PixelPos {
-        let pos_center = self.pos_map_center(pos);
-        PixelPos {
-            x: pos_center.x as _,
-            y: pos_center.y as _,
-        }
-    }
-
     fn draw_pixel_coord_with_depth (&mut self, x: usize, y: usize, color: Pixel, opacity: f32, depth: f32) {
-        debug_assert!(self.depth_frame.len() > 0, "Depth not initialized");
+        debug_assert!(
+            self.depth_frame.len() > 0,
+            "Depth not initialized"
+        );
 
         let new_color = if opacity < 1.0 {
             let bg_color = self.get_pixel_coord(x, y);
             bg_color * (1.0 - opacity) + color * opacity
-
         } else {
             color
         };
@@ -1040,34 +959,31 @@ impl Canvas {
     }
 
     fn get_pixel_coord (&self, x: usize, y: usize) -> Pixel {
-        debug_assert!(self.in_bounds(x, y),
-                    "Drawing out of bounds. \
-                    Point ({x}, {y}) doesnt fit ({0}, {1})",
-                    self.width, self.height
+        debug_assert!(
+            self.in_bounds(x, y),
+            "Drawing out of bounds. \
+            Point ({x}, {y}) doesnt fit ({0}, {1})",
+            self.width, self.height
         );
 
         let y_inv = self.height - y - 1;
-        unsafe{*self.frame.get_unchecked(self.width * y_inv + x)}
+        let offset = self.width * y_inv + x;
+        unsafe{ *self.frame.get_unchecked(offset) }
     }
 
-    pub
     fn draw_pixel_coord (&mut self, x: usize, y: usize, color: Pixel) {
-        debug_assert!(self.in_bounds(x, y),
-                    "Drawing out of bounds. \
-                    Point ({x}, {y}) doesnt fit ({0}, {1})",
-                    self.width, self.height
+        debug_assert!(
+            self.in_bounds(x, y),
+            "Drawing out of bounds. \
+            Point ({x}, {y}) doesnt fit ({0}, {1})",
+            self.width, self.height
         );
 
-        //println!("Drawing {x}, {y}");
-
         let y_inv = self.height - y - 1;
-        unsafe{*self.frame.get_unchecked_mut(self.width * y_inv + x) = color;}
-        //self.frame[self.width * y_inv + x] = color;
-    }
-
-    pub
-    fn draw_pixel (&mut self, pos: PixelPos, color: Pixel) {
-        self.draw_pixel_coord(pos.x, pos.y, color);
+        let offset = self.width * y_inv + x;
+        unsafe{
+            *self.frame.get_unchecked_mut(offset) = color;
+        }
     }
 
     fn in_bounds (&self, x: usize, y: usize) -> bool {

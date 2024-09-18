@@ -26,15 +26,18 @@ impl Application {
     fn new () -> Self {
         let width = 800;
         let height = 600;
+
         let mut canvas = Canvas::new(width, height);
         canvas.init_depth(100000.0);
 
+        let win = Window::new(width, height);
+        let (screen_width, screen_height) = win.get_screen_dim();
 
         Self {
             gui:    Gui::new(),
-            scene:  Scene::new(width, height),
-            win:    Window::new(width, height),
-            canvas: canvas,
+            scene:  Scene::new(screen_width, screen_height),
+            win,
+            canvas,
         }
     }
 
@@ -60,7 +63,12 @@ impl Application {
                         window_open = false;
                     },
 
+                    Event::ReposWindow((x, y)) => {
+                        println!("{x} x {y}");
+                    },
+
                     Event::KeyPress(key) => {
+                        /*
                         print!("KeyPress ");
                         match key {
                             Key::UpArrow => {
@@ -82,6 +90,7 @@ impl Application {
 
                             _ => {println!("Unknow")},
                         };
+                        */
                     },
 
                     Event::KeyRelease(_key) => {
@@ -108,6 +117,7 @@ impl Application {
                 //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
                 self.gui.new_frame(&mut self.win, &frame_events, elapsed); 
+                self.gui.build_ui();
                 self.gui.render(&mut self.canvas);
                 frame_events.clear();
 

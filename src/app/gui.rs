@@ -30,9 +30,12 @@ impl Gui {
     const FONT_SIZE: f32 = 17.0;
 
     pub
-    fn new () -> Self {
-        let width = 800;
-        let height = 600;
+    fn update_display_size (&mut self, width: usize, height: usize) {
+        self.io().display_size = [width as f32, height as f32];
+    }
+
+    pub
+    fn new (width: usize, height: usize) -> Self {
 
         let mut imgui =  ig::Context::create();
         let io = imgui.io_mut();

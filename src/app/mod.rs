@@ -9,7 +9,6 @@ use gui::*;
 use window::{
     Window,
     Event,
-    Key,
 };
 
 
@@ -19,6 +18,8 @@ struct Application {
     win: Window,
     scene: Scene,
     canvas: Canvas,
+    width: usize,
+    height: usize,
 }
 
 impl Application {
@@ -27,22 +28,30 @@ impl Application {
         let width = 800;
         let height = 600;
 
-        let mut canvas = Canvas::new(width, height);
-        canvas.init_depth(100000.0);
 
         let win = Window::new(width, height);
         let (screen_width, screen_height) = win.get_screen_dim();
 
         Self {
-            gui:    Gui::new(),
+            gui:    Gui::new(width, height),
             scene:  Scene::new(screen_width, screen_height),
             win,
-            canvas,
+            canvas: Canvas::new(width, height),
+            width,
+            height,
         }
     }
 
     pub
     fn run (&mut self) {
+
+        let (screen_width, screen_height) = self.win.get_screen_dim();
+        self.canvas.init_depth(100000.0);
+        self.canvas.apply_offset(
+            ((screen_width  - self.width)  / 2) as _,
+            ((screen_height - self.height) / 2) as _,
+        );
+
 
         let frame_rate: f32 = 60.0;
         let dt_ms = 1000.0 / frame_rate;
@@ -61,6 +70,21 @@ impl Application {
                 match e {
                     Event::CloseWindow => {
                         window_open = false;
+                    },
+
+                    Event::RedimWindow((width, height)) => {
+                        self.width  = *width;
+                        self.height = *height;
+
+                        self.canvas.resize(self.width, self.height);
+                        self.canvas.apply_offset(
+                            ((screen_width  - self.width)  / 2) as _,
+                            ((screen_height - self.height) / 2) as _,
+                        );
+
+                        self.gui.update_display_size(self.width, self.height);
+
+                        println!("redim {width} x {height}");
                     },
 
                     Event::ReposWindow((x, y)) => {

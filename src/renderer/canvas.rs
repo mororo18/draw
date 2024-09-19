@@ -352,6 +352,7 @@ struct Canvas {
     frame: Vec<Pixel>,
     width: usize,
     height: usize,
+    offset: Vec2,
 
     depth_update_enabled: bool,
     depth_frame: Vec<f32>,
@@ -366,15 +367,31 @@ impl Canvas {
         let frame = vec![Pixel::black(); len];
 
         Self {
-            frame: frame,
-            width: width,
-            height: height,
+            frame,
+            width,
+            height,
+            offset: Vec2::new(0.0, 0.0),
 
             depth_frame: vec![],
             depth_max: 0.0,
             depth_update_enabled: false,
 
         }
+    }
+
+    pub
+    fn apply_offset(&mut self, x: i32, y: i32) {
+        self.offset.x = x as f32;
+        self.offset.y = y as f32;
+    }
+
+    pub
+    fn resize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+        self.frame.resize(width * height, Pixel::black());
+
+        self.init_depth(self.depth_max);
     }
 
     pub
@@ -580,9 +597,9 @@ impl Canvas {
         clipping_rect: Option<Rectangle>,
     ) {
 
-        let a_center = self.pos_map_center(a_attr.screen_coord);
-        let b_center = self.pos_map_center(b_attr.screen_coord);
-        let c_center = self.pos_map_center(c_attr.screen_coord);
+        let a_center = self.pos_map_center(a_attr.screen_coord - self.offset);
+        let b_center = self.pos_map_center(b_attr.screen_coord - self.offset);
+        let c_center = self.pos_map_center(c_attr.screen_coord - self.offset);
 
       //let a_pixel_color = a_attr.color.as_pixel();
       //let b_pixel_color = b_attr.color.as_pixel();

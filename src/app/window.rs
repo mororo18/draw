@@ -312,7 +312,7 @@ enum Event {
     ButtonPress(Button),
     ButtonRelease(Button),
 
-    RedimWindow,
+    RedimWindow((usize, usize)),
     ReposWindow((i32, i32)),
     MouseMotion(MouseInfo),
 
@@ -732,7 +732,7 @@ impl Window {
                         self.height = e.height as _;
 
                         size_change = true;
-                        events.push(Event::RedimWindow);
+                        events.push(Event::RedimWindow((self.width, self.height)));
                     }
 
                     if self.pos_x != e.x ||
@@ -927,6 +927,11 @@ impl Window {
     pub
     fn get_window_position(&self) -> (i32, i32) {
         (self.pos_x, self.pos_y)
+    }
+
+    pub
+    fn get_window_dim(&self) -> (usize, usize) {
+        (self.width, self.height)
     }
 
     pub

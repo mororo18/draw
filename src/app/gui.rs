@@ -31,6 +31,8 @@ impl Gui {
 
     pub
     fn update_display_size (&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
         self.io().display_size = [width as f32, height as f32];
     }
 

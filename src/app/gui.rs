@@ -140,26 +140,36 @@ impl Gui {
                 },
 
                 Event::ButtonPress(button_event) => {
-                    let idx = match button_event {
-                        Button::MouseLeft   => 0,
-                        Button::MouseRight  => 1,
-                        Button::MouseMiddle => 2,
-                        _ => 0,
-                    };
-
-                    io.mouse_down[idx] = true;
+                    match button_event {
+                        Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
+                            let idx = match button_event {
+                                Button::MouseLeft   => 0,
+                                Button::MouseRight  => 1,
+                                Button::MouseMiddle => 2,
+                                _ => unreachable!(),
+                            };
+                            io.mouse_down[idx] = true;
+                        },
+                        Button::WheelUp   => { io.mouse_wheel += 1.0; },
+                        Button::WheelDown => { io.mouse_wheel -= 1.0; },
+                    }
                 },
 
                 Event::ButtonRelease(button_event) => {
 
-                    let idx = match button_event {
-                        Button::MouseLeft   => 0,
-                        Button::MouseRight  => 1,
-                        Button::MouseMiddle => 2,
-                        _ => 0,
-                    };
+                    match button_event {
+                        Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
+                            let idx = match button_event {
+                                Button::MouseLeft   => 0,
+                                Button::MouseRight  => 1,
+                                Button::MouseMiddle => 2,
+                                _ => unreachable!(),
+                            };
+                            io.mouse_down[idx] = false;
+                        },
+                        Button::WheelUp | Button::WheelDown => {},
+                    }
 
-                    io.mouse_down[idx] = false;
                 },
 
                 Event::KeyPress(key) => {
@@ -232,6 +242,8 @@ impl Gui {
     pub
     fn build_ui (&mut self) {
         let ui = self.imgui.new_frame();
+
+        ui.show_metrics_window(&mut true);
 
         let ig_win = ui.window("janela")
                         .menu_bar(true);

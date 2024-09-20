@@ -61,6 +61,7 @@ impl Gui {
 
         let font_atlas_texture = font_atlas.build_rgba32_texture();
 
+        /*
         stb::image_write::stbi_write_png(
             unsafe{ std::ffi::CStr::from_ptr(c"textura-font.png".as_ptr()) }, 
             font_atlas_texture.width  as _,
@@ -69,6 +70,7 @@ impl Gui {
             font_atlas_texture.data,
             (font_atlas_texture.width * 4) as _,
         );
+        */
 
         let f_texture =  Texture::with_diffuse_map(
             TextureMap::new(
@@ -240,21 +242,24 @@ impl Gui {
     }
 
     pub
+    fn build_top_menu (&self, ui: &mut ig::Ui) {
+    }
+
+    pub
     fn build_ui (&mut self) {
         let ui = self.imgui.new_frame();
 
-        ui.show_metrics_window(&mut true);
-
-        let ig_win = ui.window("janela")
+        // TODO: put this into a function
+        let top_menu = ui.window("top_menu")
+                        .no_decoration()
+                        .draw_background(false)
+                        .position([-2.0, 0.0], ig::Condition::Always)
+                        .size([(self.width + 2) as f32, 0.0], ig::Condition::Always)
+                        .movable(false)
                         .menu_bar(true);
 
-
-        ig_win.build(|| {
-            let _w = ui.push_item_width(-140.0);
-            ui.text(format!("dear imgui says hello. ({})", imgui::dear_imgui_version()));
-
+        top_menu.build(|| {
             if let Some(_menu_bar) = ui.begin_menu_bar() {
-
                 if let Some(menu) = ui.begin_menu("Menu") {
                     ui.menu_item_config("(dummy_menu)").enabled(false).build();
                     ui.menu_item("New");
@@ -264,6 +269,8 @@ impl Gui {
                 }
             }
         });
+
+        ui.show_metrics_window(&mut true);
     }
 
     pub

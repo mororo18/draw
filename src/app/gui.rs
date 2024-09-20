@@ -242,19 +242,12 @@ impl Gui {
     }
 
     pub
-    fn build_top_menu (&self, ui: &mut ig::Ui) {
-    }
-
-    pub
-    fn build_ui (&mut self) {
-        let ui = self.imgui.new_frame();
-
-        // TODO: put this into a function
+    fn build_top_menu (ui: &mut ig::Ui, width: usize) {
         let top_menu = ui.window("top_menu")
                         .no_decoration()
                         .draw_background(false)
                         .position([-2.0, 0.0], ig::Condition::Always)
-                        .size([(self.width + 2) as f32, 0.0], ig::Condition::Always)
+                        .size([(width + 2) as f32, 0.0], ig::Condition::Always)
                         .movable(false)
                         .menu_bar(true);
 
@@ -269,6 +262,13 @@ impl Gui {
                 }
             }
         });
+    }
+
+    pub
+    fn build_ui (&mut self) {
+        let ui = self.imgui.new_frame();
+
+        Self::build_top_menu(ui, self.width);
 
         ui.show_metrics_window(&mut true);
     }

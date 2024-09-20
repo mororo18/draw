@@ -141,6 +141,7 @@ pub enum Key {
     Sym((u32, u32)),
 }
 
+#[allow(non_upper_case_globals)]
 impl Key {
     pub
     fn from_keysym(keysym: u32) -> Self {
@@ -434,13 +435,33 @@ impl Window {
 
         if window == 0 {panic!("Window wasn't created properly");}
 
+        let to_c_string_mut = 
+        |str_: &str| -> *mut i8 {
+            CString::new(str_).unwrap().into_raw() as *mut i8
+        };
+
         let to_c_string = 
         |str_: &str| -> *const i8 {
             CString::new(str_).unwrap().into_raw() as *const i8
         };
 
-        /**/
+        // Set window name
         unsafe{xlib::XStoreName(display, window, to_c_string("draw"));}
+
+        // Set icon name
+        let class_hint = unsafe { xlib::XAllocClassHint() };
+        if !class_hint.is_null() {
+            unsafe {
+                (*class_hint).res_name = to_c_string_mut("draw");
+                (*class_hint).res_class = to_c_string_mut("draw");
+
+                xlib::XSetClassHint(display, window, class_hint);
+                xlib::XFree(class_hint as _);
+            }
+        }
+
+        // TODO: Set icon 
+        // https://stackoverflow.com/questions/10699927/xlib-argb-window-icon
 
         /* Defines the minimum and maximum dimensions of the window */
         {
@@ -449,47 +470,23 @@ impl Window {
             if (min_width > 0) && (min_height > 0) { hints.flags |= xlib::PMinSize; }
             if (max_width > 0) && (max_height > 0) { hints.flags |= xlib::PMaxSize; }
 
-            hints.min_width = min_width;
+            hints.min_width  = min_width;
             hints.min_height = min_height;
-            hints.max_width = max_width;
+            hints.max_width  = max_width;
             hints.max_height = max_height;
 
             unsafe{xlib::XSetWMNormalHints(display, 
                                     window, 
                                     &mut hints as *mut _)};
         }
+
+        
+
+
         
         /**/
         unsafe{xlib::XMapWindow(display, window);}
 
-        // maximiza a janela
-        /*
-        let _ = {  
-            let mut ev: XClientMessageEvent = MaybeUninit::<>::zeroed().assume_init();
-            let  wmState: xlib::Atom = XInternAtom(display, to_c_string("_NET_WM_STATE"), 0);
-            let  maxH: xlib::Atom  =  XInternAtom(display, to_c_string("_NET_WM_STATE_MAXIMIZED_HORZ"), 0);
-            let  maxV: xlib::Atom  =  XInternAtom(display, to_c_string("_NET_WM_STATE_MAXIMIZED_VERT"), 0);
-
-            if wmState == AllocNone  as u64{ 0}
-            else {
-
-            ev.type_ = ClientMessage;
-            ev.format = 32;
-            ev.window = window;
-            ev.message_type = wmState;
-            ev.data.as_longs_mut()[0] = 2 as i64; // _NET_WM_STATE_TOGGLE 2 according to spec; Not defined in my headers
-            ev.data.as_longs_mut()[1] = maxH as i64;
-            ev.data.as_longs_mut()[2] = maxV as i64;
-            ev.data.as_longs_mut()[3] = 1 as i64;
-
-            XSendEvent(display, 
-                        XDefaultRootWindow(display), 
-                        0,
-                        SubstructureNotifyMask,
-                        (&mut ev as *mut XClientMessageEvent).cast::<XEvent>())
-            };
-        };
-        */
 
         // https://github.com/glfw/glfw/blob/master/src/x11_window.c#L498
         // Xinput Events 
@@ -751,18 +748,10 @@ impl Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym( &mut e as *mut _, 0 ) as u32 };
 
-                    println!("keysym  {:?}", keysym);
-
-                    println!("keycode {:?}", e.keycode);
-                    /*
-
-                    let mut key_press = Key::Unknown;
-
-                    if e.keycode == kcode_left  {key_press = Key::LeftArrow;}
-                    if e.keycode == kcode_right {key_press = Key::RightArrow;}
-                    if e.keycode == kcode_up    {key_press = Key::UpArrow;}
-                    if e.keycode == kcode_down  {key_press = Key::DownArrow;}
-                    */
+                    match Key::from_keysym(keysym) {
+                        Key::F11 => { self.toggle_fullscreen() },
+                        _ => {},
+                    };
 
                     events.push(Event::KeyPress(Key::from_keysym(keysym)));
                 },
@@ -772,16 +761,6 @@ impl Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym( &mut e as *mut _, 0 ) as u32 };
 
-                    /*
-                    let mut key_press = Key::Unknown;
-
-                    if e.keycode == kcode_left  {key_press = Key::LeftArrow;}
-                    if e.keycode == kcode_right {key_press = Key::RightArrow;}
-                    if e.keycode == kcode_up    {key_press = Key::UpArrow;}
-                    if e.keycode == kcode_down  {key_press = Key::DownArrow;}
-                    */
-
-                    //events.push(Event::KeyRelease(key_press));
                     events.push(Event::KeyRelease(Key::from_keysym(keysym)));
                 },
 
@@ -868,6 +847,43 @@ impl Window {
     fn show_mouse_cursor(&mut self) {
         unsafe { x11::xfixes::XFixesShowCursor(self.x11.display, self.x11.window) };
         unsafe { xlib::XFlush(self.x11.display); }
+    }
+
+    pub
+    fn toggle_fullscreen(&mut self) {
+        unsafe {  
+            let mut ev: xlib::XClientMessageEvent = MaybeUninit::<>::zeroed().assume_init();
+            let wm_state: xlib::Atom = xlib::XInternAtom(
+                self.x11.display,
+                CString::new("_NET_WM_STATE").unwrap().into_raw() as _,
+                0
+            );
+
+            let fullscreen: xlib::Atom = xlib::XInternAtom(
+                self.x11.display,
+                CString::new("_NET_WM_STATE_FULLSCREEN").unwrap().into_raw(),
+                0
+            );
+
+            if wm_state != xlib::AllocNone as u64 {
+                ev.type_ = xlib::ClientMessage;
+                ev.format = 32;
+                ev.window = self.x11.window;
+                ev.message_type = wm_state;
+                ev.data.as_longs_mut()[0] = 2 as i64; // _NET_WM_STATE_TOGGLE 2 according to spec
+                ev.data.as_longs_mut()[1] = fullscreen as i64;
+                ev.data.as_longs_mut()[2] = 0;
+                ev.data.as_longs_mut()[3] = 1 as i64;
+
+                let _ = xlib::XSendEvent(
+                    self.x11.display, 
+                    xlib::XDefaultRootWindow(self.x11.display), 
+                    0,
+                    xlib::SubstructureNotifyMask,
+                    (&mut ev as *mut xlib::XClientMessageEvent).cast::<xlib::XEvent>()
+                );
+            }
+        }
     }
 
     pub

@@ -1,5 +1,4 @@
 use imgui as ig;
-use stb;
 
 use super::window::{
     Window,
@@ -8,6 +7,8 @@ use super::window::{
     Button,
     MouseCursor,
 };
+
+use super::{UserAction, ImgFileFormat};
 
 use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
@@ -242,40 +243,47 @@ impl Gui {
     }
 
     pub
-    fn build_top_menu (ui: &mut ig::Ui, width: usize) {
-        let top_menu = ui.window("top_menu")
-                        .no_decoration()
-                        .draw_background(false)
-                        .position([-2.0, 0.0], ig::Condition::Always)
-                        .size([(width + 2) as f32, 0.0], ig::Condition::Always)
-                        .movable(false)
-                        .menu_bar(true);
+    fn build_top_menu (ui: &mut ig::Ui, width: usize, user_action: &mut Option<UserAction>) {
+        ui.window("top_menu")
+            .no_decoration()
+            .draw_background(false)
+            .position([-2.0, 0.0], ig::Condition::Always)
+            .size([(width + 2) as f32, 0.0], ig::Condition::Always)
+            .movable(false)
+            .menu_bar(true)
+            .build(|| {
+                if let Some(_menu_bar) = ui.begin_menu_bar() {
+                    if let Some(_file_menu) = ui.begin_menu("File") {
+                        ui.menu_item_config("(dummy_menu)").enabled(false).build();
 
-        top_menu.build(|| {
-            if let Some(_menu_bar) = ui.begin_menu_bar() {
-                if let Some(menu) = ui.begin_menu("Menu") {
-                    ui.menu_item_config("(dummy_menu)").enabled(false).build();
-                    ui.menu_item("New");
-                    ui.menu_item_config("Open").shortcut("Ctrl+O").build();
+                        if ui.menu_item_config("Open").shortcut("Ctrl+O").build() {
+                            *user_action = Some(UserAction::Open)
+                        }
 
-                    menu.end();
+                        if let Some(_file_export_menu) = ui.begin_menu("Export as") {
+                            if ui.menu_item("JPEG") {
+                                *user_action = Some(
+                                    UserAction::ExportAs(ImgFileFormat::Jpeg)
+                                );
+                            }
+                        }
+                    }
                 }
-            }
-        });
+            });
+
     }
 
     pub
-    fn build_ui (&mut self) {
+    fn build_ui (&mut self, user_action: &mut Option<UserAction>) {
         let ui = self.imgui.new_frame();
 
-        Self::build_top_menu(ui, self.width);
+        Self::build_top_menu(ui, self.width, user_action);
 
         ui.show_metrics_window(&mut true);
     }
 
     pub
     fn render(&mut self, canvas: &mut Canvas) {
-
 
         canvas.disable_depth_update();
 

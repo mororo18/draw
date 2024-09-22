@@ -74,6 +74,7 @@ impl Triangle {
             tri_pool_size = 1;
         }
 
+        // TODO: substituir por heapless::Vec
         let mut new_tri_pool: [Triangle; 12] = unsafe {
             std::mem::MaybeUninit::<[Triangle; 12]>::zeroed().assume_init()
         };
@@ -1617,6 +1618,7 @@ impl Scene {
                         continue;
                     }
 
+                    // TODO: substituir por heapless::Vec
                     let mut clipped_triangles: [Triangle; 12]  = [Triangle::zeroed(); 12]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
@@ -1816,6 +1818,7 @@ impl Scene {
                         //Color::Green,
                     );
 
+                    // TODO: substituir por heapless::Vec
                     let mut clipped_triangles: [Triangle; 12]  = [Triangle::zeroed(); 12]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {

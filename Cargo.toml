@@ -12,6 +12,7 @@ imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"} # h
 itertools = "0.13.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
+rfd = "0.15.0"
 stb = "0.3.2"
 x11 = { git = "https://github.com/mororo18/x11-rs.git" }
 #x11 = "2.21.0"

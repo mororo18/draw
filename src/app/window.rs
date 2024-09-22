@@ -437,7 +437,7 @@ impl Window {
 
         let to_c_string_mut = 
         |str_: &str| -> *mut i8 {
-            CString::new(str_).unwrap().into_raw() as *mut i8
+            CString::new(str_).unwrap().into_raw() 
         };
 
         let to_c_string = 
@@ -638,10 +638,10 @@ impl Window {
 
                             let mask =
                                 unsafe { std::slice::from_raw_parts(raw_ev.valuators.mask, raw_ev.valuators.mask_len as usize) };
-                            if xinput2::XIMaskIsSet(&mask, 0) {
+                            if xinput2::XIMaskIsSet(mask, 0) {
                                 let delta_delta = unsafe {*raw_ev.raw_values.offset(0)};
                                 // test for inf and nan
-                                if delta_delta == delta_delta && 1.0+delta_delta != delta_delta {
+                                if 1.0 + delta_delta != delta_delta {
                                     delta_x += delta_delta;
                                 }
                             }
@@ -649,7 +649,7 @@ impl Window {
                             if xinput2::XIMaskIsSet(mask, 1) {
                                 let delta_delta = unsafe { *raw_ev.raw_values.offset(1) };
                                 // test for inf and nan
-                                if delta_delta == delta_delta && 1.0+delta_delta != delta_delta {
+                                if 1.0 + delta_delta != delta_delta {
                                     delta_y += delta_delta;
                                 }
                             }
@@ -675,15 +675,14 @@ impl Window {
 
                 xlib::ButtonPress => {
                     let e: xlib::XButtonEvent = From::from(ev);
-                    println!("Press");
 
                     let button_event = 
                     match e.button {
-                        xlib::Button1 => {println!(" Mouse Left "); Event::ButtonPress(Button::MouseLeft)},
-                        xlib::Button2 => {println!(" Wheel Click ");Event::ButtonPress(Button::MouseMiddle)},
-                        xlib::Button3 => {println!(" Mouse Right ");Event::ButtonPress(Button::MouseRight)},
-                        xlib::Button4 => {println!(" Wheel Up ");   Event::ButtonPress(Button::WheelUp)},
-                        xlib::Button5 => {println!(" Wheel Down "); Event::ButtonPress(Button::WheelDown)},
+                        xlib::Button1 => {Event::ButtonPress(Button::MouseLeft)},
+                        xlib::Button2 => {Event::ButtonPress(Button::MouseMiddle)},
+                        xlib::Button3 => {Event::ButtonPress(Button::MouseRight)},
+                        xlib::Button4 => {Event::ButtonPress(Button::WheelUp)},
+                        xlib::Button5 => {Event::ButtonPress(Button::WheelDown)},
                         _ => Event::Empty,
                     };
 
@@ -693,15 +692,14 @@ impl Window {
 
                 xlib::ButtonRelease => {
                     let e: xlib::XButtonEvent = From::from(ev);
-                    println!("Release");
 
                     let button_event = 
                     match e.button {
-                        xlib::Button1 => {println!(" Mouse Left "); Event::ButtonRelease(Button::MouseLeft)},
-                        xlib::Button2 => {println!(" Wheel Click ");Event::ButtonRelease(Button::MouseMiddle)},
-                        xlib::Button3 => {println!(" Mouse Right ");Event::ButtonRelease(Button::MouseRight)},
-                        xlib::Button4 => {println!(" Wheel Up ");   Event::ButtonRelease(Button::WheelUp)},
-                        xlib::Button5 => {println!(" Wheel Down "); Event::ButtonRelease(Button::WheelDown)},
+                        xlib::Button1 => {Event::ButtonRelease(Button::MouseLeft)},
+                        xlib::Button2 => {Event::ButtonRelease(Button::MouseMiddle)},
+                        xlib::Button3 => {Event::ButtonRelease(Button::MouseRight)},
+                        xlib::Button4 => {Event::ButtonRelease(Button::WheelUp)},
+                        xlib::Button5 => {Event::ButtonRelease(Button::WheelDown)},
                         _ => Event::Empty,
                     };
 
@@ -816,7 +814,7 @@ impl Window {
             ////loop {}
 
             println!("{} x {}", self.width, self.height);
-            self.x11.window_buffer_size = (self.width * self.height * self.x11.pixel_bytes) as usize;
+            self.x11.window_buffer_size = self.width * self.height * self.x11.pixel_bytes;
             let layout = Layout::array::<i8>( self.x11.window_buffer_size ).expect("layout deu merda");
             self.x11.mem = unsafe { alloc_zeroed(layout) };
 
@@ -834,7 +832,7 @@ impl Window {
             };
         }
 
-        return events;
+        events
     }
 
     pub

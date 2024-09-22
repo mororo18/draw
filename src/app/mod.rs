@@ -11,6 +11,17 @@ use window::{
     Event,
 };
 
+//struct AppState();
+
+enum ImgFileFormat {
+    Jpeg,
+}
+
+enum UserAction {
+    Open,
+    ExportAs(ImgFileFormat),
+}
+
 
 pub
 struct Application {
@@ -128,6 +139,8 @@ impl Application {
 
             frame_events.extend(events);
 
+            let mut user_action: Option<UserAction> = None;
+
             let elapsed = now.elapsed();
             let ms_elapsed = elapsed.as_millis() as f32;
             //if ms_elapsed > dt_ms {
@@ -140,8 +153,9 @@ impl Application {
                 //let render_elapsed = now.elapsed().as_millis() as f32;
                 //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
 
+
                 self.gui.new_frame(&mut self.win, &frame_events, elapsed); 
-                self.gui.build_ui();
+                self.gui.build_ui(&mut user_action);
                 self.gui.render(&mut self.canvas);
                 frame_events.clear();
 
@@ -149,6 +163,68 @@ impl Application {
                 self.win.write_frame_from_slice(frame_slice);
 
             }
+
+            if let Some(action) = user_action {
+                match action {
+                    UserAction::ExportAs(img_fmt) => {
+                        Self::export_as(
+                            self.canvas.as_bytes_slice(),
+                            self.width,
+                            self.height,
+                            img_fmt
+                        );
+                    },
+                    _ => {},
+                }
+            }
+
+        }
+    }
+
+    fn export_as(data: &[u8], width: usize, heihgt: usize, img_fmt: ImgFileFormat) {
+        use rfd::FileDialog;
+
+        let file_extensions = match img_fmt {
+            ImgFileFormat::Jpeg => { &["jpeg", "jpg"] },
+
+        };
+
+        let file = FileDialog::new()
+            .add_filter("text", file_extensions)
+            .set_directory("$HOME")
+            .save_file();
+
+        if let Some(file_path) = file {
+
+            let output_extension =
+                if let Some(given_extension) = file_path.extension() {
+                    let user_extension = given_extension.to_str();
+
+                    // verify if user gave a valid extension
+                    if user_extension.is_some()  &&
+                        file_extensions.contains(
+                            &user_extension.unwrap()
+                        )
+                    {
+                        user_extension.unwrap()
+                    } else {
+                        file_extensions[0]
+                    }
+
+                } else {
+                    file_extensions[0]
+                };
+
+            /*
+           stb::image_write::stbi_write_png(
+               unsafe{ std::ffi::CStr::from_ptr(c"textura-font.png".as_ptr()) }, 
+               font_atlas_texture.width  as _,
+               font_atlas_texture.height as _,
+               4, 
+               font_atlas_texture.data,
+               (font_atlas_texture.width * 4) as _,
+           );
+           */
         }
     }
 }

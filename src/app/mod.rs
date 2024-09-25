@@ -22,14 +22,18 @@ enum UserAction {
     ExportAs(ImgFileFormat),
 }
 
+const PIXEL_BYTES: usize = 4;
 
 pub
 struct Application {
-    gui: Gui,
-    win: Window,
-    scene: Scene,
+    gui:    Gui,
+    win:    Window,
+    scene:  Scene,
     canvas: Canvas,
-    width: usize,
+
+    current_frame: Vec<u8>,
+
+    width:  usize,
     height: usize,
 }
 
@@ -48,6 +52,7 @@ impl Application {
             scene:  Scene::new(screen_width, screen_height),
             win,
             canvas: Canvas::new(width, height),
+            current_frame: vec![0; width * height * PIXEL_BYTES],
             width,
             height,
         }
@@ -86,6 +91,10 @@ impl Application {
                     Event::RedimWindow((width, height)) => {
                         self.width  = *width;
                         self.height = *height;
+
+                        self.current_frame.resize(
+                            self.width * self.height * PIXEL_BYTES, 0
+                        );
 
                         self.canvas.resize(self.width, self.height);
                         self.canvas.apply_offset(
@@ -150,8 +159,14 @@ impl Application {
                 //scene.camera_right();
 
                 self.scene.render(&mut self.canvas);
-                //let render_elapsed = now.elapsed().as_millis() as f32;
-                //println!("Rendering percentage {}%", render_elapsed * 100.0 / dt_ms);
+
+                // Stores a copy of the current frame before
+                // the GUI is rendered.
+                self.current_frame
+                    .as_mut_slice()
+                    .copy_from_slice(
+                        self.canvas.as_bytes_slice()
+                    );
 
 
                 self.gui.new_frame(&mut self.win, &frame_events, elapsed); 
@@ -168,11 +183,13 @@ impl Application {
                 match action {
                     UserAction::ExportAs(img_fmt) => {
                         Self::export_as(
-                            self.canvas.as_bytes_slice(),
+                            &self.current_frame,
                             self.width,
                             self.height,
                             img_fmt
                         );
+                    },
+                    UserAction::Open => {
                     },
                     _ => {},
                 }
@@ -181,8 +198,12 @@ impl Application {
         }
     }
 
-    fn export_as(data: &[u8], width: usize, heihgt: usize, img_fmt: ImgFileFormat) {
+    fn open(&mut self) {
+    }
+
+    fn export_as(frame: &Vec<u8>, width: usize, height: usize, img_fmt: ImgFileFormat) {
         use rfd::FileDialog;
+        use std::ffi::CString;
 
         let file_extensions = match img_fmt {
             ImgFileFormat::Jpeg => { &["jpeg", "jpg"] },
@@ -195,12 +216,13 @@ impl Application {
             .save_file();
 
         if let Some(file_path) = file {
+            let mut output_path = file_path.clone();
 
             let output_extension =
                 if let Some(given_extension) = file_path.extension() {
                     let user_extension = given_extension.to_str();
 
-                    // verify if user gave a valid extension
+                    // verifies if user gave a valid extension
                     if user_extension.is_some()  &&
                         file_extensions.contains(
                             &user_extension.unwrap()
@@ -215,16 +237,23 @@ impl Application {
                     file_extensions[0]
                 };
 
-            /*
-           stb::image_write::stbi_write_png(
-               unsafe{ std::ffi::CStr::from_ptr(c"textura-font.png".as_ptr()) }, 
-               font_atlas_texture.width  as _,
-               font_atlas_texture.height as _,
-               4, 
-               font_atlas_texture.data,
-               (font_atlas_texture.width * 4) as _,
-           );
-           */
+            output_path.set_extension(output_extension);
+            let output_c_str = CString::new(output_path.to_str().unwrap()).unwrap();
+
+            // reverse the RGB order
+            let mut out_frame = frame.clone();
+            out_frame.as_mut_slice()
+                .chunks_mut(PIXEL_BYTES)
+                .for_each(|pixel_slice| { pixel_slice.swap(0, 2) });
+
+            stb::image_write::stbi_write_jpg(
+                output_c_str.as_c_str(),
+                width  as _,
+                height as _,
+                PIXEL_BYTES as _, 
+                out_frame.as_slice(),
+                (width * PIXEL_BYTES) as _,
+            );
         }
     }
 }

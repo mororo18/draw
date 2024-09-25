@@ -253,8 +253,10 @@ impl Gui {
             .menu_bar(true)
             .build(|| {
                 if let Some(_menu_bar) = ui.begin_menu_bar() {
+
+                    // File Menu 
                     if let Some(_file_menu) = ui.begin_menu("File") {
-                        ui.menu_item_config("(dummy_menu)").enabled(false).build();
+                        //ui.menu_item_config("(dummy_menu)").enabled(false).build();
 
                         if ui.menu_item_config("Open").shortcut("Ctrl+O").build() {
                             *user_action = Some(UserAction::Open)

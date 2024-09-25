@@ -1,7 +1,7 @@
 mod window;
 mod gui;
 
-use crate::renderer::scene::Scene;
+use crate::renderer::scene::{Scene, Object};
 use crate::renderer::canvas::Canvas;
 
 use gui::*;
@@ -182,14 +182,10 @@ impl Application {
             if let Some(action) = user_action {
                 match action {
                     UserAction::ExportAs(img_fmt) => {
-                        Self::export_as(
-                            &self.current_frame,
-                            self.width,
-                            self.height,
-                            img_fmt
-                        );
+                        self.export_frame_as(img_fmt);
                     },
                     UserAction::Open => {
+                        self.open_file();
                     },
                     _ => {},
                 }
@@ -198,10 +194,23 @@ impl Application {
         }
     }
 
-    fn open(&mut self) {
+    fn open_file(&mut self) {
+        use rfd::FileDialog;
+        let file = FileDialog::new()
+            .add_filter("text", &["obj"])
+            .set_directory("$HOME")
+            .pick_file();
+
+        if let Some(file_path) = file {
+            let obj = Object::load_from_file(
+                file_path.to_str().unwrap()
+            );
+
+            self.scene.add_obj(obj);
+        }
     }
 
-    fn export_as(frame: &Vec<u8>, width: usize, height: usize, img_fmt: ImgFileFormat) {
+    fn export_frame_as(&self, img_fmt: ImgFileFormat) {
         use rfd::FileDialog;
         use std::ffi::CString;
 
@@ -241,18 +250,18 @@ impl Application {
             let output_c_str = CString::new(output_path.to_str().unwrap()).unwrap();
 
             // reverse the RGB order
-            let mut out_frame = frame.clone();
+            let mut out_frame = self.current_frame.clone();
             out_frame.as_mut_slice()
                 .chunks_mut(PIXEL_BYTES)
                 .for_each(|pixel_slice| { pixel_slice.swap(0, 2) });
 
             stb::image_write::stbi_write_jpg(
                 output_c_str.as_c_str(),
-                width  as _,
-                height as _,
+                self.width  as _,
+                self.height as _,
                 PIXEL_BYTES as _, 
                 out_frame.as_slice(),
-                (width * PIXEL_BYTES) as _,
+                (self.width * PIXEL_BYTES) as _,
             );
         }
     }

@@ -1366,7 +1366,7 @@ impl Scene {
         //let obj = Object::load_from_file("models/donut/donut.obj");
         //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
         //let obj = Object::load_from_file("models/g_soldier1/soldier1.obj");
-        let obj = Object::load_from_file("models/lemur/lemur.obj");
+        //let obj = Object::load_from_file("models/lemur/lemur.obj");
         //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
         //let obj = Object::load_from_file("models/CornellBox/CornellBox-Original.obj");
         //let obj_vec = Object::load_from_directory("models/dungeon_set/");
@@ -1376,10 +1376,15 @@ impl Scene {
             height,
             camera,
             //objects: obj_vec,
-            objects: vec![obj],
+            objects: vec![],
 
             light_source,
         }
+    }
+
+    pub
+    fn add_obj(&mut self, obj: Object) {
+        self.objects.push(obj);
     }
 
     pub

@@ -17,7 +17,7 @@ A CPU-based real-time renderer built in Rust, this project implements core graph
 ### dependencies
 install the latest version of [rust](https://www.rust-lang.org/tools/install) and:
 ```console
-$ sudo apt install libx11-dev libxi-dev libxfixes-dev libxcursor-dev
+$ sudo apt install libx11-dev libxi-dev libxfixes-dev libxcursor-dev libwayland-dev clang pkg-config
 ```
 ### build and run
 ```console

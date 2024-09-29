@@ -268,6 +268,12 @@ impl Gui {
                                     UserAction::ExportAs(ImgFileFormat::Jpeg)
                                 );
                             }
+
+                            if ui.menu_item("PNG") {
+                                *user_action = Some(
+                                    UserAction::ExportAs(ImgFileFormat::Png)
+                                );
+                            }
                         }
                     }
                 }

@@ -1,6 +1,9 @@
 mod window;
 mod gui;
 
+use std::ffi::{CString, CStr};
+use rfd::FileDialog;
+
 use crate::renderer::scene::{Scene, Object};
 use crate::renderer::canvas::Canvas;
 
@@ -15,6 +18,7 @@ use window::{
 
 enum ImgFileFormat {
     Jpeg,
+    Png,
 }
 
 enum UserAction {
@@ -195,7 +199,7 @@ impl Application {
     }
 
     fn open_file(&mut self) {
-        use rfd::FileDialog;
+
         let file = FileDialog::new()
             .add_filter("text", &["obj"])
             .set_directory("$HOME")
@@ -211,12 +215,10 @@ impl Application {
     }
 
     fn export_frame_as(&self, img_fmt: ImgFileFormat) {
-        use rfd::FileDialog;
-        use std::ffi::CString;
 
         let file_extensions = match img_fmt {
-            ImgFileFormat::Jpeg => { &["jpeg", "jpg"] },
-
+            ImgFileFormat::Jpeg => { ["jpeg", "jpg"].as_slice() },
+            ImgFileFormat::Png  => { ["png"].as_slice() },
         };
 
         let file = FileDialog::new()
@@ -255,14 +257,34 @@ impl Application {
                 .chunks_mut(PIXEL_BYTES)
                 .for_each(|pixel_slice| { pixel_slice.swap(0, 2) });
 
-            stb::image_write::stbi_write_jpg(
-                output_c_str.as_c_str(),
-                self.width  as _,
-                self.height as _,
-                PIXEL_BYTES as _, 
-                out_frame.as_slice(),
-                (self.width * PIXEL_BYTES) as _,
-            );
+
+            Self::write_img(out_frame.as_slice(), self.width, self.height, output_c_str, img_fmt);
         }
+    }
+
+    fn write_img(data: &[u8], width: usize, height: usize, path: CString, img_fmt: ImgFileFormat) {
+
+        type StbImageWriteFn = fn(
+            &CStr, 
+            i32, 
+            i32, 
+            i32, 
+            &[u8], 
+            i32
+        ) -> Option<()> ;
+
+        let stbi_write: StbImageWriteFn = match img_fmt {
+            ImgFileFormat::Jpeg => { stb::image_write::stbi_write_jpg },
+            ImgFileFormat::Png  => { stb::image_write::stbi_write_png },
+        };
+
+        stbi_write(
+            path.as_c_str(),
+            width  as _,
+            height as _,
+            PIXEL_BYTES as _, 
+            data,
+            (width * PIXEL_BYTES) as _,
+        ).unwrap();
     }
 }

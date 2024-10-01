@@ -278,13 +278,14 @@ impl Application {
             ImgFileFormat::Png  => { stb::image_write::stbi_write_png },
         };
 
-        stbi_write(
+        // TODO: print error message
+        let _ret = stbi_write(
             path.as_c_str(),
             width  as _,
             height as _,
             PIXEL_BYTES as _, 
             data,
             (width * PIXEL_BYTES) as _,
-        ).unwrap();
+        );
     }
 }

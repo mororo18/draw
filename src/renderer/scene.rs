@@ -452,9 +452,9 @@ impl Object {
         let parent_dir = path.parent();
 
         let add_file_path = |filename: &String| -> PathBuf {
-            if parent_dir.is_some() {
+            if let Some(dir_path) = parent_dir {
                 [
-                    parent_dir.unwrap().to_str().expect("Failed adding file path."),
+                    dir_path.to_str().expect("Failed adding file path."),
                     filename.as_str()
                 ].iter().collect()
             } else {
@@ -462,7 +462,7 @@ impl Object {
             }
         };
 
-        let file = File::open(&path);
+        let file = File::open(path);
         assert!(file.is_ok(), "Unable to open file {}", filename);
         let reader = BufReader::new(file.unwrap());
 
@@ -472,7 +472,7 @@ impl Object {
             |mtllib| {
                 let mtl_path: PathBuf = add_file_path(&mtllib.filename);
                 let fname = mtllib.filename.as_str();
-                let file = File::open(&mtl_path);
+                let file = File::open(mtl_path);
                 assert!(file.is_ok(), "Unable to open file {}", fname);
                 _ = mtllib.reload(file.unwrap());
             }
@@ -485,15 +485,17 @@ impl Object {
         let mut obj_texture_uv:  Vec<Vec3> = obj_data.texture .iter().map(|e| Vec3::new([e[0], e[1], 0.0]))              .collect::<_>();
 
 
+        // TODO: keep this ??
         // rescaling test
-        if false {
+        if true {
+
         let mut vertices_sorted = 
         obj_vertices.iter()
                     .map(|e| e.norm())
                     .collect::<Vec<_>>();
         vertices_sorted.as_mut_slice()
                     .sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
-        let vertex_max = vertices_sorted.get(0).unwrap();
+        let vertex_max = vertices_sorted.first().unwrap();
         dbg!(vertex_max);
         
         let scale = 100.0;
@@ -516,7 +518,7 @@ impl Object {
                 let ka = material.ka.as_ref().unwrap();
                 let kd = material.kd.as_ref().unwrap();
                 let ks = material.ks.as_ref().unwrap();
-                let alpha = material.d.as_ref().unwrap_or_else(|| &1.0);
+                let alpha = material.d.as_ref().unwrap_or(&1.0);
 
                 let map_ka = 
                     if let Some(map_ka_filename) = material.map_ka.as_ref() {
@@ -764,19 +766,11 @@ impl Object {
                         *normal = normal.normalized();
                     }
 
-                    // TODO: Como os indeces armazenados num IndexedTriangle
-                    // sao utilizados para indexar os vectors globais dum Object, uma possivel
-                    // solucao seria extender o vector global de vetores normais, obtidos na leitura
-                    // do arquivo, utilizando o vector de normais calculados.
-                    //
                     // TODO: Criar teste onde eh realizada a leitura de um modelo que possui
                     // vetores normais definidos e faces que nao referenciam os vetores
                     // normais.
 
                     // build indexed triangles for the normals
-                    // (PT): substitui os triangulos de normais faltantes.
-                    // poercorre o group_mesh_triangles procurando por faces onde 
-                    // faltam normais. 
                     for (indexed_tri, _, indexed_normal) in group_mesh_triangles.iter_mut() {
 
                         if indexed_normal.is_none() {
@@ -1021,7 +1015,6 @@ impl Camera {
         ]);
         let tfp_vec4: Vec4 = matrix_basis * tfp_cam.as_vec4();
         let top_further_point = tfp_vec4.vec3_over_w() + camera_pos;
-
 
         // TODO: aplicar essa logica aq p o restante
         let x_center = (l + r) / 2.;
@@ -1473,7 +1466,6 @@ impl Scene {
             [  0.0,  0.0,      1.0,      0.0]
         ]);
 
-        //let M = M_viewport * M_orth * M_cam;
         let matrix_transf = matrix_viewport * matrix_orth * persp * matrix_cam;
 
         matrix_transf
@@ -1519,8 +1511,6 @@ impl Scene {
                     let indexed_tri_vertex  = vertex_tri_idx.clone();
                     let indexed_tri_normal  = normal_tri_idx.clone();
                     let indexed_tri_texture = texture_tri_idx.clone();
-
-
 
                     let tri_vertices = IndexedMesh::vec3_list_from_indexed(
                         indexed_tri_vertex,
@@ -1649,7 +1639,7 @@ impl Scene {
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;
 
-                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
+                        let clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
                         clip_tri_vert_attr[0].screen_coord = a_coord;
                         clip_tri_vert_attr[1].screen_coord = b_coord;
                         clip_tri_vert_attr[2].screen_coord = c_coord;
@@ -1662,7 +1652,7 @@ impl Scene {
                            */
 
                         let mesh_texture = match obj.textures.get(mesh_texture_idx) {
-                            Some(texture) => &texture,
+                            Some(texture) => texture,
                             None          => &Texture::default(),
                         };
 
@@ -1684,8 +1674,7 @@ impl Scene {
             for obj_mesh in obj.transparent_meshes.iter_mut() {
                 let mesh_texture_idx = obj_mesh.texture_idx.unwrap();
 
-
-                // sort aq (painter algorithm)
+                // sort the triangles of the transparent meshes (painter algorithm)
                 // TODO: essa ordenação precisa ser aplicada a todos os triangulos
                 // de todos os objetos transparentes de maneira absoluta.
                 // Talvez seja possivel apenas manter essa ordenação atual, relativa
@@ -1712,15 +1701,7 @@ impl Scene {
                     let a_depth = a_center.dist(camera_pos);
                     let b_depth = b_center.dist(camera_pos);
 
-                    // ordem não decrescente
                     a_depth.total_cmp(&b_depth).reverse()
-                    /*
-                    if a_depth < b_depth {
-                        std::cmp::Ordering::Greater
-                    } else {
-                        std::cmp::Ordering::Less
-                    }
-                    */
                 });
                 
                 for (vertex_tri_idx, texture_tri_idx, normal_tri_idx) in obj_mesh.triangles.iter() {
@@ -1840,20 +1821,21 @@ impl Scene {
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;
 
-                        let mut clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
+                        let clip_tri_vert_attr = &mut clipped_tri.vertices_attr;
                         clip_tri_vert_attr[0].screen_coord = a_coord;
                         clip_tri_vert_attr[1].screen_coord = b_coord;
                         clip_tri_vert_attr[2].screen_coord = c_coord;
-                        // vis'ao ortogonal
+
                         /*
-                           let camera_dir = self.camera.get_direction().normalized();
-                           let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
-                           let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
-                           let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
-                           */
+                            // vis'ao ortogonal
+                            let camera_dir = self.camera.get_direction().normalized();
+                            let a_depth: f32 = camera_dir.dot(camera_pos - tri.points[0]).abs() as _;
+                            let b_depth: f32 = camera_dir.dot(camera_pos - tri.points[1]).abs() as _;
+                            let c_depth: f32 = camera_dir.dot(camera_pos - tri.points[2]).abs() as _;
+                       */
                         
                         let mesh_texture = match obj.textures.get(mesh_texture_idx) {
-                            Some(texture) => &texture,
+                            Some(texture) => texture,
                             None          => &Texture::default(),
                         };
 

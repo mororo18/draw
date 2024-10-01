@@ -306,8 +306,6 @@ impl Gui {
             let idx_buffer = draw_list.idx_buffer();
             let vtx_buffer = draw_list.vtx_buffer();
 
-            // ver -> https://docs.rs/imgui/latest/imgui/enum.DrawCmd.html
-            //     -> https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_opengl2.cpp#L202
             for draw_cmd in draw_list.commands() {
 
                 match draw_cmd {
@@ -330,7 +328,6 @@ impl Gui {
                         clip_rect[1] = self.height as f32 - clip_rect[1];
                         clip_rect[3] = self.height as f32 - clip_rect[3];
 
-                        // 2o) desenhar
                         let idx_buff_slice = &idx_buffer[idx_offset..idx_offset+count];
                         for indexed_tri in idx_buff_slice.chunks_exact(3) {
                             let a_idx = indexed_tri[0] as usize + vtx_offset;

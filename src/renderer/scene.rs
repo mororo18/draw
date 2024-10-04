@@ -318,6 +318,7 @@ impl Texture {
         }
     }
 
+    // TODO: impl std::default::Default trait
     pub
     fn default() -> Self {
         let map_ka = TextureMap::default();
@@ -938,9 +939,12 @@ impl Camera {
     }
 
     pub
-    fn set_screen_direction(&mut self, dx: f32, dy: f32) {
-        self.direction = self.direction 
-            + (self.u.normalized() * dx + self.v.normalized() * dy);
+    fn offset_screen_direction(&mut self, dx: f32, dy: f32) {
+        self.direction = (
+            self.direction
+            + self.u.normalized() * dx
+            + self.v.normalized() * dy
+        ).normalized();
     }
 
     pub
@@ -1381,12 +1385,15 @@ impl Scene {
     }
 
     pub
-    fn move_camera_directon(&mut self, dx: f32, dy: f32) {
-        assert!(dx < self.width  as f32);
-        assert!(dy < self.height as f32);
+    fn move_camera_direction(&mut self, dx: i32, dy: i32) {
+        assert!(dx < self.width  as _);
+        assert!(dy < self.height as _);
 
         println!("{} {}", dx, dy);
-        self.camera.set_screen_direction(dx, dy);
+        self.camera.offset_screen_direction(
+            dx as f32 / self.width as f32,
+            dy as f32 / self.height as f32
+        );
     }
 
     pub

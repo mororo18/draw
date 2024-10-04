@@ -16,6 +16,11 @@ use window::{
 
 //struct AppState();
 
+enum CameraNavigation {
+    Free,
+    Locked,
+}
+
 enum ImgFileFormat {
     Jpeg,
     Png,
@@ -115,6 +120,10 @@ impl Application {
                         println!("{x} x {y}");
                     },
 
+                    Event::MouseMotion(mouse_info) => {
+                        self.move_camera(mouse_info.dx, mouse_info.dy);
+                    },
+
                     Event::KeyPress(key) => {
                         /*
                         print!("KeyPress ");
@@ -198,6 +207,10 @@ impl Application {
         }
     }
 
+    fn move_camera(&mut self, dx: i32, dy: i32) {
+        self.scene.move_camera_direction(dx, -dy);
+    }
+
     fn open_file(&mut self) {
 
         let file = FileDialog::new()
@@ -271,7 +284,7 @@ impl Application {
             i32, 
             &[u8], 
             i32
-        ) -> Option<()> ;
+        ) -> Option<()>;
 
         let stbi_write: StbImageWriteFn = match img_fmt {
             ImgFileFormat::Jpeg => { stb::image_write::stbi_write_jpg },

@@ -190,8 +190,8 @@ impl TextureMap {
             height,
             components,
 
-            f_width:  ( width -1) as f32,
-            f_height: ( height-1) as f32,
+            f_width:  width  as f32,
+            f_height: height as f32,
         }
     }
 
@@ -207,8 +207,8 @@ impl TextureMap {
 
     pub
     fn get_rgba_slice(&self, u: f32, v: f32) -> [u8; 4] {
-        debug_assert!(0.0 <= u && u <= 1.0);
-        debug_assert!(0.0 <= v && v <= 1.0);
+        debug_assert!((0.0..=1.0).contains(&u));
+        debug_assert!((0.0..=1.0).contains(&v));
         debug_assert!(self.components == 4);
 
         let u_idx =                  (u * self.f_width).floor()  as usize;
@@ -228,8 +228,8 @@ impl TextureMap {
 
     pub
     fn get_rgb_slice(&self, u: f32, v: f32) -> [u8; 3] {
-        debug_assert!(0.0 <= u && u <= 1.0);
-        debug_assert!(0.0 <= v && v <= 1.0);
+        debug_assert!((0.0..=1.0).contains(&u));
+        debug_assert!((0.0..=1.0).contains(&v));
 
         let u_idx =                  (u * self.f_width).floor()  as usize;
         let v_idx = self.height -1 - (v * self.f_height).floor() as usize;

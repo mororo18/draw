@@ -8,7 +8,7 @@ use super::window::{
     MouseCursor,
 };
 
-use super::{UserAction, ImgFileFormat};
+use super::{GuiAction, ImgFileFormat};
 
 use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
@@ -28,7 +28,7 @@ struct Gui {
 impl Gui {
 
     pub
-    const FONT_SIZE: f32 = 17.0;
+    const FONT_SIZE: f32 = 14.0;
 
     pub
     fn update_display_size (&mut self, width: usize, height: usize) {
@@ -52,9 +52,10 @@ impl Gui {
         font_atlas.add_font(&[
             ig::FontSource::DefaultFontData {
                 config: Some(ig::FontConfig {
-                    //rasterizer_multiply: 1.4,
-                    //oversample_h: 4,
-                    //oversample_v: 4,
+                    rasterizer_multiply: 1.2,
+                    oversample_h: 4,
+                    oversample_v: 4,
+                    size_pixels: Self::FONT_SIZE,
                     ..ig::FontConfig::default()
                 }),
             },
@@ -243,7 +244,7 @@ impl Gui {
     }
 
     pub
-    fn build_top_menu (ui: &mut ig::Ui, width: usize, user_action: &mut Option<UserAction>) {
+    fn build_top_menu (ui: &mut ig::Ui, width: usize, user_action: &mut Option<GuiAction>) {
         ui.window("top_menu")
             .no_decoration()
             .draw_background(false)
@@ -259,19 +260,19 @@ impl Gui {
                         //ui.menu_item_config("(dummy_menu)").enabled(false).build();
 
                         if ui.menu_item_config("Open").shortcut("Ctrl+O").build() {
-                            *user_action = Some(UserAction::Open)
+                            *user_action = Some(GuiAction::Open)
                         }
 
                         if let Some(_file_export_menu) = ui.begin_menu("Export as") {
                             if ui.menu_item("JPEG") {
                                 *user_action = Some(
-                                    UserAction::ExportAs(ImgFileFormat::Jpeg)
+                                    GuiAction::ExportAs(ImgFileFormat::Jpeg)
                                 );
                             }
 
                             if ui.menu_item("PNG") {
                                 *user_action = Some(
-                                    UserAction::ExportAs(ImgFileFormat::Png)
+                                    GuiAction::ExportAs(ImgFileFormat::Png)
                                 );
                             }
                         }
@@ -281,13 +282,28 @@ impl Gui {
 
     }
 
+    fn build_shortcuts_list (ui: &mut ig::Ui, width: usize) {
+        ui.window("Shortcuts List")
+            .bg_alpha(0.4)
+            .movable(true)
+            .resizable(false)
+            .position([width as f32 - 5., 25.0], ig::Condition::FirstUseEver)
+            .position_pivot([1.0, 0.0])
+            .build(|| {
+                ui.text("(F5)  Toggle Camera Visualisation");
+                ui.text("(F11) Toggle Fullscreen");
+            });
+    }
+
     pub
-    fn build_ui (&mut self, user_action: &mut Option<UserAction>) {
+    fn build_ui (&mut self, user_action: &mut Option<GuiAction>) {
         let ui = self.imgui.new_frame();
 
         Self::build_top_menu(ui, self.width, user_action);
+        Self::build_shortcuts_list(ui, self.width);
 
         ui.show_metrics_window(&mut true);
+
     }
 
     pub

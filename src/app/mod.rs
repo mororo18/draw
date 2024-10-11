@@ -7,11 +7,15 @@ use rfd::FileDialog;
 use crate::renderer::scene::{Scene, Object};
 use crate::renderer::canvas::Canvas;
 
+use crate::renderer::linalg::Vec3;
+
 use gui::*;
 
 use window::{
     Window,
     Event,
+    Key,
+    MouseCursor
 };
 
 //struct AppState();
@@ -26,12 +30,19 @@ enum ImgFileFormat {
     Png,
 }
 
-enum UserAction {
+enum GuiAction {
     Open,
     ExportAs(ImgFileFormat),
 }
 
 const PIXEL_BYTES: usize = 4;
+
+const CAMERA_FOWARDS:   u8 = 1;
+const CAMERA_BACKWARDS: u8 = 2;
+const CAMERA_LEFT:      u8 = 4;
+const CAMERA_RIGHT:     u8 = 8;
+const CAMERA_UPWARDS:   u8 = 16;
+const CAMERA_DOWNWARDS: u8 = 32;
 
 pub
 struct Application {
@@ -44,6 +55,10 @@ struct Application {
 
     width:  usize,
     height: usize,
+
+    camera_mode: CameraNavigation,
+
+    camera_moving_direction: u8,
 }
 
 impl Application {
@@ -64,6 +79,8 @@ impl Application {
             current_frame: vec![0; width * height * PIXEL_BYTES],
             width,
             height,
+            camera_mode: CameraNavigation::Locked,
+            camera_moving_direction: 0,
         }
     }
 
@@ -86,8 +103,10 @@ impl Application {
         let mut window_open = true;
 
         let mut frame_events: Vec<Event> = vec![];
+        let mut user_action: Option<GuiAction> = None;
 
         while window_open {
+            user_action = None;
             let events: Vec<Event> = self.win.handle();
 
             for e in events.iter() {
@@ -121,38 +140,72 @@ impl Application {
                     },
 
                     Event::MouseMotion(mouse_info) => {
-                        self.move_camera(mouse_info.dx, mouse_info.dy);
+                        self.move_camera_direction(mouse_info.dx, mouse_info.dy);
                     },
 
                     Event::KeyPress(key) => {
-                        /*
                         print!("KeyPress ");
                         match key {
-                            Key::UpArrow => {
-                                println!("Up");
-                                self.scene.camera_up();
-                            },
-                            Key::DownArrow => {
-                                println!("Down");
-                                self.scene.camera_down();
-                            },
-                            Key::LeftArrow => {
-                                println!("Left");
-                                self.scene.camera_left();
-                            },
-                            Key::RightArrow => {
-                                println!("Right");
-                                self.scene.camera_right();
+                            Key::F5 =>
+                                self.toggle_camera_mode(),
+                            _ => println!("Unknow"),
+                        }
+
+                        match self.camera_mode {
+                            CameraNavigation::Free => {
+                                match key {
+                                    Key::W | Key::UpArrow =>
+                                        self.add_camera_movement(CAMERA_FOWARDS),
+                                    Key::S | Key::DownArrow =>
+                                        self.add_camera_movement(CAMERA_BACKWARDS),
+                                    Key::A | Key::LeftArrow =>
+                                        self.add_camera_movement(CAMERA_LEFT),
+                                    Key::D | Key::RightArrow =>
+                                        self.add_camera_movement(CAMERA_RIGHT),
+
+                                    Key::Space =>
+                                        self.add_camera_movement(CAMERA_UPWARDS),
+                                    Key::LeftShift =>
+                                        self.add_camera_movement(CAMERA_DOWNWARDS),
+
+                                    _ => {},
+                                }
                             },
 
-                            _ => {println!("Unknow")},
-                        };
-                        */
+                            CameraNavigation::Locked => {
+                                // TODO.
+                            },
+                        }
+
                     },
 
-                    Event::KeyRelease(_key) => {
-                    },
+                    Event::KeyRelease(key) => {
+                        match self.camera_mode {
+                            CameraNavigation::Free => {
+                                match key {
+                                    Key::W | Key::UpArrow =>
+                                        self.rm_camera_movement(CAMERA_FOWARDS),
+                                    Key::S | Key::DownArrow =>
+                                        self.rm_camera_movement(CAMERA_BACKWARDS),
+                                    Key::A | Key::LeftArrow =>
+                                        self.rm_camera_movement(CAMERA_LEFT),
+                                    Key::D | Key::RightArrow =>
+                                        self.rm_camera_movement(CAMERA_RIGHT),
 
+                                    Key::Space =>
+                                        self.rm_camera_movement(CAMERA_UPWARDS),
+                                    Key::LeftShift =>
+                                        self.rm_camera_movement(CAMERA_DOWNWARDS),
+
+                                    _ => {},
+                                }
+                            },
+
+                            CameraNavigation::Locked => {
+                                // TODO.
+                            },
+                        }
+                    },
                     _ => {},
                 };
 
@@ -161,8 +214,6 @@ impl Application {
 
             frame_events.extend(events);
 
-            let mut user_action: Option<UserAction> = None;
-
             let elapsed = now.elapsed();
             let ms_elapsed = elapsed.as_millis() as f32;
             //if ms_elapsed > dt_ms {
@@ -170,6 +221,7 @@ impl Application {
                 now = std::time::Instant::now();
                 //println!("FPS {}", 1000.0 / ms_elapsed);
                 //scene.camera_right();
+                self.move_camera_position();
 
                 self.scene.render(&mut self.canvas);
 
@@ -194,21 +246,78 @@ impl Application {
 
             if let Some(action) = user_action {
                 match action {
-                    UserAction::ExportAs(img_fmt) => {
-                        self.export_frame_as(img_fmt);
-                    },
-                    UserAction::Open => {
-                        self.open_file();
-                    },
+                    GuiAction::ExportAs(img_fmt) =>
+                        self.export_frame_as(img_fmt),
+                    GuiAction::Open => 
+                        self.open_file(),
                     _ => {},
                 }
             }
 
+            match self.camera_mode {
+                CameraNavigation::Free   => {
+                    self.win.set_mouse_position(
+                        (self.width  / 2) as i32,
+                        (self.height / 2) as i32,
+                    );
+                },
+                CameraNavigation::Locked => {
+                    // TODO.
+                },
+            };
+
         }
     }
 
-    fn move_camera(&mut self, dx: i32, dy: i32) {
-        self.scene.move_camera_direction(dx, -dy);
+    fn toggle_camera_mode(&mut self) {
+        self.camera_mode = match self.camera_mode {
+            CameraNavigation::Free   => {
+                self.win.show_mouse_cursor();
+                CameraNavigation::Locked
+            },
+            CameraNavigation::Locked => {
+                self.win.hide_mouse_cursor();
+                CameraNavigation::Free
+            },
+        };
+    }
+
+    fn add_camera_movement(&mut self, cam_direction: u8) {
+        self.camera_moving_direction |= cam_direction;
+    }
+
+    fn rm_camera_movement(&mut self, cam_direction: u8) {
+        self.camera_moving_direction &= !cam_direction;
+    }
+
+
+    // TODO: find better name to these func. maybe 'change_camera_position'
+    fn move_camera_position(&mut self) {
+        let foward   = CAMERA_FOWARDS   & self.camera_moving_direction != 0;
+        let backward = CAMERA_BACKWARDS & self.camera_moving_direction != 0;
+        let left     = CAMERA_LEFT      & self.camera_moving_direction != 0;
+        let right    = CAMERA_RIGHT     & self.camera_moving_direction != 0;
+        let up       = CAMERA_UPWARDS   & self.camera_moving_direction != 0;
+        let down     = CAMERA_DOWNWARDS & self.camera_moving_direction != 0;
+
+        let delta = 1.5;
+
+        if foward   { self.scene.camera.move_foward(delta);   }
+        if backward { self.scene.camera.move_backward(delta); }
+        if left     { self.scene.camera.move_left(delta);     }
+        if right    { self.scene.camera.move_right(delta);    }
+        if up       { self.scene.camera.move_up(delta);       }
+        if down     { self.scene.camera.move_down(delta);     }
+    }
+
+    fn move_camera_direction(&mut self, dx: i32, dy: i32) {
+        match self.camera_mode {
+            CameraNavigation::Free => 
+                self.scene.move_camera_direction(dx, -dy),
+            CameraNavigation::Locked => {
+                // TODO
+            },
+        }
     }
 
     fn open_file(&mut self) {

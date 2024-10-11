@@ -823,9 +823,11 @@ struct CameraWindow {
     left:   f32,
 }
 
+pub
 struct Camera {
     position:  Vec3,
     direction: Vec3,
+    up_direction: Vec3,
 
     window_view: CameraWindow,
     min_view_dist: f32,
@@ -875,6 +877,7 @@ impl Camera {
         Self {
             position:    pos,
             direction:   dir.normalized(),
+            up_direction: Vec3::new([0.,  1.,  0.]),
             window_view: CameraWindow {
                 top,
                 bottom,
@@ -905,6 +908,46 @@ impl Camera {
     }
 
     pub
+    fn move_up(&mut self, dist: f32) {
+        self.position = self.position
+                        + self.up_direction * dist;
+    }
+
+    pub
+    fn move_down(&mut self, dist: f32) {
+        self.position = self.position
+                        + self.up_direction * (-dist);
+    }
+
+    pub
+    fn move_left(&mut self, dist: f32) {
+        self.position = self.position
+                        + self.u * (-dist);
+    }
+
+    pub
+    fn move_right(&mut self, dist: f32) {
+        self.position = self.position
+                        + self.u * dist;
+    }
+
+    pub
+    fn move_foward(&mut self, dist: f32) {
+        let foward = self.up_direction.cross(self.u)
+                                        .normalized();
+        self.position = self.position
+                        + foward * dist;
+    }
+
+    pub
+    fn move_backward(&mut self, dist: f32) {
+        let backward = self.u.cross(self.up_direction)
+                            .normalized();
+        self.position = self.position
+                        + backward * dist;
+    }
+
+    pub
     fn rotate_origin(&mut self, theta: f32) {
 
         let new_pos = Matrix4::rotate_y(theta.to_radians()) * 
@@ -926,8 +969,7 @@ impl Camera {
         assert!(
             u.norm() > 0. &&
             v.norm() > 0. &&
-            w.norm() > 0.,
-            "Base da camera ainda n'ao foi calculada."
+            w.norm() > 0.
         );
 
         Matrix4::new([
@@ -942,26 +984,31 @@ impl Camera {
     fn offset_screen_direction(&mut self, dx: f32, dy: f32) {
         self.direction = (
             self.direction
-            + self.u.normalized() * dx
-            + self.v.normalized() * dy
+            + self.u * dx
+            + self.v * dy
         ).normalized();
+    }
+
+    pub
+    fn rotate_by_offset(&mut self, dx: f32, dy: f32) {
+        let offset = self.u * dx
+                    + self.v * dy;
     }
 
     pub
     fn update_basis(&mut self) {
         let g = self.direction;
-        let top_dir = Vec3::new([0.,  1.,  0.]);
 
         let w = (g / g.norm()) * (-1.0);
 
-        let t_x_w = top_dir.cross(w);
+        let t_x_w = self.up_direction.cross(w);
         let u = t_x_w / t_x_w.norm();
 
         let v = w.cross(u);
 
-        self.u = u;
-        self.v = v;
-        self.w = w;
+        self.u = u.normalized();
+        self.v = v.normalized();
+        self.w = w.normalized();
     }
 
     pub
@@ -1334,8 +1381,7 @@ pub
 struct Scene {
     width: usize,
     height: usize,
-    camera: Camera,
-    // objetos
+    pub camera: Camera,
     objects: Vec<Object>,
 
     light_source: Vec3,
@@ -1347,8 +1393,8 @@ impl Scene {
     fn new (width: usize, height: usize) -> Self {
         //let camera_pos = Vec3::new([0., 2., 4.]);
         //let camera_pos = Vec3::new([0., 300., 630.0]); // Aviao ae
-        let camera_pos = Vec3::new([0., 100., 140.0]);
-        let camera_dir = Vec3::new([0., -0.3, -1.0]);
+        let camera_pos = Vec3::new([0., 0., 150.0]);
+        let camera_dir = camera_pos * -1.0;
 
         let light_source = Vec3::new([0., 300., 300.]);
 
@@ -1358,21 +1404,13 @@ impl Scene {
         // alguns modelos classicos
         // https://casual-effects.com/data/
 
-        //let obj = Object::inv_piramid(Vec3::zeros());
-        //let obj = Object::load_from_file("Glass Bowl with Cloth Towel.obj");
-        //let obj = Object::load_from_file("models/donut/donut.obj");
-        //let obj = Object::load_from_file("models/soldier1/soldier1.obj");
-        //let obj = Object::load_from_file("models/g_soldier1/soldier1.obj");
         //let obj = Object::load_from_file("models/lemur/lemur.obj");
-        //let obj = Object::load_from_file("models/airplane/11804_Airplane_v2_l2.obj");
-        //let obj = Object::load_from_file("models/CornellBox/CornellBox-Original.obj");
         //let obj_vec = Object::load_from_directory("models/dungeon_set/");
 
         Self {
             width,
             height,
             camera,
-            //objects: obj_vec,
             objects: vec![],
 
             light_source,
@@ -1389,51 +1427,16 @@ impl Scene {
         assert!(dx < self.width  as _);
         assert!(dy < self.height as _);
 
-        println!("{} {}", dx, dy);
         self.camera.offset_screen_direction(
             dx as f32 / self.width as f32,
             dy as f32 / self.height as f32
         );
+
+        self.camera.update_basis();
     }
 
     pub
-    fn camera_up(&mut self) {
-        let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([0., 0.5, 0.]));
-    }
-
-    pub
-    fn camera_down(&mut self) {
-        let cam_pos = self.camera.get_pos();
-        self.camera.set_pos(cam_pos + Vec3::new([0., -0.5, 0.]));
-    }
-
-    pub
-    fn camera_left(&mut self) {
-        let theta: f32 = -4.0;
-        self.camera.rotate_origin(theta);
-
-        //let cam_pos = self.camera.get_pos();
-        //self.camera.set_pos(cam_pos + Vec3::new([0.05, 0., 0.]));
-
-        let new_light = Matrix4::rotate_y(theta.to_radians()) * 
-                        self.light_source.as_vec4();
-
-        self.light_source = new_light.as_vec3();
-    }
-
-    pub
-    fn camera_right(&mut self) {
-        let theta: f32 = 4.0;
-        self.camera.rotate_origin(theta);
-
-        //let cam_pos = self.camera.get_pos();
-        //self.camera.set_pos(cam_pos + Vec3::new([-0.05, 0., 0.]));
-
-        let new_light = Matrix4::rotate_y(theta.to_radians()) * 
-                        self.light_source.as_vec4();
-
-        self.light_source = new_light.as_vec3();
+    fn rotate_camera_by_offset(&mut self, dx: i32, dy: i32) {
     }
 
     fn gen_transformation_matrix(&mut self) -> Matrix4 {

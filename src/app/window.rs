@@ -13,6 +13,7 @@ use std::mem::MaybeUninit;
 use std::alloc::{alloc_zeroed, Layout};
 
 use std::ffi::CString;
+use procfs::Current;
 
 
 /*
@@ -368,6 +369,7 @@ struct Window {
     mouse_info:     MouseInfo,
     just_warped_pointer: bool,
 
+    running_on_vm: bool,
 }
 
 impl Window {
@@ -378,6 +380,25 @@ impl Window {
             env!("XDG_SESSION_TYPE") == "x11",
             "Wayland is not supported."
         );
+
+        let cpu_info = procfs::CpuInfo::current();
+
+        let mut running_on_vm = false;
+
+        if cpu_info.is_ok() {
+            let cpu_info = cpu_info.unwrap();
+            println!("Number of cores {}", cpu_info.num_cores());
+
+            for core in 0..cpu_info.num_cores() {
+                if let Some(flags) = cpu_info.flags(core) {
+                    for flag in flags {
+                        if flag == "hypervisor" {
+                            running_on_vm = true;
+                        }
+                    }
+                }
+            }
+        }
 
         let min_width    = width as i32;
         let min_height   = height as i32;
@@ -609,13 +630,11 @@ impl Window {
                 dx: 0,
                 dy: 0
             },
+
+            running_on_vm,
         }
-
-
     }
 
-    // criar funcao "handle" que retorna um enum, ou vec de enums, contendo os eventos recebidos
-    //
     pub
     fn handle(&mut self) -> Vec<Event> {
 
@@ -679,21 +698,19 @@ impl Window {
                                 }
                             }
 
-                            //println!("raw delta ({delta_x}, {delta_y})");
+                            // Special case of running on a VM
+                            if !self.running_on_vm {
+                                let mouse_info = MouseInfo {
+                                    x: self.mouse_info.x, 
+                                    y: self.mouse_info.y,
+                                    dx: delta_x as i32,
+                                    dy: delta_y as i32,
+                                };
 
-                            /*
-                            let mouse_info = MouseInfo {
-                                x: self.mouse_info.x, 
-                                y: self.mouse_info.y,
-                                dx: delta_x as i32,
-                                dy: delta_y as i32,
-                            };
+                                self.mouse_info = mouse_info.clone();
 
-                            self.mouse_info = mouse_info.clone();
-
-                            events.push(Event::MouseMotion(mouse_info));
-                            */
-
+                                events.push(Event::MouseMotion(mouse_info));
+                            }
                         },
 
                         _ => println!("Unknown xinput evet {}", cookie.evtype),
@@ -812,25 +829,35 @@ impl Window {
                         self.mouse_info.y != e.y
                     {
 
-                        let mut mouse_info = MouseInfo {
-                            x: e.x, 
-                            y: e.y,
-                            dx: self.mouse_info.x - e.x,
-                            dy: self.mouse_info.y - e.y,
+                        self.mouse_info = if !self.running_on_vm {
+
+                            MouseInfo {
+                                x: e.x, 
+                                y: e.y,
+                                dx: self.mouse_info.dx,
+                                dy: self.mouse_info.dy,
+                            }
+
+                        } else {
+
+                            let mut mouse_info = MouseInfo {
+                                x: e.x, 
+                                y: e.y,
+                                dx: self.mouse_info.x - e.x,
+                                dy: self.mouse_info.y - e.y,
+                            };
+
+                            if self.just_warped_pointer {
+                                self.just_warped_pointer = false;
+                                mouse_info.dx = 0;
+                                mouse_info.dy = 0;
+                            }
+
+                            mouse_info
                         };
 
-                        if self.just_warped_pointer {
-                            self.just_warped_pointer = false;
-                            mouse_info.dx = 0;
-                            mouse_info.dy = 0;
-                        }
-
-                        self.mouse_info = mouse_info.clone();
-
-                        events.push(Event::MouseMotion(mouse_info));
-
+                        events.push(Event::MouseMotion(self.mouse_info.clone()));
                     }
-                    
                 },
 
                 xlib::ReparentNotify => println!("ReparentNotify"),

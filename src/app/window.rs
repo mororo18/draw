@@ -366,6 +366,8 @@ struct Window {
 
     mouse_grabbed:      bool,
     mouse_info:     MouseInfo,
+    just_warped_pointer: bool,
+
 }
 
 impl Window {
@@ -550,6 +552,23 @@ impl Window {
         let pos_x = win_attr.x;
         let pos_y = win_attr.y;
 
+        // Get initial mouse position
+        let mut win_ret: xlib::Window = unsafe { MaybeUninit::<>::zeroed().assume_init() };
+        let mut root_x_return = 0;
+        let mut root_y_return = 0;
+        let mut win_x_return  = 0;
+        let mut win_y_return  = 0;
+        let mut mask_return  =  0_u32;
+
+        unsafe { xlib::XQueryPointer(
+            display,
+            window,
+            &mut win_ret       as *mut _, &mut win_ret       as *mut _,
+            &mut root_x_return as *mut _, &mut root_y_return as *mut _,
+            &mut win_x_return  as *mut _, &mut win_y_return  as *mut _,
+            &mut mask_return   as *mut _
+        );}
+
         Window {
             width:      width,
             min_width:  min_width as _,
@@ -582,8 +601,14 @@ impl Window {
                 wm_delete_window:   wm_delete_window,
             },
 
+            just_warped_pointer: false,
             mouse_grabbed:      false,
-            mouse_info:     MouseInfo {x: 0, y: 0, dx: 0, dy: 0},
+            mouse_info: MouseInfo {
+                x: win_x_return,
+                y: win_y_return,
+                dx: 0,
+                dy: 0
+            },
         }
 
 
@@ -656,6 +681,7 @@ impl Window {
 
                             //println!("raw delta ({delta_x}, {delta_y})");
 
+                            /*
                             let mouse_info = MouseInfo {
                                 x: self.mouse_info.x, 
                                 y: self.mouse_info.y,
@@ -666,6 +692,7 @@ impl Window {
                             self.mouse_info = mouse_info.clone();
 
                             events.push(Event::MouseMotion(mouse_info));
+                            */
 
                         },
 
@@ -785,16 +812,23 @@ impl Window {
                         self.mouse_info.y != e.y
                     {
 
-                        let mouse_info = MouseInfo {
+                        let mut mouse_info = MouseInfo {
                             x: e.x, 
                             y: e.y,
-                            dx: self.mouse_info.dx,
-                            dy: self.mouse_info.dy,
+                            dx: self.mouse_info.x - e.x,
+                            dy: self.mouse_info.y - e.y,
                         };
+
+                        if self.just_warped_pointer {
+                            self.just_warped_pointer = false;
+                            mouse_info.dx = 0;
+                            mouse_info.dy = 0;
+                        }
 
                         self.mouse_info = mouse_info.clone();
 
                         events.push(Event::MouseMotion(mouse_info));
+
                     }
                     
                 },
@@ -910,6 +944,8 @@ impl Window {
 
             xlib::XFlush(self.x11.display);
         }
+
+        self.just_warped_pointer = true;
 
         // emular mouse warp no wayland
         // https://github.com/libsdl-org/SDL/commit/ad29875ee692deb9a3517f4d470bde4a83ff76ad

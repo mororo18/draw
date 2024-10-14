@@ -211,6 +211,7 @@ impl TextureMap {
         debug_assert!((0.0..=1.0).contains(&v));
         debug_assert!(self.components == 4);
 
+        // TODO: Verify correctness
         let u_idx =                  (u * self.f_width).floor()  as usize;
         let v_idx = self.height -1 - (v * self.f_height).floor() as usize;
         
@@ -231,9 +232,10 @@ impl TextureMap {
         debug_assert!((0.0..=1.0).contains(&u));
         debug_assert!((0.0..=1.0).contains(&v));
 
-        let u_idx =                  (u * self.f_width).floor()  as usize;
-        let v_idx = self.height -1 - (v * self.f_height).floor() as usize;
-        
+        // TODO: Verify correctness
+        let u_idx =                  (u * (self.f_width -1.)).floor() as usize;
+        let v_idx = self.height -1 - (v * (self.f_height-1.)).floor() as usize;
+
         let offset = (v_idx * self.width + u_idx) * self.components;
 
         debug_assert!(offset     <  self.img.len());

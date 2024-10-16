@@ -62,13 +62,13 @@ impl Triangle {
 
         let mut tri_pool_size: usize = 0;
 
-        // the lateral planes (right, left, top, bot) will just clip the triangles that are
-        // completly outside of the view volume. The triangles that are partially outside will
-        // be clipped during the rasterization.
-        if lateral_planes[0].partially_visible(&self) &&
-           lateral_planes[1].partially_visible(&self) &&
-           lateral_planes[2].partially_visible(&self) &&
-           lateral_planes[3].partially_visible(&self)
+        // Nessa etapa do pipeline, a verificação de clipagem nos planos laterais (right, left, top, bottom)
+        // vai impedir apenas aqueles triângulos que estiverem *completamente* fora do volume de visualização.
+        // A clipagem dos triângulos que estão parcialmente fora não é feita aqui pois é resolvido durante a rasterização.
+        if lateral_planes[0].at_least_partially_visible(&self) &&
+           lateral_planes[1].at_least_partially_visible(&self) &&
+           lateral_planes[2].at_least_partially_visible(&self) &&
+           lateral_planes[3].at_least_partially_visible(&self)
         {
             tri_pool_ret[0] = self.clone();
             tri_pool_size = 1;
@@ -827,13 +827,13 @@ struct CameraWindow {
 
 pub
 struct Camera {
-    position:  Vec3,
-    direction: Vec3,
-    up_direction: Vec3,
+    position:  Vec3, // Lookfrom
+    direction: Vec3, // (lookat - lookfrom)
+    up_direction: Vec3, // Vup
 
     window_view: CameraWindow,
-    min_view_dist: f32,
-    max_view_dist: f32,
+    min_view_dist: f32, // Distância da origem até o near plane
+    max_view_dist: f32, // Distância da origem até o far plane
 
     u: Vec3,
     v: Vec3,
@@ -846,8 +846,6 @@ impl Camera {
             dir:      Vec3,
             ratio:    f32) -> Self 
     {
-
-        let n: f32 = -10.0;      // nearest
         /*
         let f: f32 = n - 100.0;       // furtherest
 
@@ -858,28 +856,37 @@ impl Camera {
         let b: f32 = -10.0;     // bottom-most
         */
 
-        let horizontal_view_angle: f32 = 135.0;  // degrees
-        let h_angle_rad = horizontal_view_angle.to_radians();
+        let near: f32 = -10.0; // Distância da origem até o near plane
+        let far = near - 500.; // Distância da origem até o far plane
+        let fov_x: f32 = 135.0;
+        let fov_x_rad = fov_x.to_radians();
 
-        let right = dbg!(n.abs() * (h_angle_rad / 2.0).tan());
-        let left = - right;
+        // A origem das coordenadas é no centro:
+        //  ___________________
+        // |       top         |
+        // |                   |
+        // |left  center  right| H
+        // |                   |
+        // |      bottom       |
+        //  ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+        //           W
+        let right = dbg!(near.abs() * (fov_x_rad / 2.0).tan()); // right = W/2
+        let left = - right; // left = -W/2
+        let top = ratio.recip() * right; // top = H/2
+        let bottom = - top; // bottom = -H/2
 
-        let top = ratio.recip() * right;
-        let bottom = - top;
-        let further = n - 500.;
-
-        assert!(horizontal_view_angle < 180.0);
-        assert!(n < 0.0);
-        assert!(n > further);
+        assert!(fov_x < 180.0);
+        assert!(near < 0.0);
+        assert!(near > far);
         assert!(right > left);
         assert!(top > bottom);
 
         println!("CameraWindow dimension ({} x {})", right-left, top-bottom);
 
         Self {
-            position:    pos,
+            position:    pos, // Lookfrom
             direction:   dir.normalized(),
-            up_direction: Vec3::new([0.,  1.,  0.]),
+            up_direction: Vec3::new([0.,  1.,  0.]), // Vup
             window_view: CameraWindow {
                 top,
                 bottom,
@@ -887,8 +894,8 @@ impl Camera {
                 left,
             },
 
-            min_view_dist: n,
-            max_view_dist: further,
+            min_view_dist: near,
+            max_view_dist: far,
 
             u: Vec3::zeros(),
             v: Vec3::zeros(),
@@ -1015,10 +1022,11 @@ impl Camera {
 
     pub
     fn gen_matrix(&mut self) -> Matrix4 {
-        self.update_basis();
 
-        let matrix_basis_transp = self.get_basis_matrix().transposed();
-
+        // A matriz View, que transforma pontos do espaço do mundo
+        // para o espaço da câmera, é obtida da seguinte forma:
+        // Primeiro, encontramos a matriz de transformação que translada
+        // a câmera para a origem do mundo utilizando a posição da câmera.
         let pos = self.position;
         let matrix_pos = Matrix4::new([
             [1.0,   0.0,    0.0,   -pos.x()],
@@ -1027,106 +1035,82 @@ impl Camera {
             [0.0,   0.0,    0.0,        1.0]
         ]);
 
-        let matrix_cam = matrix_basis_transp * matrix_pos;
+        // Com as origens alinhadas, encontramos (u,v,w), os três vetores unitários
+        // que formam a base da câmera e que não estão alinhados com as coordenadas
+        // de mundo (são o x,y,z da câmera).
+        self.update_basis();
 
+        // A matriz de rotação que alinha os eixos da câmera com o mundo é obtida 
+        // pela transposta da matriz da base da câmera, que aplica uma mudança de base
+        // do mundo para a câmera.
+        let matrix_basis_transp = self.get_basis_matrix().transposed();
+
+        // Multiplicando a translação com a rotação, obtemos a matriz View.
+        let matrix_cam = matrix_basis_transp * matrix_pos;
         matrix_cam
     }
 
     fn gen_view_planes(&mut self) -> ([ViewPlane; 2] , [ViewPlane; 4]) {
         self.update_basis();
+
+        // Matriz para aplicar a rotação que leva coordenadas da câmera para o mundo.
         let matrix_basis =  self.get_basis_matrix();
+
         let camera_pos = self.get_pos();
+        let camera_window = self.get_window();
 
         let n = self.get_min_view_dist();
         let f = self.get_max_view_dist();
-
-        let camera_window = self.get_window();
         let r = camera_window.right;
         let l = camera_window.left;
-
         let t = camera_window.top;
         let b = camera_window.bottom;
 
-        let a_cam = Vec3::new([ r, t, n]).as_vec4();
-        let b_cam = Vec3::new([ r, b, n]).as_vec4();      
-        let c_cam = Vec3::new([ l, b, n]).as_vec4();     
-        let d_cam = Vec3::new([ l, t, n]).as_vec4();     
+        // Os 4 vértices do near plane em coordenadas de câmera
+        let upper_right_near_cam = Vec3::new([r, t, n]).as_vec4();
+        let upper_left_near_cam = Vec3::new([l, t, n]).as_vec4();
+        let lower_right_near_cam = Vec3::new([r, b, n]).as_vec4();
+        let lower_left_near_cam = Vec3::new([l, b, n]).as_vec4();
 
-        // window view
-        let a_vec4 = matrix_basis * a_cam;
-        let b_vec4 = matrix_basis * b_cam;
-        let c_vec4 = matrix_basis * c_cam;
-        let d_vec4 = matrix_basis * d_cam;
+        // Os 4 vértices do near plane em coordenadas de mundo com offset da posicao da camera
+        let upper_right_near_world = (matrix_basis * upper_right_near_cam).vec3_over_w() + camera_pos;
+        let upper_left_near_world = (matrix_basis * upper_left_near_cam).vec3_over_w() + camera_pos;
+        let lower_right_near_world = (matrix_basis * lower_right_near_cam).vec3_over_w() + camera_pos;
+        let lower_left_near_world = (matrix_basis * lower_left_near_cam).vec3_over_w() + camera_pos;
 
-        // z = f
-        // x = (l + r) / 2.
-        // y = (f * t) / n
-        let tfp_cam = Vec3::new([
-            (l + r) / 2., 
-            (f * t) / n, 
-            f
-        ]);
-        let tfp_vec4: Vec4 = matrix_basis * tfp_cam.as_vec4();
-        let top_further_point = tfp_vec4.vec3_over_w() + camera_pos;
+        let x_center = (l + r) / 2.; // = 0
+        let y_center = (b + t) / 2.; // = 0
 
-        // TODO: aplicar essa logica aq p o restante
-        let x_center = (l + r) / 2.;
-        // z = f
-        // x = (l + r) / 2.
-        // y = (f * b) / n
-        let bfp_cam = Vec3::new([
-            x_center, 
-            x_center + (f * (b-x_center)) / n, 
-            f
-        ]);
-        let bfp_vec4: Vec4 = matrix_basis * bfp_cam.as_vec4();
-        let bottom_further_point = bfp_vec4.vec3_over_w() + camera_pos;
+        // Os 4 vértices do far plane em coordenadas de câmera
+        let upper_center_far_cam = Vec3::new([x_center, (f * t) / n, f]).as_vec4();
+        let lower_center_far_cam = Vec3::new([x_center, (f * b) / n, f]).as_vec4();
+        let right_center_far_cam = Vec3::new([(f * r) / n, y_center, f]).as_vec4();
+        let left_center_far_cam = Vec3::new([(f * l) / n, y_center, f]).as_vec4();
 
-        // z = f
-        // x = (f * r) / n
-        // y = (b + t) / 2.
-        let rfp_cam = Vec3::new([
-            (f * r) / n, 
-            (b + t) / 2., 
-            f
-        ]);
-        let rfp_vec4: Vec4 = matrix_basis * rfp_cam.as_vec4();
-        let right_further_point = rfp_vec4.vec3_over_w() + camera_pos;
+        // Os 4 vértices do far plane em coordenadas de mundo com offset da posicao da camera
+        let upper_center_far_world = (matrix_basis * upper_center_far_cam).vec3_over_w() + camera_pos;
+        let lower_center_far_world = (matrix_basis * lower_center_far_cam).vec3_over_w() + camera_pos;
+        let right_center_far_world = (matrix_basis * right_center_far_cam).vec3_over_w() + camera_pos;
+        let left_center_far_world = (matrix_basis * left_center_far_cam).vec3_over_w() + camera_pos;
 
-        // z = f
-        // x = (f * l) / n
-        // y = (b + t) / 2.
-        let lfp_cam = Vec3::new([
-            (f * l) / n, 
-            (b + t) / 2., 
-            f
-        ]);
-        let lfp_vec4: Vec4 = matrix_basis * lfp_cam.as_vec4();
-        let left_further_point = lfp_vec4.vec3_over_w() + camera_pos;
-
-
-        let a_point = a_vec4.as_vec3() / a_vec4.get_w() + camera_pos;
-        let b_point = b_vec4.as_vec3() / b_vec4.get_w() + camera_pos;
-        let c_point = c_vec4.as_vec3() / c_vec4.get_w() + camera_pos;
-        let d_point = d_vec4.as_vec3() / d_vec4.get_w() + camera_pos;
-
-        let visible_point = (a_point + bottom_further_point) / 2.0;
+        // Um ponto arbitrário dentro do frustrum para testes. 
+        let visible_point = (upper_right_near_world + lower_center_far_world) / 2.0;
 
         let depth_planes = [
             ViewPlane::new(
                 [
-                    a_point,
-                    b_point,
-                    c_point
+                    upper_right_near_world,
+                    lower_right_near_world,
+                    lower_left_near_world
                 ], 
                 visible_point, 
                 "near"
             ),
             ViewPlane::new(
                 [
-                    left_further_point, 
-                    right_further_point, 
-                    top_further_point
+                    left_center_far_world, 
+                    right_center_far_world, 
+                    upper_center_far_world
                 ],
                 visible_point, 
                 "far"
@@ -1136,37 +1120,36 @@ impl Camera {
         let lateral_planes = [
             ViewPlane::new(
                 [
-                    right_further_point,
-                    a_point,
-                    b_point
+                    right_center_far_world,
+                    upper_right_near_world,
+                    lower_right_near_world
                 ],
                 visible_point, 
                 "right"
             ),
             ViewPlane::new(
                 [
-                    left_further_point,
-                    c_point,
-                    d_point
+                    left_center_far_world,
+                    lower_left_near_world,
+                    upper_left_near_world
                 ],
                 visible_point,
                 "left"
             ),
-
             ViewPlane::new(
                 [
-                    top_further_point,
-                    d_point,
-                    a_point
+                    upper_center_far_world,
+                    upper_left_near_world,
+                    upper_right_near_world
                 ],
                 visible_point,
                 "top"
             ),
             ViewPlane::new(
                 [
-                    bottom_further_point,
-                    c_point,
-                    b_point
+                    lower_center_far_world,
+                    lower_left_near_world,
+                    lower_right_near_world
                 ],
                 visible_point, 
                 "bottom"
@@ -1226,7 +1209,7 @@ impl ViewPlane {
         self.normal
     }
     pub
-    fn partially_visible (&self, tri: &Triangle) -> bool {
+    fn at_least_partially_visible (&self, tri: &Triangle) -> bool {
         let a_vertex = tri.vertices[0];
         let b_vertex = tri.vertices[1];
         let c_vertex = tri.vertices[2];
@@ -1381,8 +1364,8 @@ impl ViewPlane {
 
 pub
 struct Scene {
-    width: usize,
-    height: usize,
+    width: usize, // Comprimento da Janela
+    height: usize, // Altura da Janela
     pub camera: Camera,
     objects: Vec<Object>,
 
@@ -1442,8 +1425,8 @@ impl Scene {
     }
 
     fn gen_transformation_matrix(&mut self) -> Matrix4 {
-        let n_x: f32 = self.width as _;
-        let n_y: f32 = self.height as _;
+        let n_x: f32 = self.width as _; // Qnt. de pixeis do comprimento da janela 
+        let n_y: f32 = self.height as _; // Qnt. de pixeis da altura da janela
 
         let n = self.camera.get_min_view_dist();
         let f = self.camera.get_max_view_dist();
@@ -1455,13 +1438,39 @@ impl Scene {
         let t = camera_window.top;
         let b = camera_window.bottom;
 
-        let matrix_viewport = Matrix4::new([
-            [n_x / 2.0,        0.0,  0.0,  (n_x-1.0) / 2.0],
-            [      0.0,  n_y / 2.0,  0.0,  (n_y-1.0) / 2.0],
-            [      0.0,        0.0,  1.0,              0.0],
-            [      0.0,        0.0,  0.0,              1.0]
-        ]);
+        // A matriz View, que transforma pontos do espaço do mundo
+        // para o espaço da câmera, é obtida da seguinte forma:
+        // Primeiro, encontramos a matriz de transformação que translada
+        // a câmera para a origem do mundo utilizando a posição da câmera.
+        // Com as origens alinhadas, encontramos (u,v,w), os três vetores unitários
+        // que formam a base da câmera e que não estão alinhados com as coordenadas
+        // de mundo (são o x,y,z da câmera).
+        // A matriz de rotação que alinha os eixos da câmera com o mundo é obtida 
+        // pela transposta da matriz da base da câmera, que aplica uma mudança de base
+        // do mundo para a câmera.
+        // Multiplicando a translação com a rotação, obtemos a matriz View.
+        let matrix_cam = self.camera.gen_matrix();
 
+        // A matriz de perspectiva mapeia o volume de visão perspectiva (que é o frustrum)
+        // para o volume de visão ortográfica (que é uma caixa alinhada aos eixos a partir do
+        // plano near até o far).
+        // Ela mantém os pontos no plano z = n inalterados e mapeia o grande retângulo em z = f,
+        // na parte de trás do volume de perspectiva, para o pequeno retângulo em z = f, na parte de trás do volume ortográfico.
+        let persp = Matrix4::new([
+            [   n,  0.0,       0.0,      0.0],
+            [  0.0,   n,       0.0,      0.0],
+            [  0.0,  0.0,  (n + f), -(n * f)],
+            [  0.0,  0.0,      1.0,      0.0]
+        ]);
+        // Note que é necessário fazer a desomogeneização dos pontos obtidos após as transformações.
+
+        // Do volume de visualização ortográfico (caixa formado pelo near e far plane e alinhada aos eixos)
+        // para o volume de visualização canônico (o cubo [-1,1]):
+        // Fazemos a redimensionalização do volume de visualização ortográfico para o canônico.
+        // Para isso, basta apenas alterar os limites dos volumes do cálculo da matriz dessa operação,
+        // com os limites do volume de origem sendo o retângulo que se estende do near até o far plane,
+        // e os limites do volume de destino sendo o cubo canônico.
+        // Esse processo é similar a redimensionalização de janela da matriz ViewPort.
         let matrix_orth = Matrix4::new([
             [2.0 / (r-l),          0.0,          0.0,  -(r+l) / (r-l)],
             [        0.0,  2.0 / (t-b),          0.0,  -(t+b) / (t-b)],
@@ -1469,13 +1478,28 @@ impl Scene {
             [        0.0,          0.0,          0.0,             1.0]
         ]);
 
-        let matrix_cam = self.camera.gen_matrix();
-
-        let persp = Matrix4::new([
-            [   n,  0.0,       0.0,      0.0],
-            [  0.0,   n,       0.0,      0.0],
-            [  0.0,  0.0,  (n + f), -(n * f)],
-            [  0.0,  0.0,      1.0,      0.0]
+        // Do espaço canônico [-1,1] para o espaço de tela (janela):
+        //        ___________________(1,1)         ___________________(width,height)
+        //       |                   |            |                   |    
+        //       |        ^          |            |                   |    
+        //       |        │          |     =>     |                   |
+        //       |        └───>      |            |                   |    
+        //       |                   |            ^                   |    
+        //       |                   |            │                   |    
+        // (-1,-1)‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾         (0,0)───>───────────────     
+        //
+        // Primeiro, aplicar a translação T(1,1), que posicionará o espaço canônico na origem, 
+        // obtendo o espaço dentro dos pontos extremos (0,0) e (2,2).
+        // Em seguida, aplicar a escala S(width/2,height/2), que redimensionará o espaço
+        // para o mesmo tamanho da janela.
+        // O último passo seria posicionar o espaço na origem da janela,
+        // mas como ele já está em (0,0), a translação T(0,0) não é necessária.
+        // M_vp = S(width/2,height/2) * T(1,1)
+        let matrix_viewport = Matrix4::new([
+            [n_x / 2.0,        0.0,  0.0,  (n_x-1.0) / 2.0],
+            [      0.0,  n_y / 2.0,  0.0,  (n_y-1.0) / 2.0],
+            [      0.0,        0.0,  1.0,              0.0],
+            [      0.0,        0.0,  0.0,              1.0]
         ]);
 
         let matrix_transf = matrix_viewport * matrix_orth * persp * matrix_cam;
@@ -1622,10 +1646,13 @@ impl Scene {
 
                     // TODO: calculo da normal potencialmente errado
                     if tri_eye.dot(tri_normal) <= 0.0 {
+                        // Se o ângulo entre o vetor que sai da câmera em direção ao triângulo 
+                        // e a normal do triângulo for maior do que 90 graus, o triângulo não é renderizado.
                         continue;
                     }
 
                     // TODO: substituir por heapless::Vec
+                    // 12 é o número máximo possível de triângulos gerados após clipagem entre os 6 planos. 
                     let mut clipped_triangles: [Triangle; 12]  = [Triangle::zeroed(); 12]; 
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
@@ -1639,6 +1666,8 @@ impl Scene {
                         // recalcular os a VisualInfo triangulos parcialmente clippados, para
                         // evitar as cópias dessas structs na funcao de clipping
 
+                        // Aplica todas as transformações que levam o ponto de coordenadas
+                        // de mundo (clipped_tri.vertices) para coordenadas de janela.
                         let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
                         let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
                         let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
@@ -1647,6 +1676,7 @@ impl Scene {
                         let b_w = b_vec4.get_w();
                         let c_w = c_vec4.get_w();
 
+                        // Aplica a desomogeneização.
                         let a_coord  = a_vec4.as_vec2() / a_w;
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;
@@ -1720,8 +1750,6 @@ impl Scene {
                     let indexed_tri_vertex  = vertex_tri_idx.clone();
                     let indexed_tri_normal  = normal_tri_idx.clone();
                     let indexed_tri_texture = texture_tri_idx.clone();
-
-
 
                     let tri_vertices = IndexedMesh::vec3_list_from_indexed(
                         indexed_tri_vertex,
@@ -1821,6 +1849,8 @@ impl Scene {
                     let clipped_count = original_tri.clip_against_planes(&func_planes, clipped_triangles.as_mut_slice());
                     for clipped_tri in clipped_triangles[..clipped_count].iter_mut() {
 
+                        // Aplica todas as transformações que levam o ponto de coordenadas
+                        // de mundo (clipped_tri.vertices) para coordenadas de janela.
                         let a_vec4  = matrix_transf * clipped_tri.vertices[0].as_vec4();
                         let b_vec4  = matrix_transf * clipped_tri.vertices[1].as_vec4();
                         let c_vec4  = matrix_transf * clipped_tri.vertices[2].as_vec4();
@@ -1829,6 +1859,7 @@ impl Scene {
                         let b_w = b_vec4.get_w();
                         let c_w = c_vec4.get_w();
 
+                        // Aplica a desomogeneização.
                         let a_coord  = a_vec4.as_vec2() / a_w;
                         let b_coord  = b_vec4.as_vec2() / b_w;
                         let c_coord  = c_vec4.as_vec2() / c_w;

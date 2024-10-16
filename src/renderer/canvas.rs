@@ -410,8 +410,7 @@ impl Canvas {
 
         if self.depth_frame.len() != self.frame.len() {
             self.depth_frame = vec![depth; self.frame.len()];
-
-        } else if self.depth_frame.len() == self.frame.len() {
+        } else {
             self.depth_frame.iter_mut().for_each(|d| *d = depth);
         }
     }

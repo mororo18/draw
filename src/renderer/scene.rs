@@ -1257,17 +1257,16 @@ impl ViewPlane {
         if f_a > 0.0 && 
            f_b > 0.0 && 
            f_c > 0.0 
-        {
+        { // Todo o triângulo está "dentro" do plano, não é necessário clipar
             tri_pool_ret[0] = tri.clone();
             return 1;
         } else
         if f_a <= 0.0 && 
            f_b <= 0.0 && 
            f_c <= 0.0 
-        {
+        { // Todo o triângulo está "fora" do plano, não será exibido
             return 0;
         }
-
 
         if f_a * f_c >= 0.0 {
             swap(&mut f_b,      &mut f_c);
@@ -1306,7 +1305,6 @@ impl ViewPlane {
             self.normal().dot(b_vertex - c_vertex) - EPS;
         let new_vertex_b = b_vertex + (c_vertex - b_vertex) * t_b;
         let new_b_attr   = b_attr   + (c_attr   - b_attr)   * t_b;
-
 
         if f_c <= 0.0 {
             let new_triangle_a = Triangle::new(
@@ -1644,9 +1642,11 @@ impl Scene {
                     let tri_normal = Triangle::calc_normal(&original_tri);
                     let tri_eye = camera_pos - original_tri.get_center();
 
-                    // TODO: calculo da normal potencialmente errado
+                    // Back-face culling
                     if tri_eye.dot(tri_normal) <= 0.0 {
-                        // Se o ângulo entre o vetor que sai da câmera em direção ao triângulo 
+                        // Renderizamos modelos poligoniais fechados em que faces que não estão viradas para
+                        // a câmera estão sobrepostas por faces que estão viradas para a câmera. 
+                        // Portanto, se o ângulo entre o vetor que sai da câmera em direção ao triângulo 
                         // e a normal do triângulo for maior do que 90 graus, o triângulo não é renderizado.
                         continue;
                     }

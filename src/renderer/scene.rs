@@ -62,9 +62,12 @@ impl Triangle {
 
         let mut tri_pool_size: usize = 0;
 
-        // Nessa etapa do pipeline, a verificação de clipagem nos planos laterais (right, left, top, bottom)
-        // vai impedir apenas aqueles triângulos que estiverem *completamente* fora do volume de visualização.
-        // A clipagem dos triângulos que estão parcialmente fora não é feita aqui pois é resolvido durante a rasterização.
+        // Nessa etapa do pipeline, a verificação de clipagem nos
+        // planos laterais (right, left, top, bottom) vai impedir
+        // apenas aqueles triângulos que estiverem *completamente*
+        // fora do volume de visualização. A clipagem dos triângulos
+        // que estão parcialmente fora não é feita aqui pois é resolvido
+        // durante a rasterização.
         if lateral_planes[0].at_least_partially_visible(&self) &&
            lateral_planes[1].at_least_partially_visible(&self) &&
            lateral_planes[2].at_least_partially_visible(&self) &&
@@ -1035,14 +1038,14 @@ impl Camera {
             [0.0,   0.0,    0.0,        1.0]
         ]);
 
-        // Com as origens alinhadas, encontramos (u,v,w), os três vetores unitários
-        // que formam a base da câmera e que não estão alinhados com as coordenadas
-        // de mundo (são o x,y,z da câmera).
+        // Com as origens alinhadas, encontramos (u,v,w), os três vetores 
+        // unitários que formam a base da câmera e que não estão alinhados
+        // com as coordenadas de mundo (são o x,y,z da câmera).
         self.update_basis();
 
-        // A matriz de rotação que alinha os eixos da câmera com o mundo é obtida 
-        // pela transposta da matriz da base da câmera, que aplica uma mudança de base
-        // do mundo para a câmera.
+        // A matriz de rotação que alinha os eixos da câmera com o mundo
+        // é obtida pela transposta da matriz da base da câmera, que aplica
+        // uma mudança de base do mundo para a câmera.
         let matrix_basis_transp = self.get_basis_matrix().transposed();
 
         // Multiplicando a translação com a rotação, obtemos a matriz View.
@@ -1254,20 +1257,21 @@ impl ViewPlane {
         let mut f_b = self.func(b_vertex);
         let mut f_c = self.func(c_vertex);
 
-        if f_a > 0.0 && 
-           f_b > 0.0 && 
-           f_c > 0.0 
+        if f_a > 0.0 && f_b > 0.0 && f_c > 0.0
         {
+            // Todos os vértices dentro do volume,
+            // não é necessário clipar.
             tri_pool_ret[0] = tri.clone();
             return 1;
-        } else
-        if f_a <= 0.0 && 
-           f_b <= 0.0 && 
-           f_c <= 0.0 
-        {
+        } else if f_a <= 0.0 && f_b <= 0.0 && f_c <= 0.0
+        { 
+            // Todos os vértices fora do volume,
+            // não será exibido.
             return 0;
         }
-
+        // Se prosseguiu, verificar a existência de
+        // um vértice para fora do plano enquanto
+        // os outros dois vértices estáo dentro.
 
         if f_a * f_c >= 0.0 {
             swap(&mut f_b,      &mut f_c);
@@ -1294,20 +1298,19 @@ impl ViewPlane {
             swap(&mut a_attr,   &mut b_attr);
         }
 
-        //  p = in + t * (out - in)
 
+        // Calcular os pontos de interseção entre o plano e o triângulo
+        // para a criação dos novos triângulos da clipagem
         let t_a = self.func(a_vertex) /
             self.normal().dot(a_vertex - c_vertex) - EPS;
         let new_vertex_a = a_vertex + (c_vertex - a_vertex) * t_a;
         let new_a_attr   = a_attr   + (c_attr   - a_attr)   * t_a;
-
-
         let t_b = self.func(b_vertex) /
             self.normal().dot(b_vertex - c_vertex) - EPS;
         let new_vertex_b = b_vertex + (c_vertex - b_vertex) * t_b;
         let new_b_attr   = b_attr   + (c_attr   - b_attr)   * t_b;
 
-
+        // Apenas um vértice do triângulo para fora do plano
         if f_c <= 0.0 {
             let new_triangle_a = Triangle::new(
                 [
@@ -1320,7 +1323,6 @@ impl ViewPlane {
                     new_a_attr,
                     new_b_attr
                 ],
-                //tri.color,
             );
 
             let new_triangle_b = Triangle::new(
@@ -1451,25 +1453,27 @@ impl Scene {
         // Multiplicando a translação com a rotação, obtemos a matriz View.
         let matrix_cam = self.camera.gen_matrix();
 
-        // A matriz de perspectiva mapeia o volume de visão perspectiva (que é o frustrum)
-        // para o volume de visão ortográfica (que é uma caixa alinhada aos eixos a partir do
-        // plano near até o far).
-        // Ela mantém os pontos no plano z = n inalterados e mapeia o grande retângulo em z = f,
-        // na parte de trás do volume de perspectiva, para o pequeno retângulo em z = f, na parte de trás do volume ortográfico.
+        // A matriz de perspectiva mapeia o volume de visão perspectiva,
+        // que é o frustum, para o volume de visão ortográfica, que é
+        // uma caixa alinhada aos eixos a partir do plano near até o far.
+        // Ela mantém os pontos no plano z = n inalterados e mapeia 
+        // o grande retângulo em z = f, na parte de trás do volume de perspectiva,
+        // para o pequeno retângulo em z = f, na parte de trás do volume ortográfico.
         let persp = Matrix4::new([
             [   n,  0.0,       0.0,      0.0],
             [  0.0,   n,       0.0,      0.0],
             [  0.0,  0.0,  (n + f), -(n * f)],
             [  0.0,  0.0,      1.0,      0.0]
         ]);
-        // Note que é necessário fazer a desomogeneização dos pontos obtidos após as transformações.
+        // Note que é necessário fazer a desomogeneização após as transformações.
 
-        // Do volume de visualização ortográfico (caixa formado pelo near e far plane e alinhada aos eixos)
-        // para o volume de visualização canônico (o cubo [-1,1]):
-        // Fazemos a redimensionalização do volume de visualização ortográfico para o canônico.
-        // Para isso, basta apenas alterar os limites dos volumes do cálculo da matriz dessa operação,
-        // com os limites do volume de origem sendo o retângulo que se estende do near até o far plane,
-        // e os limites do volume de destino sendo o cubo canônico.
+        // Do volume de visualização ortográfico para o volume de visualização
+        // canônico (o cubo [-1,1]):
+        // Fazemos a redimensionalização do volume ortográfico para o canônico.
+        // Para isso, basta apenas alterar os limites dos volumes da matriz
+        // dessa operação, com os limites do volume de origem sendo o retângulo
+        // que se estende do near até o far plane, e os limites do volume de destino
+        // sendo o cubo canônico.
         // Esse processo é similar a redimensionalização de janela da matriz ViewPort.
         let matrix_orth = Matrix4::new([
             [2.0 / (r-l),          0.0,          0.0,  -(r+l) / (r-l)],
@@ -1487,11 +1491,10 @@ impl Scene {
         //       |                   |            ^                   |    
         //       |                   |            │                   |    
         // (-1,-1)‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾         (0,0)───>───────────────     
-        //
-        // Primeiro, aplicar a translação T(1,1), que posicionará o espaço canônico na origem, 
-        // obtendo o espaço dentro dos pontos extremos (0,0) e (2,2).
-        // Em seguida, aplicar a escala S(width/2,height/2), que redimensionará o espaço
-        // para o mesmo tamanho da janela.
+        // Primeiro, aplicar a translação T(1,1), que posicionará o espaço canônico 
+        // na origem, obtendo o espaço dentro dos pontos extremos (0,0) e (2,2).
+        // Em seguida, aplicar a escala S(width/2,height/2), que redimensionará
+        // o espaço para o mesmo tamanho da janela.
         // O último passo seria posicionar o espaço na origem da janela,
         // mas como ele já está em (0,0), a translação T(0,0) não é necessária.
         // M_vp = S(width/2,height/2) * T(1,1)
@@ -1644,10 +1647,13 @@ impl Scene {
                     let tri_normal = Triangle::calc_normal(&original_tri);
                     let tri_eye = camera_pos - original_tri.get_center();
 
-                    // TODO: calculo da normal potencialmente errado
+                    // Back-face culling
                     if tri_eye.dot(tri_normal) <= 0.0 {
-                        // Se o ângulo entre o vetor que sai da câmera em direção ao triângulo 
-                        // e a normal do triângulo for maior do que 90 graus, o triângulo não é renderizado.
+                        // Renderizamos modelos poligonais fechados em que faces que
+                        // não estão viradas para a câmera são sobrepostas por faces
+                        // que estão viradas para a câmera. Portanto, se o ângulo entre
+                        // o vetor que sai do triângulo em direção à câmera e a normal
+                        // do triângulo for maior do que 90 graus, o triângulo não é renderizado.
                         continue;
                     }
 

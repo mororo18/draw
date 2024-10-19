@@ -14,12 +14,28 @@ use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
 use crate::renderer::linalg::Vec2;
 
+struct GuiWindowsVisibility {
+    models:     bool,
+    shortcuts:  bool,
+}
+
+impl Default for GuiWindowsVisibility {
+    fn default() -> Self {
+        Self {
+            models:     false,
+            shortcuts:  false,
+        }
+    }
+}
+
 pub
 struct Gui {
     imgui:  ig::Context,
     width: usize,
     height: usize,
     font_texture: Texture,
+
+    windows_visibility: GuiWindowsVisibility,
 
     hide_native_cursor: bool,
     current_mouse_cursor: Option<ig::MouseCursor>,
@@ -92,6 +108,8 @@ impl Gui {
             height,
             imgui,
             font_texture: f_texture,
+
+            windows_visibility: Default::default(),
 
             hide_native_cursor: false,
             current_mouse_cursor: None,
@@ -243,8 +261,7 @@ impl Gui {
         self.update_mouse_cursor(win);
     }
 
-    pub
-    fn build_top_menu (ui: &mut ig::Ui, width: usize, user_action: &mut Option<GuiAction>) {
+    fn build_top_menu (ui: &mut ig::Ui, width: usize, windows_visibility: &mut GuiWindowsVisibility, user_action: &mut Option<GuiAction>) {
         ui.window("top_menu")
             .no_decoration()
             .draw_background(false)
@@ -277,12 +294,24 @@ impl Gui {
                             }
                         }
                     }
+                    
+                    // Windows Menu 
+                    if let Some(_file_menu) = ui.begin_menu("Windows") {
+                        if ui.menu_item_config("Models")
+                            .selected(windows_visibility.models).build() {
+                            windows_visibility.models = !windows_visibility.models; 
+                        }
+                        if ui.menu_item_config("Shortcuts")
+                            .selected(windows_visibility.shortcuts).build() {
+                            windows_visibility.shortcuts = !windows_visibility.shortcuts; 
+                        }
+                    }
                 }
             });
 
     }
 
-    fn build_shortcuts_list (ui: &mut ig::Ui, width: usize) {
+    fn build_shortcuts_list_window (ui: &mut ig::Ui, width: usize) {
         ui.window("Shortcuts List")
             .bg_alpha(0.4)
             .movable(true)
@@ -295,14 +324,24 @@ impl Gui {
             });
     }
 
+    fn build_windows (ui: &mut ig::Ui, width: usize, windows_visibility: &GuiWindowsVisibility) {
+        if windows_visibility.shortcuts {
+            Self::build_shortcuts_list_window(ui, width);
+        }
+
+        if windows_visibility.models {
+        }
+    }
+
     pub
     fn build_ui (&mut self, user_action: &mut Option<GuiAction>) {
         let ui = self.imgui.new_frame();
 
-        Self::build_top_menu(ui, self.width, user_action);
-        Self::build_shortcuts_list(ui, self.width);
+        Self::build_top_menu(ui, self.width, &mut self.windows_visibility, user_action);
 
-        ui.show_metrics_window(&mut true);
+        Self::build_windows(ui, self.width, &self.windows_visibility);
+
+        //ui.show_metrics_window(&mut true);
 
     }
 

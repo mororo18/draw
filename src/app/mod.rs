@@ -311,7 +311,7 @@ impl Application {
     }
 
     fn move_camera_direction(&mut self, dx: i32, dy: i32) {
-        let sensibility = 1;
+        let sensibility = 3;
         match self.camera_mode {
             CameraNavigation::Free => 
                 self.scene.move_camera_direction(sensibility * dx, - sensibility * dy),

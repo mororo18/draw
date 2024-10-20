@@ -1,4 +1,7 @@
 use imgui as ig;
+use font_awesome as fa;
+use material_icons as mi;
+use material_icons::Icon;
 
 use super::window::{
     Window,
@@ -14,18 +17,10 @@ use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
 use crate::renderer::linalg::Vec2;
 
+#[derive(Default)]
 struct GuiWindowsVisibility {
     models:     bool,
     shortcuts:  bool,
-}
-
-impl Default for GuiWindowsVisibility {
-    fn default() -> Self {
-        Self {
-            models:     false,
-            shortcuts:  false,
-        }
-    }
 }
 
 pub
@@ -55,7 +50,6 @@ impl Gui {
 
     pub
     fn new (width: usize, height: usize) -> Self {
-
         let mut imgui =  ig::Context::create();
         let io = imgui.io_mut();
         io.display_size = [width as f32, height as f32];
@@ -72,6 +66,24 @@ impl Gui {
                     oversample_h: 4,
                     oversample_v: 4,
                     size_pixels: Self::FONT_SIZE,
+                    ..ig::FontConfig::default()
+                }),
+            },
+            ig::FontSource::TtfData {
+                data: mi::FONT,
+                size_pixels: Self::FONT_SIZE,
+                config: Some(ig::FontConfig {
+                    rasterizer_multiply: 0.8,
+                    oversample_h: 4,
+                    oversample_v: 4,
+                    size_pixels: Self::FONT_SIZE,
+                    pixel_snap_h: true,
+                    glyph_offset: [0.0, 3.],
+                    glyph_ranges: ig::FontGlyphRanges::from_slice(&[
+                        fa::MINIMUM_CODEPOINT as _,
+                        fa::MAXIMUM_CODEPOINT as _,
+                        0
+                    ]),
                     ..ig::FontConfig::default()
                 }),
             },
@@ -276,11 +288,11 @@ impl Gui {
                     if let Some(_file_menu) = ui.begin_menu("File") {
                         //ui.menu_item_config("(dummy_menu)").enabled(false).build();
 
-                        if ui.menu_item_config("Open").shortcut("Ctrl+O").build() {
+                        if ui.menu_item_config(format!("{} Open", Icon::InsertDriveFile)).shortcut("Ctrl+O").build() {
                             *user_action = Some(GuiAction::Open)
                         }
 
-                        if let Some(_file_export_menu) = ui.begin_menu("Export as") {
+                        if let Some(_file_export_menu) = ui.begin_menu(format!("{} Export as", Icon::Image)) {
                             if ui.menu_item("JPEG") {
                                 *user_action = Some(
                                     GuiAction::ExportAs(ImgFileFormat::Jpeg)
@@ -324,12 +336,25 @@ impl Gui {
             });
     }
 
+    fn build_models_list_window (ui: &mut ig::Ui, width: usize) {
+        ui.window("Models List")
+            .bg_alpha(0.4)
+            .movable(true)
+            .resizable(false)
+            .position([4., 25.0], ig::Condition::FirstUseEver)
+            //.position_pivot([1.0, 0.0])
+            .build(|| {
+                ui.text("Models list here..");
+            });
+    }
+
     fn build_windows (ui: &mut ig::Ui, width: usize, windows_visibility: &GuiWindowsVisibility) {
         if windows_visibility.shortcuts {
             Self::build_shortcuts_list_window(ui, width);
         }
 
         if windows_visibility.models {
+            Self::build_models_list_window(ui, width);
         }
     }
 

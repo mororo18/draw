@@ -5,11 +5,11 @@ edition = "2021"
 links = "X11"
 build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+font-awesome = "0.2.0"
 imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"} # https://github.com/imgui-rs/imgui-rs/pull/779
 itertools = "0.13.0"
+material-icons = "0.2.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 rfd = "0.15.0"
@@ -21,9 +21,5 @@ x11 = { git = "https://github.com/mororo18/x11-rs.git" }
 debug = true
 debuginfo-level = 1
 
-
 [profile.release]
 debug = 1
-
-#[target.<triple>.<links>] # `links` build script override
-#rustc-link-lib = ["X11"]

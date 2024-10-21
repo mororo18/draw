@@ -287,7 +287,7 @@ impl MouseCursor {
     fn as_c_str(self) -> *const i8 {
 
         match self {
-            MouseCursor::Arrow      => c"arrow".as_ptr(),
+            MouseCursor::Arrow      => c"default".as_ptr(),
             MouseCursor::TextInput  => c"xterm".as_ptr(),
             MouseCursor::ResizeAll  => c"fleur".as_ptr(),
             MouseCursor::ResizeNS   => c"sb_v_double_arrow".as_ptr(),

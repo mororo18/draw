@@ -4,10 +4,8 @@ mod gui;
 use std::ffi::{CString, CStr};
 use rfd::FileDialog;
 
-use crate::renderer::scene::{Scene, Object};
+use crate::renderer::scene::{Scene, Object, ObjectInfo};
 use crate::renderer::canvas::Canvas;
-
-use crate::renderer::linalg::Vec3;
 
 use gui::*;
 
@@ -15,7 +13,6 @@ use window::{
     Window,
     Event,
     Key,
-    MouseCursor
 };
 
 //struct AppState();
@@ -33,6 +30,7 @@ enum ImgFileFormat {
 enum GuiAction {
     Open,
     ExportAs(ImgFileFormat),
+    ListModelsInfo,
 }
 
 const PIXEL_BYTES: usize = 4;
@@ -103,7 +101,7 @@ impl Application {
         let mut window_open = true;
 
         let mut frame_events: Vec<Event> = vec![];
-        let mut user_action: Option<GuiAction> = None;
+        let mut user_action: Option<GuiAction>;
 
         while window_open {
             user_action = None;
@@ -248,8 +246,12 @@ impl Application {
                 match action {
                     GuiAction::ExportAs(img_fmt) =>
                         self.export_frame_as(img_fmt),
-                    GuiAction::Open => 
-                        self.open_file(),
+                    GuiAction::Open => {
+                        let obj_info_ret = self.open_obj_file();
+                        if let Some(obj_info) = obj_info_ret {
+                            self.gui.add_obj(obj_info);
+                        }
+                    },
                     _ => {},
                 }
             }
@@ -321,7 +323,7 @@ impl Application {
         }
     }
 
-    fn open_file(&mut self) {
+    fn open_obj_file(&mut self) -> Option<ObjectInfo> {
 
         let file = FileDialog::new()
             .add_filter("text", &["obj"])
@@ -333,7 +335,9 @@ impl Application {
                 file_path.to_str().unwrap()
             );
 
-            self.scene.add_obj(obj);
+            Some(self.scene.add_obj(obj))
+        } else {
+            None
         }
     }
 

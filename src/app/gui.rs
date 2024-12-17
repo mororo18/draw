@@ -15,6 +15,7 @@ use super::{GuiAction, ImgFileFormat};
 
 use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
 use crate::renderer::scene::{Texture, TextureMap};
+use crate::renderer::scene::ObjectInfo;
 use crate::renderer::linalg::Vec2;
 
 #[derive(Default)]
@@ -34,12 +35,19 @@ struct Gui {
 
     hide_native_cursor: bool,
     current_mouse_cursor: Option<ig::MouseCursor>,
+
+    objects_list: Vec<ObjectInfo>,
 }
 
 impl Gui {
 
     pub
     const FONT_SIZE: f32 = 14.0;
+
+    pub
+    fn add_obj(&mut self, obj_info: ObjectInfo) {
+        self.objects_list.push(obj_info);
+    }
 
     pub
     fn update_display_size (&mut self, width: usize, height: usize) {
@@ -125,6 +133,8 @@ impl Gui {
 
             hide_native_cursor: false,
             current_mouse_cursor: None,
+
+            objects_list: vec![],
         }
     }
 
@@ -165,7 +175,7 @@ impl Gui {
         }
     }
 
-    fn process_events (&mut self, events: &Vec<Event>) {
+    fn process_events (&mut self, events: &[Event]) {
         let io = self.io();
         for event in events.iter() {
             match event {
@@ -264,7 +274,7 @@ impl Gui {
     }
 
     pub
-    fn new_frame (&mut self, win: &mut Window, events: &Vec<Event>, delta_time: std::time::Duration) {
+    fn new_frame (&mut self, win: &mut Window, events: &[Event], delta_time: std::time::Duration) {
         let io = self.io();
         io.update_delta_time(delta_time);
 
@@ -286,7 +296,6 @@ impl Gui {
 
                     // File Menu 
                     if let Some(_file_menu) = ui.begin_menu("File") {
-                        //ui.menu_item_config("(dummy_menu)").enabled(false).build();
 
                         if ui.menu_item_config(format!("{} Open", Icon::InsertDriveFile)).shortcut("Ctrl+O").build() {
                             *user_action = Some(GuiAction::Open)
@@ -323,38 +332,39 @@ impl Gui {
 
     }
 
-    fn build_shortcuts_list_window (ui: &mut ig::Ui, width: usize) {
+    fn build_shortcuts_list_window (ui: &mut ig::Ui, windows_visibility: &mut GuiWindowsVisibility, width: usize) {
         ui.window("Shortcuts List")
             .bg_alpha(0.4)
             .movable(true)
             .resizable(false)
             .position([width as f32 - 5., 25.0], ig::Condition::FirstUseEver)
             .position_pivot([1.0, 0.0])
+            .opened(&mut windows_visibility.shortcuts)
             .build(|| {
                 ui.text("(F5)  Toggle Camera Visualisation");
                 ui.text("(F11) Toggle Fullscreen");
             });
     }
 
-    fn build_models_list_window (ui: &mut ig::Ui, width: usize) {
+    fn build_models_list_window (ui: &mut ig::Ui, windows_visibility: &mut GuiWindowsVisibility) {
         ui.window("Models List")
             .bg_alpha(0.4)
             .movable(true)
             .resizable(false)
             .position([4., 25.0], ig::Condition::FirstUseEver)
-            //.position_pivot([1.0, 0.0])
+            .opened(&mut windows_visibility.models)
             .build(|| {
                 ui.text("Models list here..");
             });
     }
 
-    fn build_windows (ui: &mut ig::Ui, width: usize, windows_visibility: &GuiWindowsVisibility) {
+    fn build_windows (ui: &mut ig::Ui, width: usize, windows_visibility: &mut GuiWindowsVisibility) {
         if windows_visibility.shortcuts {
-            Self::build_shortcuts_list_window(ui, width);
+            Self::build_shortcuts_list_window(ui, windows_visibility, width);
         }
 
         if windows_visibility.models {
-            Self::build_models_list_window(ui, width);
+            Self::build_models_list_window(ui, windows_visibility);
         }
     }
 
@@ -364,7 +374,7 @@ impl Gui {
 
         Self::build_top_menu(ui, self.width, &mut self.windows_visibility, user_action);
 
-        Self::build_windows(ui, self.width, &self.windows_visibility);
+        Self::build_windows(ui, self.width, &mut self.windows_visibility);
 
         //ui.show_metrics_window(&mut true);
 

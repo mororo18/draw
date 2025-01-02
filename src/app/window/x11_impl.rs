@@ -8,6 +8,7 @@
 use std::alloc::{alloc_zeroed, Layout};
 use std::mem::MaybeUninit;
 use std::os::raw::*;
+use x11::keysym::*;
 use x11::xinput2;
 use x11::xlib;
 
@@ -18,9 +19,6 @@ pub struct X11Info {
     pixel_bytes: usize,
 
     display: *mut xlib::Display,
-    root: c_long,
-    screen: c_int,
-    screen_bit_depth: c_int,
     visinfo: xlib::XVisualInfo,
 
     window: xlib::Window,
@@ -53,11 +51,6 @@ pub struct X11Window {
 
 impl super::Window for X11Window {
     fn new(width: usize, height: usize) -> Self {
-        assert!(
-            env!("XDG_SESSION_TYPE") == "x11",
-            "Wayland is not supported."
-        );
-
         let min_width = width as i32;
         let min_height = height as i32;
         let max_width = 0;
@@ -267,11 +260,12 @@ impl super::Window for X11Window {
         }
 
         Self {
-            width: width,
+            width,
+            height,
+
             min_width: min_width as _,
             max_width: max_width as _,
 
-            height: height,
             min_height: min_height as _,
             max_height: max_height as _,
 
@@ -282,20 +276,17 @@ impl super::Window for X11Window {
                 pixel_bits: pixel_bits as _,
                 pixel_bytes: pixel_bytes as _,
 
-                display: display,
-                root: root as _,
-                screen: default_screen,
-                screen_bit_depth: screen_bit_depth,
-                visinfo: visinfo,
+                display,
+                visinfo,
 
-                window: window,
-                window_attr: window_attr,
-                window_buffer: window_buffer,
+                window,
+                window_attr,
+                window_buffer,
                 window_buffer_size: window_buffer_size as _,
-                mem: mem,
+                mem,
 
-                default_gc: default_gc,
-                wm_delete_window: wm_delete_window,
+                default_gc,
+                wm_delete_window,
             },
 
             just_warped_pointer: false,
@@ -472,12 +463,12 @@ impl super::Window for X11Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym(&mut e as *mut _, 0) as u32 };
 
-                    match super::Key::from_keysym(keysym) {
+                    match From::from(keysym) {
                         super::Key::F11 => self.toggle_fullscreen(),
                         _ => {}
                     };
 
-                    events.push(super::Event::KeyPress(super::Key::from_keysym(keysym)));
+                    events.push(super::Event::KeyPress(From::from(keysym)));
                 }
 
                 xlib::KeyRelease => {
@@ -485,7 +476,7 @@ impl super::Window for X11Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym(&mut e as *mut _, 0) as u32 };
 
-                    events.push(super::Event::KeyRelease(super::Key::from_keysym(keysym)));
+                    events.push(super::Event::KeyRelease(From::from(keysym)));
                 }
 
                 xlib::MotionNotify => {
@@ -598,10 +589,10 @@ impl super::Window for X11Window {
                 ev.format = 32;
                 ev.window = self.x11.window;
                 ev.message_type = wm_state;
-                ev.data.as_longs_mut()[0] = 2 as i64; // _NET_WM_STATE_TOGGLE 2 according to spec
+                ev.data.as_longs_mut()[0] = 2; // _NET_WM_STATE_TOGGLE 2 according to spec
                 ev.data.as_longs_mut()[1] = fullscreen as i64;
                 ev.data.as_longs_mut()[2] = 0;
-                ev.data.as_longs_mut()[3] = 1 as i64;
+                ev.data.as_longs_mut()[3] = 1;
 
                 let _ = xlib::XSendEvent(
                     self.x11.display,
@@ -693,4 +684,120 @@ impl super::Window for X11Window {
 
     //pub
     //fn get_pitch(&self) -> usize {self.width * self.pixel_bytes}
+}
+
+#[allow(non_snake_case, non_upper_case_globals)]
+impl std::convert::From<u32> for super::Key {
+    fn from(keysym: u32) -> super::Key {
+        match keysym {
+            XK_Tab => super::Key::Tab,
+            XK_Left => super::Key::LeftArrow,
+            XK_Right => super::Key::RightArrow,
+            XK_Up => super::Key::UpArrow,
+            XK_Down => super::Key::DownArrow,
+            XK_Prior => super::Key::PageUp,
+            XK_Next => super::Key::PageDown,
+            XK_Home => super::Key::Home,
+            XK_End => super::Key::End,
+            XK_Insert => super::Key::Insert,
+            XK_Delete => super::Key::Delete,
+            XK_BackSpace => super::Key::Backspace,
+            XK_space => super::Key::Space,
+            XK_Return => super::Key::Enter,
+            XK_Escape => super::Key::Escape,
+            XK_quoteright => super::Key::Apostrophe,
+            XK_comma => super::Key::Comma,
+            XK_minus => super::Key::Minus,
+            XK_period => super::Key::Period,
+            XK_slash => super::Key::Slash,
+            XK_semicolon => super::Key::Semicolon,
+            XK_equal => super::Key::Equal,
+            XK_bracketleft => super::Key::LeftBracket,
+            XK_backslash => super::Key::Backslash,
+            XK_bracketright => super::Key::RightBracket,
+            XK_quoteleft => super::Key::GraveAccent,
+            XK_Caps_Lock => super::Key::CapsLock,
+            XK_Scroll_Lock => super::Key::ScrollLock,
+            XK_Num_Lock => super::Key::NumLock,
+            XK_Print => super::Key::PrintScreen,
+            XK_Pause => super::Key::Pause,
+            XK_KP_0 => super::Key::Keypad0,
+            XK_KP_1 => super::Key::Keypad1,
+            XK_KP_2 => super::Key::Keypad2,
+            XK_KP_3 => super::Key::Keypad3,
+            XK_KP_4 => super::Key::Keypad4,
+            XK_KP_5 => super::Key::Keypad5,
+            XK_KP_6 => super::Key::Keypad6,
+            XK_KP_7 => super::Key::Keypad7,
+            XK_KP_8 => super::Key::Keypad8,
+            XK_KP_9 => super::Key::Keypad9,
+            XK_KP_Decimal => super::Key::KeypadDecimal,
+            XK_KP_Divide => super::Key::KeypadDivide,
+            XK_KP_Multiply => super::Key::KeypadMultiply,
+            XK_KP_Subtract => super::Key::KeypadSubtract,
+            XK_KP_Add => super::Key::KeypadAdd,
+            XK_KP_Enter => super::Key::KeypadEnter,
+            XK_KP_Equal => super::Key::KeypadEqual,
+            XK_Control_L => super::Key::LeftCtrl,
+            XK_Shift_L => super::Key::LeftShift,
+            XK_Alt_L => super::Key::LeftAlt,
+            XK_Super_L => super::Key::LeftSuper,
+            XK_Control_R => super::Key::RightCtrl,
+            XK_Shift_R => super::Key::RightShift,
+            XK_Alt_R => super::Key::RightAlt,
+            XK_Super_R => super::Key::RightSuper,
+            XK_Menu => super::Key::Menu,
+            XK_0 => super::Key::Num0,
+            XK_1 => super::Key::Num1,
+            XK_2 => super::Key::Num2,
+            XK_3 => super::Key::Num3,
+            XK_4 => super::Key::Num4,
+            XK_5 => super::Key::Num5,
+            XK_6 => super::Key::Num6,
+            XK_7 => super::Key::Num7,
+            XK_8 => super::Key::Num8,
+            XK_9 => super::Key::Num9,
+            XK_a => super::Key::A,
+            XK_b => super::Key::B,
+            XK_c => super::Key::C,
+            XK_d => super::Key::D,
+            XK_e => super::Key::E,
+            XK_f => super::Key::F,
+            XK_g => super::Key::G,
+            XK_h => super::Key::H,
+            XK_i => super::Key::I,
+            XK_j => super::Key::J,
+            XK_k => super::Key::K,
+            XK_l => super::Key::L,
+            XK_m => super::Key::M,
+            XK_n => super::Key::N,
+            XK_o => super::Key::O,
+            XK_p => super::Key::P,
+            XK_q => super::Key::Q,
+            XK_r => super::Key::R,
+            XK_s => super::Key::S,
+            XK_t => super::Key::T,
+            XK_u => super::Key::U,
+            XK_v => super::Key::V,
+            XK_w => super::Key::W,
+            XK_x => super::Key::X,
+            XK_y => super::Key::Y,
+            XK_z => super::Key::Z,
+            XK_F1 => super::Key::F1,
+            XK_F2 => super::Key::F2,
+            XK_F3 => super::Key::F3,
+            XK_F4 => super::Key::F4,
+            XK_F5 => super::Key::F5,
+            XK_F6 => super::Key::F6,
+            XK_F7 => super::Key::F7,
+            XK_F8 => super::Key::F8,
+            XK_F9 => super::Key::F9,
+            XK_F10 => super::Key::F10,
+            XK_F11 => super::Key::F11,
+            XK_F12 => super::Key::F12,
+            XF86XK_Back => super::Key::AppBack,
+            XF86XK_Forward => super::Key::AppForward,
+            _ => super::Key::Unknown,
+        }
+    }
 }

@@ -2,19 +2,22 @@
 name = "draw"
 version = "0.1.0"
 edition = "2021"
-links = "X11"
 build = "build.rs"
 
 [dependencies]
 font-awesome = "0.2.0"
-imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"} # https://github.com/imgui-rs/imgui-rs/pull/779
+imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"}
 itertools = "0.13.0"
 material-icons = "0.2.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 rfd = "0.15.0"
 stb = { git = "https://github.com/mororo18/stb.git", branch = "fix-ubuntu-24.10-build" }
-#stb = version = "0.3.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tempfile = "3.14.0"
+wayland-client = "0.31.7"
+wayland-protocols = { version = "0.32.5", features = ["client"] }
 x11 = { git = "https://github.com/mororo18/x11-rs.git" }
 
 [rust]

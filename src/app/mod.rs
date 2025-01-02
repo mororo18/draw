@@ -40,6 +40,7 @@ const CAMERA_DOWNWARDS: u8 = 32;
 
 pub struct Application {
     gui: Gui,
+    #[cfg(x11_impl)]
     win: X11Window,
     scene: Scene,
     canvas: Canvas,

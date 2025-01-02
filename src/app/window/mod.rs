@@ -1,11 +1,14 @@
+#[cfg(wayland_impl)]
+mod wayland_impl;
+#[cfg(x11_impl)]
 mod x11_impl;
 
+#[cfg(x11_impl)]
 pub use x11_impl::X11Window;
-use x11::keysym::*;
 
 pub trait Window {
-    fn handle(&mut self) -> Vec<super::Event>;
     fn new(width: usize, height: usize) -> Self;
+    fn handle(&mut self) -> Vec<super::Event>;
     fn hide_mouse_cursor(&mut self);
     fn show_mouse_cursor(&mut self);
     fn toggle_fullscreen(&mut self);
@@ -128,124 +131,7 @@ pub enum Key {
     AppBack,
     AppForward,
     Unknown,
-
     //Sym((u32, u32)),
-}
-
-#[allow(non_upper_case_globals)]
-impl Key {
-    pub fn from_keysym(keysym: u32) -> Self {
-        match keysym {
-            XK_Tab => Key::Tab,
-            XK_Left => Key::LeftArrow,
-            XK_Right => Key::RightArrow,
-            XK_Up => Key::UpArrow,
-            XK_Down => Key::DownArrow,
-            XK_Prior => Key::PageUp,
-            XK_Next => Key::PageDown,
-            XK_Home => Key::Home,
-            XK_End => Key::End,
-            XK_Insert => Key::Insert,
-            XK_Delete => Key::Delete,
-            XK_BackSpace => Key::Backspace,
-            XK_space => Key::Space,
-            XK_Return => Key::Enter,
-            XK_Escape => Key::Escape,
-            XK_quoteright => Key::Apostrophe,
-            XK_comma => Key::Comma,
-            XK_minus => Key::Minus,
-            XK_period => Key::Period,
-            XK_slash => Key::Slash,
-            XK_semicolon => Key::Semicolon,
-            XK_equal => Key::Equal,
-            XK_bracketleft => Key::LeftBracket,
-            XK_backslash => Key::Backslash,
-            XK_bracketright => Key::RightBracket,
-            XK_quoteleft => Key::GraveAccent,
-            XK_Caps_Lock => Key::CapsLock,
-            XK_Scroll_Lock => Key::ScrollLock,
-            XK_Num_Lock => Key::NumLock,
-            XK_Print => Key::PrintScreen,
-            XK_Pause => Key::Pause,
-            XK_KP_0 => Key::Keypad0,
-            XK_KP_1 => Key::Keypad1,
-            XK_KP_2 => Key::Keypad2,
-            XK_KP_3 => Key::Keypad3,
-            XK_KP_4 => Key::Keypad4,
-            XK_KP_5 => Key::Keypad5,
-            XK_KP_6 => Key::Keypad6,
-            XK_KP_7 => Key::Keypad7,
-            XK_KP_8 => Key::Keypad8,
-            XK_KP_9 => Key::Keypad9,
-            XK_KP_Decimal => Key::KeypadDecimal,
-            XK_KP_Divide => Key::KeypadDivide,
-            XK_KP_Multiply => Key::KeypadMultiply,
-            XK_KP_Subtract => Key::KeypadSubtract,
-            XK_KP_Add => Key::KeypadAdd,
-            XK_KP_Enter => Key::KeypadEnter,
-            XK_KP_Equal => Key::KeypadEqual,
-            XK_Control_L => Key::LeftCtrl,
-            XK_Shift_L => Key::LeftShift,
-            XK_Alt_L => Key::LeftAlt,
-            XK_Super_L => Key::LeftSuper,
-            XK_Control_R => Key::RightCtrl,
-            XK_Shift_R => Key::RightShift,
-            XK_Alt_R => Key::RightAlt,
-            XK_Super_R => Key::RightSuper,
-            XK_Menu => Key::Menu,
-            XK_0 => Key::Num0,
-            XK_1 => Key::Num1,
-            XK_2 => Key::Num2,
-            XK_3 => Key::Num3,
-            XK_4 => Key::Num4,
-            XK_5 => Key::Num5,
-            XK_6 => Key::Num6,
-            XK_7 => Key::Num7,
-            XK_8 => Key::Num8,
-            XK_9 => Key::Num9,
-            XK_a => Key::A,
-            XK_b => Key::B,
-            XK_c => Key::C,
-            XK_d => Key::D,
-            XK_e => Key::E,
-            XK_f => Key::F,
-            XK_g => Key::G,
-            XK_h => Key::H,
-            XK_i => Key::I,
-            XK_j => Key::J,
-            XK_k => Key::K,
-            XK_l => Key::L,
-            XK_m => Key::M,
-            XK_n => Key::N,
-            XK_o => Key::O,
-            XK_p => Key::P,
-            XK_q => Key::Q,
-            XK_r => Key::R,
-            XK_s => Key::S,
-            XK_t => Key::T,
-            XK_u => Key::U,
-            XK_v => Key::V,
-            XK_w => Key::W,
-            XK_x => Key::X,
-            XK_y => Key::Y,
-            XK_z => Key::Z,
-            XK_F1 => Key::F1,
-            XK_F2 => Key::F2,
-            XK_F3 => Key::F3,
-            XK_F4 => Key::F4,
-            XK_F5 => Key::F5,
-            XK_F6 => Key::F6,
-            XK_F7 => Key::F7,
-            XK_F8 => Key::F8,
-            XK_F9 => Key::F9,
-            XK_F10 => Key::F10,
-            XK_F11 => Key::F11,
-            XK_F12 => Key::F12,
-            XF86XK_Back => Key::AppBack,
-            XF86XK_Forward => Key::AppForward,
-            _ => Key::Unknown,
-        }
-    }
 }
 
 #[derive(PartialEq)]

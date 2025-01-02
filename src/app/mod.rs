@@ -54,8 +54,8 @@ pub struct Application {
     camera_moving_direction: u8,
 }
 
-impl Application {
-    pub fn new() -> Self {
+impl Default for Application {
+    fn default() -> Self {
         let width = 800;
         let height = 600;
 
@@ -74,7 +74,9 @@ impl Application {
             camera_moving_direction: 0,
         }
     }
+}
 
+impl Application {
     pub fn run(&mut self) {
         let (screen_width, screen_height) = self.win.get_screen_dim();
         self.canvas.init_depth(100000.0);

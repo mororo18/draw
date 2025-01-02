@@ -9,7 +9,7 @@ use crate::renderer::scene::{Object, ObjectInfo, Scene};
 
 use gui::*;
 
-use window::{Event, Key, Window};
+use window::{Event, Key, Window, X11Window};
 
 //struct AppState();
 
@@ -40,7 +40,7 @@ const CAMERA_DOWNWARDS: u8 = 32;
 
 pub struct Application {
     gui: Gui,
-    win: Window,
+    win: X11Window,
     scene: Scene,
     canvas: Canvas,
 
@@ -59,7 +59,7 @@ impl Application {
         let width = 800;
         let height = 600;
 
-        let win = Window::new(width, height);
+        let win: X11Window = Window::new(width, height);
         let (screen_width, screen_height) = win.get_screen_dim();
 
         Self {

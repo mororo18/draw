@@ -128,7 +128,7 @@ impl Gui {
         self.imgui.io_mut()
     }
 
-    fn update_mouse_cursor(&mut self, win: &mut Window) {
+    fn update_mouse_cursor(&mut self, win: &mut impl Window) {
         if self.hide_native_cursor != self.io().mouse_draw_cursor {
             self.hide_native_cursor = self.io().mouse_draw_cursor;
 
@@ -258,7 +258,7 @@ impl Gui {
 
     pub fn new_frame(
         &mut self,
-        win: &mut Window,
+        win: &mut impl Window,
         events: &[Event],
         delta_time: std::time::Duration,
     ) {

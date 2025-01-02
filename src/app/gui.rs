@@ -1,32 +1,25 @@
-use imgui as ig;
 use font_awesome as fa;
+use imgui as ig;
 use material_icons as mi;
 use material_icons::Icon;
 
-use super::window::{
-    Window,
-    Event,
-    Key,
-    Button,
-    MouseCursor,
-};
+use super::window::{Button, Event, Key, MouseCursor, Window};
 
 use super::{GuiAction, ImgFileFormat};
 
-use crate::renderer::canvas::{Canvas, VertexSimpleAttributes, Color, Rectangle};
-use crate::renderer::scene::{Texture, TextureMap};
-use crate::renderer::scene::ObjectInfo;
+use crate::renderer::canvas::{Canvas, Color, Rectangle, VertexSimpleAttributes};
 use crate::renderer::linalg::Vec2;
+use crate::renderer::scene::ObjectInfo;
+use crate::renderer::scene::{Texture, TextureMap};
 
 #[derive(Default)]
 struct GuiWindowsVisibility {
-    models:     bool,
-    shortcuts:  bool,
+    models: bool,
+    shortcuts: bool,
 }
 
-pub
-struct Gui {
-    imgui:  ig::Context,
+pub struct Gui {
+    imgui: ig::Context,
     width: usize,
     height: usize,
     font_texture: Texture,
@@ -40,32 +33,27 @@ struct Gui {
 }
 
 impl Gui {
+    pub const FONT_SIZE: f32 = 14.0;
 
-    pub
-    const FONT_SIZE: f32 = 14.0;
-
-    pub
-    fn add_obj(&mut self, obj_info: ObjectInfo) {
+    pub fn add_obj(&mut self, obj_info: ObjectInfo) {
         self.objects_list.push(obj_info);
     }
 
-    pub
-    fn update_display_size (&mut self, width: usize, height: usize) {
+    pub fn update_display_size(&mut self, width: usize, height: usize) {
         self.width = width;
         self.height = height;
         self.io().display_size = [width as f32, height as f32];
     }
 
-    pub
-    fn new (width: usize, height: usize) -> Self {
-        let mut imgui =  ig::Context::create();
+    pub fn new(width: usize, height: usize) -> Self {
+        let mut imgui = ig::Context::create();
         let io = imgui.io_mut();
         io.display_size = [width as f32, height as f32];
         io.display_framebuffer_scale = [1.0, 1.0];
 
         imgui.style_mut().use_classic_colors();
 
-        let font_atlas = imgui.fonts(); 
+        let font_atlas = imgui.fonts();
 
         font_atlas.add_font(&[
             ig::FontSource::DefaultFontData {
@@ -90,7 +78,7 @@ impl Gui {
                     glyph_ranges: ig::FontGlyphRanges::from_slice(&[
                         fa::MINIMUM_CODEPOINT as _,
                         fa::MAXIMUM_CODEPOINT as _,
-                        0
+                        0,
                     ]),
                     ..ig::FontConfig::default()
                 }),
@@ -101,23 +89,21 @@ impl Gui {
 
         /*
         stb::image_write::stbi_write_png(
-            unsafe{ std::ffi::CStr::from_ptr(c"textura-font.png".as_ptr()) }, 
+            unsafe{ std::ffi::CStr::from_ptr(c"textura-font.png".as_ptr()) },
             font_atlas_texture.width  as _,
             font_atlas_texture.height as _,
-            4, 
+            4,
             font_atlas_texture.data,
             (font_atlas_texture.width * 4) as _,
         );
         */
 
-        let f_texture =  Texture::with_diffuse_map(
-            TextureMap::new(
-                font_atlas_texture.data.to_vec(),
-                font_atlas_texture.width  as _,
-                font_atlas_texture.height as _,
-                4,
-            )
-        );
+        let f_texture = Texture::with_diffuse_map(TextureMap::new(
+            font_atlas_texture.data.to_vec(),
+            font_atlas_texture.width as _,
+            font_atlas_texture.height as _,
+            4,
+        ));
 
         assert!(font_atlas.is_built());
 
@@ -143,7 +129,6 @@ impl Gui {
     }
 
     fn update_mouse_cursor(&mut self, win: &mut Window) {
-
         if self.hide_native_cursor != self.io().mouse_draw_cursor {
             self.hide_native_cursor = self.io().mouse_draw_cursor;
 
@@ -159,14 +144,14 @@ impl Gui {
 
             if let Some(cursor) = self.current_mouse_cursor {
                 let native_cursor = match cursor {
-                    ig::MouseCursor::Arrow      => MouseCursor::Arrow,
-                    ig::MouseCursor::TextInput  => MouseCursor::TextInput,
-                    ig::MouseCursor::ResizeAll  => MouseCursor::ResizeAll,
-                    ig::MouseCursor::ResizeNS   => MouseCursor::ResizeNS,
-                    ig::MouseCursor::ResizeEW   => MouseCursor::ResizeEW,
+                    ig::MouseCursor::Arrow => MouseCursor::Arrow,
+                    ig::MouseCursor::TextInput => MouseCursor::TextInput,
+                    ig::MouseCursor::ResizeAll => MouseCursor::ResizeAll,
+                    ig::MouseCursor::ResizeNS => MouseCursor::ResizeNS,
+                    ig::MouseCursor::ResizeEW => MouseCursor::ResizeEW,
                     ig::MouseCursor::ResizeNESW => MouseCursor::ResizeNESW,
                     ig::MouseCursor::ResizeNWSE => MouseCursor::ResizeNWSE,
-                    ig::MouseCursor::Hand       => MouseCursor::Hand,
+                    ig::MouseCursor::Hand => MouseCursor::Hand,
                     ig::MouseCursor::NotAllowed => MouseCursor::NotAllowed,
                 };
 
@@ -175,45 +160,43 @@ impl Gui {
         }
     }
 
-    fn process_events (&mut self, events: &[Event]) {
+    fn process_events(&mut self, events: &[Event]) {
         let io = self.io();
         for event in events.iter() {
             match event {
                 Event::MouseMotion(mouse_info) => {
                     io.mouse_pos = [mouse_info.x as f32, mouse_info.y as f32];
-                },
+                }
 
-                Event::ButtonPress(button_event) => {
-                    match button_event {
-                        Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
-                            let idx = match button_event {
-                                Button::MouseLeft   => 0,
-                                Button::MouseRight  => 1,
-                                Button::MouseMiddle => 2,
-                                _ => unreachable!(),
-                            };
-                            io.mouse_down[idx] = true;
-                        },
-                        Button::WheelUp   => { io.mouse_wheel += 1.0; },
-                        Button::WheelDown => { io.mouse_wheel -= 1.0; },
+                Event::ButtonPress(button_event) => match button_event {
+                    Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
+                        let idx = match button_event {
+                            Button::MouseLeft => 0,
+                            Button::MouseRight => 1,
+                            Button::MouseMiddle => 2,
+                            _ => unreachable!(),
+                        };
+                        io.mouse_down[idx] = true;
+                    }
+                    Button::WheelUp => {
+                        io.mouse_wheel += 1.0;
+                    }
+                    Button::WheelDown => {
+                        io.mouse_wheel -= 1.0;
                     }
                 },
 
-                Event::ButtonRelease(button_event) => {
-
-                    match button_event {
-                        Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
-                            let idx = match button_event {
-                                Button::MouseLeft   => 0,
-                                Button::MouseRight  => 1,
-                                Button::MouseMiddle => 2,
-                                _ => unreachable!(),
-                            };
-                            io.mouse_down[idx] = false;
-                        },
-                        Button::WheelUp | Button::WheelDown => {},
+                Event::ButtonRelease(button_event) => match button_event {
+                    Button::MouseLeft | Button::MouseRight | Button::MouseMiddle => {
+                        let idx = match button_event {
+                            Button::MouseLeft => 0,
+                            Button::MouseRight => 1,
+                            Button::MouseMiddle => 2,
+                            _ => unreachable!(),
+                        };
+                        io.mouse_down[idx] = false;
                     }
-
+                    Button::WheelUp | Button::WheelDown => {}
                 },
 
                 Event::KeyPress(key) => {
@@ -240,7 +223,7 @@ impl Gui {
 
                     }
                     */
-                },
+                }
 
                 Event::KeyRelease(key) => {
                     if let Some(ig_key) = Self::key_to_imgui_key(key) {
@@ -266,15 +249,19 @@ impl Gui {
                         Key::Code(keycode) => {},
                     }
                     */
-                },
+                }
 
-                _ => {},
+                _ => {}
             }
         }
     }
 
-    pub
-    fn new_frame (&mut self, win: &mut Window, events: &[Event], delta_time: std::time::Duration) {
+    pub fn new_frame(
+        &mut self,
+        win: &mut Window,
+        events: &[Event],
+        delta_time: std::time::Duration,
+    ) {
         let io = self.io();
         io.update_delta_time(delta_time);
 
@@ -283,7 +270,12 @@ impl Gui {
         self.update_mouse_cursor(win);
     }
 
-    fn build_top_menu (ui: &mut ig::Ui, width: usize, windows_visibility: &mut GuiWindowsVisibility, user_action: &mut Option<GuiAction>) {
+    fn build_top_menu(
+        ui: &mut ig::Ui,
+        width: usize,
+        windows_visibility: &mut GuiWindowsVisibility,
+        user_action: &mut Option<GuiAction>,
+    ) {
         ui.window("top_menu")
             .no_decoration()
             .draw_background(false)
@@ -293,46 +285,55 @@ impl Gui {
             .menu_bar(true)
             .build(|| {
                 if let Some(_menu_bar) = ui.begin_menu_bar() {
-
-                    // File Menu 
+                    // File Menu
                     if let Some(_file_menu) = ui.begin_menu("File") {
-
-                        if ui.menu_item_config(format!("{} Open", Icon::InsertDriveFile)).shortcut("Ctrl+O").build() {
+                        if ui
+                            .menu_item_config(format!("{} Open", Icon::InsertDriveFile))
+                            .shortcut("Ctrl+O")
+                            .build()
+                        {
                             *user_action = Some(GuiAction::Open)
                         }
 
-                        if let Some(_file_export_menu) = ui.begin_menu(format!("{} Export as", Icon::Image)) {
+                        if let Some(_file_export_menu) =
+                            ui.begin_menu(format!("{} Export as", Icon::Image))
+                        {
                             if ui.menu_item("JPEG") {
-                                *user_action = Some(
-                                    GuiAction::ExportAs(ImgFileFormat::Jpeg)
-                                );
+                                *user_action = Some(GuiAction::ExportAs(ImgFileFormat::Jpeg));
                             }
 
                             if ui.menu_item("PNG") {
-                                *user_action = Some(
-                                    GuiAction::ExportAs(ImgFileFormat::Png)
-                                );
+                                *user_action = Some(GuiAction::ExportAs(ImgFileFormat::Png));
                             }
                         }
                     }
-                    
-                    // Windows Menu 
+
+                    // Windows Menu
                     if let Some(_file_menu) = ui.begin_menu("Windows") {
-                        if ui.menu_item_config("Models")
-                            .selected(windows_visibility.models).build() {
-                            windows_visibility.models = !windows_visibility.models; 
+                        if ui
+                            .menu_item_config("Models")
+                            .selected(windows_visibility.models)
+                            .build()
+                        {
+                            windows_visibility.models = !windows_visibility.models;
                         }
-                        if ui.menu_item_config("Shortcuts")
-                            .selected(windows_visibility.shortcuts).build() {
-                            windows_visibility.shortcuts = !windows_visibility.shortcuts; 
+                        if ui
+                            .menu_item_config("Shortcuts")
+                            .selected(windows_visibility.shortcuts)
+                            .build()
+                        {
+                            windows_visibility.shortcuts = !windows_visibility.shortcuts;
                         }
                     }
                 }
             });
-
     }
 
-    fn build_shortcuts_list_window (ui: &mut ig::Ui, windows_visibility: &mut GuiWindowsVisibility, width: usize) {
+    fn build_shortcuts_list_window(
+        ui: &mut ig::Ui,
+        windows_visibility: &mut GuiWindowsVisibility,
+        width: usize,
+    ) {
         ui.window("Shortcuts List")
             .bg_alpha(0.4)
             .movable(true)
@@ -346,7 +347,7 @@ impl Gui {
             });
     }
 
-    fn build_models_list_window (ui: &mut ig::Ui, windows_visibility: &mut GuiWindowsVisibility) {
+    fn build_models_list_window(ui: &mut ig::Ui, windows_visibility: &mut GuiWindowsVisibility) {
         ui.window("Models List")
             .bg_alpha(0.4)
             .movable(true)
@@ -358,7 +359,7 @@ impl Gui {
             });
     }
 
-    fn build_windows (ui: &mut ig::Ui, width: usize, windows_visibility: &mut GuiWindowsVisibility) {
+    fn build_windows(ui: &mut ig::Ui, width: usize, windows_visibility: &mut GuiWindowsVisibility) {
         if windows_visibility.shortcuts {
             Self::build_shortcuts_list_window(ui, windows_visibility, width);
         }
@@ -368,8 +369,7 @@ impl Gui {
         }
     }
 
-    pub
-    fn build_ui (&mut self, user_action: &mut Option<GuiAction>) {
+    pub fn build_ui(&mut self, user_action: &mut Option<GuiAction>) {
         let ui = self.imgui.new_frame();
 
         Self::build_top_menu(ui, self.width, &mut self.windows_visibility, user_action);
@@ -377,29 +377,22 @@ impl Gui {
         Self::build_windows(ui, self.width, &mut self.windows_visibility);
 
         //ui.show_metrics_window(&mut true);
-
     }
 
-    pub
-    fn render(&mut self, canvas: &mut Canvas) {
-
+    pub fn render(&mut self, canvas: &mut Canvas) {
         canvas.disable_depth_update();
 
         let draw_data = self.imgui.render();
 
-        let invert_y = |y: f32| -> f32 {
-            self.height as f32 - 1.0 - y
-        };
+        let invert_y = |y: f32| -> f32 { self.height as f32 - 1.0 - y };
 
         for draw_list in draw_data.draw_lists() {
-
             let idx_buffer = draw_list.idx_buffer();
             let vtx_buffer = draw_list.vtx_buffer();
 
             for draw_cmd in draw_list.commands() {
-
                 match draw_cmd {
-                    ig::DrawCmd::Elements { count, cmd_params }  => {
+                    ig::DrawCmd::Elements { count, cmd_params } => {
                         let mut clip_rect: [f32; 4] = cmd_params.clip_rect;
                         let texture_id: usize = cmd_params.texture_id.id();
                         let vtx_offset: usize = cmd_params.vtx_offset;
@@ -412,13 +405,15 @@ impl Gui {
                         dbg!(idx_offset);
                         */
 
-                        if clip_rect[0] > clip_rect[2] || clip_rect[1] > clip_rect[3] { continue }
+                        if clip_rect[0] > clip_rect[2] || clip_rect[1] > clip_rect[3] {
+                            continue;
+                        }
 
                         // invert the y
                         clip_rect[1] = self.height as f32 - clip_rect[1];
                         clip_rect[3] = self.height as f32 - clip_rect[3];
 
-                        let idx_buff_slice = &idx_buffer[idx_offset..idx_offset+count];
+                        let idx_buff_slice = &idx_buffer[idx_offset..idx_offset + count];
                         for indexed_tri in idx_buff_slice.chunks_exact(3) {
                             let a_idx = indexed_tri[0] as usize + vtx_offset;
                             let b_idx = indexed_tri[1] as usize + vtx_offset;
@@ -426,49 +421,48 @@ impl Gui {
 
                             let a_vtx = VertexSimpleAttributes {
                                 screen_coord: Vec2::new(
-                                              vtx_buffer[a_idx].pos[0], 
-                                    invert_y( vtx_buffer[a_idx].pos[1]),
+                                    vtx_buffer[a_idx].pos[0],
+                                    invert_y(vtx_buffer[a_idx].pos[1]),
                                 ),
                                 color: Color::Custom(
-                                    vtx_buffer[a_idx].col[..3].try_into().unwrap()
+                                    vtx_buffer[a_idx].col[..3].try_into().unwrap(),
                                 ),
                                 texture_coord: Vec2::new(
-                                    vtx_buffer[a_idx].uv[0], 
-                                    1.0 - vtx_buffer[a_idx].uv[1]
+                                    vtx_buffer[a_idx].uv[0],
+                                    1.0 - vtx_buffer[a_idx].uv[1],
                                 ),
                                 alpha: vtx_buffer[a_idx].col[3] as f32 / 255.0,
                             };
 
                             let b_vtx = VertexSimpleAttributes {
                                 screen_coord: Vec2::new(
-                                              vtx_buffer[b_idx].pos[0], 
-                                    invert_y( vtx_buffer[b_idx].pos[1]),
+                                    vtx_buffer[b_idx].pos[0],
+                                    invert_y(vtx_buffer[b_idx].pos[1]),
                                 ),
                                 color: Color::Custom(
-                                    vtx_buffer[b_idx].col[..3].try_into().unwrap()
+                                    vtx_buffer[b_idx].col[..3].try_into().unwrap(),
                                 ),
                                 texture_coord: Vec2::new(
-                                    vtx_buffer[b_idx].uv[0], 
-                                    1.0 - vtx_buffer[b_idx].uv[1]
+                                    vtx_buffer[b_idx].uv[0],
+                                    1.0 - vtx_buffer[b_idx].uv[1],
                                 ),
                                 alpha: vtx_buffer[b_idx].col[3] as f32 / 255.0,
                             };
 
                             let c_vtx = VertexSimpleAttributes {
                                 screen_coord: Vec2::new(
-                                              vtx_buffer[c_idx].pos[0], 
-                                    invert_y( vtx_buffer[c_idx].pos[1] ),
+                                    vtx_buffer[c_idx].pos[0],
+                                    invert_y(vtx_buffer[c_idx].pos[1]),
                                 ),
                                 color: Color::Custom(
-                                    vtx_buffer[c_idx].col[..3].try_into().unwrap()
+                                    vtx_buffer[c_idx].col[..3].try_into().unwrap(),
                                 ),
                                 texture_coord: Vec2::new(
-                                    vtx_buffer[c_idx].uv[0], 
-                                    1.0 - vtx_buffer[c_idx].uv[1]
+                                    vtx_buffer[c_idx].uv[0],
+                                    1.0 - vtx_buffer[c_idx].uv[1],
                                 ),
                                 alpha: vtx_buffer[c_idx].col[3] as f32 / 255.0,
                             };
-
 
                             canvas.draw_triangle(
                                 a_vtx,
@@ -480,12 +474,12 @@ impl Gui {
                                     clip_rect[1] as usize,
                                     clip_rect[2] as usize,
                                     clip_rect[3] as usize,
-                                ))
+                                )),
                             );
                         }
-                    },
-                    ig::DrawCmd::ResetRenderState => {},
-                    _ => {},
+                    }
+                    ig::DrawCmd::ResetRenderState => {}
+                    _ => {}
                 }
             }
         }
@@ -601,5 +595,4 @@ impl Gui {
             _ => None,
         }
     }
-
 }

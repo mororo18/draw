@@ -266,7 +266,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
 }
 
 #[derive(Default)]
-struct WaylandWindow {
+pub struct WaylandWindow {
     state: WindowState,
     qh: Option<QueueHandle<WindowState>>,
 }

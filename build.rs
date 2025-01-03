@@ -8,11 +8,9 @@ fn main() {
         match env!("XDG_SESSION_TYPE") {
             "x11" => {
                 println!("cargo::rustc-cfg=x11_impl");
-                println!("cargo::rustc-check-cfg=cfg(x11_impl)");
             }
             "wayland" => {
                 println!("cargo::rustc-cfg=wayland_impl");
-                println!("cargo::rustc-check-cfg=cfg(wayland_impl)");
             }
             _ => {}
         }

@@ -26,3 +26,6 @@ debuginfo-level = 1
 
 [profile.release]
 debug = 1
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(x11_impl)', 'cfg(wayland_impl)'] }

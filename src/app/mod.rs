@@ -1,17 +1,14 @@
 mod gui;
 mod window;
 
+use gui::*;
+use window::{Event, Key, Window, AppWindow};
+
 use rfd::FileDialog;
 use std::ffi::{CStr, CString};
 
 use crate::renderer::canvas::Canvas;
 use crate::renderer::scene::{Object, ObjectInfo, Scene};
-
-use gui::*;
-
-use window::{Event, Key, Window, X11Window};
-
-//struct AppState();
 
 enum CameraNavigation {
     Free,
@@ -40,8 +37,7 @@ const CAMERA_DOWNWARDS: u8 = 32;
 
 pub struct Application {
     gui: Gui,
-    #[cfg(x11_impl)]
-    win: X11Window,
+    win: AppWindow,
     scene: Scene,
     canvas: Canvas,
 
@@ -60,7 +56,7 @@ impl Default for Application {
         let width = 800;
         let height = 600;
 
-        let win: X11Window = Window::new(width, height);
+        let win = AppWindow::new(width, height);
         let (screen_width, screen_height) = win.get_screen_dim();
 
         Self {

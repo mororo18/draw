@@ -5,7 +5,15 @@ mod x11_impl;
 
 #[cfg(x11_impl)]
 pub use x11_impl::X11Window;
+#[cfg(wayland_impl)]
+pub use wayland_impl::WaylandWindow;
 
+#[cfg(x11_impl)]
+pub type AppWindow = X11Window;
+#[cfg(wayland_impl)]
+pub type AppWindow = WaylandWindow;
+
+// TODO: rename this trait to leave 'Window' to the actual 'AppWindow' type
 pub trait Window {
     fn new(width: usize, height: usize) -> Self;
     fn handle(&mut self) -> Vec<super::Event>;
@@ -156,6 +164,7 @@ pub enum MouseCursor {
     NotAllowed,
 }
 
+// TODO: move this to x11_impl.rs
 impl MouseCursor {
     fn as_c_str(self) -> *const i8 {
         match self {

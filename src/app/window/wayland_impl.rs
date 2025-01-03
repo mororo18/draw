@@ -8,10 +8,11 @@ use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_ba
 
 #[derive(Default)]
 struct WindowState {
-    configured: bool,
-    display: Option<wl_display::WlDisplay>,
+    width: i32,
+    height: i32,
+    max_width: i32,
+    max_height: i32,
     compositor: Option<wl_compositor::WlCompositor>,
-
     base_surface: Option<wl_surface::WlSurface>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
@@ -97,7 +98,7 @@ impl Dispatch<wl_shm::WlShm, ()> for WindowState {
 impl Dispatch<wl_surface::WlSurface, ()> for WindowState {
     fn event(
         _: &mut Self,
-        surface: &wl_surface::WlSurface,
+        _: &wl_surface::WlSurface,
         event: wl_surface::Event,
         _: &(),
         _: &Connection,
@@ -114,7 +115,7 @@ impl Dispatch<wl_surface::WlSurface, ()> for WindowState {
 impl Dispatch<wl_shm_pool::WlShmPool, ()> for WindowState {
     fn event(
         _: &mut Self,
-        shm_pool: &wl_shm_pool::WlShmPool,
+        _: &wl_shm_pool::WlShmPool,
         event: wl_shm_pool::Event,
         _: &(),
         _: &Connection,
@@ -131,7 +132,7 @@ impl Dispatch<wl_shm_pool::WlShmPool, ()> for WindowState {
 impl Dispatch<wl_buffer::WlBuffer, ()> for WindowState {
     fn event(
         _: &mut Self,
-        buffer: &wl_buffer::WlBuffer,
+        _: &wl_buffer::WlBuffer,
         event: wl_buffer::Event,
         _: &(),
         _: &Connection,
@@ -148,7 +149,7 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for WindowState {
 impl Dispatch<wl_compositor::WlCompositor, ()> for WindowState {
     fn event(
         _: &mut Self,
-        compositor: &wl_compositor::WlCompositor,
+        _: &wl_compositor::WlCompositor,
         event: wl_compositor::Event,
         _: &(),
         _: &Connection,
@@ -164,14 +165,26 @@ impl Dispatch<wl_compositor::WlCompositor, ()> for WindowState {
 
 impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
     fn event(
-        _: &mut Self,
-        xdg_toplevel: &xdg_toplevel::XdgToplevel,
+        state: &mut Self,
+        _: &xdg_toplevel::XdgToplevel,
         event: xdg_toplevel::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
-        //println!("Recived {} event: {:#?}", xdg_toplevel::XdgToplevel::interface().name, event);
+        println!("Recived {} event: {:#?}", xdg_toplevel::XdgToplevel::interface().name, event);
+
+        match event {
+            // Current window bounds (non-maximized)
+            xdg_toplevel::Event::ConfigureBounds { width, height } => {
+                state.max_width = width;
+                state.max_height = height;
+            }
+            xdg_toplevel::Event::Close => {
+                println!("Close button clicked!");
+            }
+            _ => {}
+        }
     }
 }
 
@@ -237,8 +250,6 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
             version,
         } = event
         {
-            //println!("[{}] {} (v{})", name, interface, version);
-
             match interface.as_str() {
                 "wl_compositor" => {
                     let compositor =
@@ -268,12 +279,15 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
 #[derive(Default)]
 pub struct WaylandWindow {
     state: WindowState,
-    qh: Option<QueueHandle<WindowState>>,
 }
 
 impl super::Window for WaylandWindow {
-    fn new(_width: usize, _height: usize) -> Self {
-        let mut state = WindowState::default();
+    fn new(width: usize, height: usize) -> Self {
+        let mut state = WindowState {
+            width: width as i32,
+            height: height as i32,
+            ..Default::default()
+        };
         let conn = wayland_client::Connection::connect_to_env().unwrap();
 
         let display = conn.display();
@@ -287,9 +301,12 @@ impl super::Window for WaylandWindow {
         state.init_xdg_surface(&qh);
         state.allocate_shared_buffer(&qh);
 
+        // TODO: check if this second roundtrip is really necessary
         event_queue.roundtrip(&mut state).unwrap();
 
-        Self::default()
+        Self {
+            state,
+        }
     }
 
     fn handle(&mut self) -> Vec<super::Event> {
@@ -301,20 +318,24 @@ impl super::Window for WaylandWindow {
         */
         vec![]
     }
-    fn hide_mouse_cursor(&mut self) {}
-    fn show_mouse_cursor(&mut self) {}
-    fn toggle_fullscreen(&mut self) {}
-    fn update_mouse_cursor(&mut self, _cursor: super::MouseCursor) {}
-    fn set_mouse_position(&mut self, _x: i32, _y: i32) {}
     fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
     fn write_frame_from_slice(&mut self, _src: &[u8]) {}
     fn get_window_position(&self) -> (i32, i32) {
         (0, 0)
     }
     fn get_screen_dim(&self) -> (usize, usize) {
-        (0, 0)
+        // FIXME: Currently we use the maximum dimensions that the window 
+        // is bounded (not fullscreen). In order to get the screen
+        // dimension we need to bind de wl_output and handle a Geometry event.
+        // See: https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_output/enum.Event.html#variant.Geometry
+        (self.state.max_width as usize, self.state.max_height as usize)
     }
     fn get_window_dim(&self) -> (usize, usize) {
-        (0, 0)
+        (self.state.width as usize, self.state.height as usize)
     }
+    fn hide_mouse_cursor(&mut self) {}
+    fn show_mouse_cursor(&mut self) {}
+    fn toggle_fullscreen(&mut self) {}
+    fn update_mouse_cursor(&mut self, _cursor: super::MouseCursor) {}
+    fn set_mouse_position(&mut self, _x: i32, _y: i32) {}
 }

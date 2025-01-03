@@ -5,6 +5,7 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
+debug_print = "1.0.0"
 font-awesome = "0.2.0"
 imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"}
 itertools = "0.13.0"

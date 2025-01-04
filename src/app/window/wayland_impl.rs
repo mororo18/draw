@@ -12,10 +12,13 @@ struct WindowState {
     height: i32,
     max_width: i32,
     max_height: i32,
+    frame_buffer: Vec<u8>,
+    latest_events: Vec<super::Event>,
     compositor: Option<wl_compositor::WlCompositor>,
     base_surface: Option<wl_surface::WlSurface>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
+    configured_xdg_surface: bool,
     shm: Option<wl_shm::WlShm>,
     buffer: Option<wl_buffer::WlBuffer>,
     file: Option<std::fs::File>,
@@ -45,16 +48,17 @@ impl WindowState {
     fn allocate_shared_buffer(&mut self, qh: &QueueHandle<Self>) {
         let shm = self.shm.as_ref().unwrap();
         let file = tempfile::tempfile().unwrap();
-        let (width, height) = (800, 600);
+        file.set_len((self.width * self.height * 4) as u64)
+            .expect("unable te resize file");
 
-        let shm_pool = shm.create_pool(file.as_fd(), (width * height * 4) as i32, qh, ());
+        let shm_pool = shm.create_pool(file.as_fd(), self.width * self.height * 4, qh, ());
 
         let buffer = shm_pool.create_buffer(
             0,
-            width as i32,
-            height as i32,
-            (width * 4) as i32,
-            wl_shm::Format::Argb8888,
+            self.width,
+            self.height,
+            self.width * 4,
+            wl_shm::Format::Xrgb8888,
             qh,
             (),
         );
@@ -63,21 +67,16 @@ impl WindowState {
         self.buffer = Some(buffer);
     }
 
-    fn draw(&mut self) {
-        use std::{cmp::min, io::Write};
-        let file = self.file.as_ref().unwrap();
+    fn store_frame(&mut self, frame: &[u8]) {
+        self.frame_buffer.copy_from_slice(frame);
+    }
+
+    fn draw_frame(&mut self, frame: &[u8]) {
+        use std::io::{Seek, Write};
+        let mut file = self.file.as_ref().unwrap();
+        file.rewind().unwrap();
         let mut buf = std::io::BufWriter::new(file);
-        let (buf_x, buf_y) = (800, 600);
-        for y in 0..buf_y {
-            for x in 0..buf_x {
-                let a = 0xFF;
-                let r = min(((buf_x - x) * 0xFF) / buf_x, ((buf_y - y) * 0xFF) / buf_y);
-                let g = min((x * 0xFF) / buf_x, ((buf_y - y) * 0xFF) / buf_y);
-                let b = min(((buf_x - x) * 0xFF) / buf_x, (y * 0xFF) / buf_y);
-                buf.write_all(&[b as u8, g as u8, r as u8, a as u8])
-                    .unwrap();
-            }
-        }
+        buf.write_all(frame).unwrap();
         buf.flush().unwrap();
     }
 }
@@ -172,7 +171,11 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
-        println!("Recived {} event: {:#?}", xdg_toplevel::XdgToplevel::interface().name, event);
+        println!(
+            "Recived {} event: {:#?}",
+            xdg_toplevel::XdgToplevel::interface().name,
+            event
+        );
 
         match event {
             // Current window bounds (non-maximized)
@@ -205,6 +208,7 @@ impl Dispatch<xdg_surface::XdgSurface, ()> for WindowState {
 
         if let xdg_surface::Event::Configure { serial } = event {
             xdg_surface.ack_configure(serial);
+            state.configured_xdg_surface = true;
 
             if let Some(ref buffer) = state.buffer {
                 let surface = state.base_surface.as_ref().unwrap();
@@ -276,9 +280,9 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
     }
 }
 
-#[derive(Default)]
 pub struct WaylandWindow {
     state: WindowState,
+    event_queue: wayland_client::EventQueue<WindowState>,
 }
 
 impl super::Window for WaylandWindow {
@@ -286,6 +290,7 @@ impl super::Window for WaylandWindow {
         let mut state = WindowState {
             width: width as i32,
             height: height as i32,
+            frame_buffer: vec![0; width * height * 4],
             ..Default::default()
         };
         let conn = wayland_client::Connection::connect_to_env().unwrap();
@@ -304,31 +309,40 @@ impl super::Window for WaylandWindow {
         // TODO: check if this second roundtrip is really necessary
         event_queue.roundtrip(&mut state).unwrap();
 
-        Self {
-            state,
-        }
+        Self { state, event_queue }
     }
 
     fn handle(&mut self) -> Vec<super::Event> {
-        /*
-        state.draw();
-        loop {
-            event_queue.blocking_dispatch(&mut state).unwrap();
-        };
-        */
-        vec![]
+        self.event_queue.flush().unwrap();
+        self.event_queue.dispatch_pending(&mut self.state).unwrap();
+        self.state.latest_events.drain(..).collect()
     }
     fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
-    fn write_frame_from_slice(&mut self, _src: &[u8]) {}
+    fn write_frame_from_slice(&mut self, src: &[u8]) {
+        assert_eq!(self.state.width * self.state.height * 4, src.len() as i32);
+        self.state.draw_frame(src);
+        //self.state.store_frame(src);
+
+        if self.state.configured_xdg_surface {
+            let buffer = self.state.buffer.as_ref().unwrap();
+            let surface = self.state.base_surface.as_ref().unwrap();
+            surface.attach(Some(buffer), 0, 0);
+            surface.damage_buffer(0, 0, self.state.width, self.state.height);
+            surface.commit();
+        }
+    }
     fn get_window_position(&self) -> (i32, i32) {
         (0, 0)
     }
     fn get_screen_dim(&self) -> (usize, usize) {
-        // FIXME: Currently we use the maximum dimensions that the window 
+        // FIXME: Currently we use the maximum dimensions that the window
         // is bounded (not fullscreen). In order to get the screen
         // dimension we need to bind de wl_output and handle a Geometry event.
         // See: https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_output/enum.Event.html#variant.Geometry
-        (self.state.max_width as usize, self.state.max_height as usize)
+        (
+            self.state.max_width as usize,
+            self.state.max_height as usize,
+        )
     }
     fn get_window_dim(&self) -> (usize, usize) {
         (self.state.width as usize, self.state.height as usize)

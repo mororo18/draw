@@ -53,7 +53,6 @@ struct Pixel {
     b: u8,
     g: u8,
     r: u8,
-
     #[allow(dead_code)]
     padd: u8,
 }
@@ -61,12 +60,7 @@ struct Pixel {
 // TODO: criar func "from_hex(cod: str)" e constantes com cores
 impl Pixel {
     pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self {
-            r: r,
-            g: g,
-            b: b,
-            padd: 255,
-        }
+        Self { r, g, b, padd: 255 }
     }
 
     pub fn blend(a: Self, b: Self) -> Self {
@@ -98,19 +92,6 @@ impl Pixel {
             self.r as f32,
             self.padd as f32,
         ])
-    }
-
-    pub fn set_red(&mut self, r: u8) {
-        self.r = r;
-    }
-    pub fn set_green(&mut self, g: u8) {
-        self.g = g;
-    }
-    pub fn set_blue(&mut self, b: u8) {
-        self.b = b;
-    }
-    pub fn set_padd(&mut self, p: u8) {
-        self.padd = p;
     }
 
     pub fn red() -> Self {
@@ -159,12 +140,7 @@ impl Mul<f32> for Pixel {
         let g = ((self.g as f32) * rhs) as u8;
         let b = ((self.b as f32) * rhs) as u8;
 
-        Pixel {
-            r: r,
-            g: g,
-            b: b,
-            padd: 0,
-        }
+        Pixel { r, g, b, padd: 255 }
     }
 }
 
@@ -214,13 +190,13 @@ impl VertexAttributes {
         txt_coord: Vec3,
     ) -> Self {
         Self {
-            screen_coord: screen_coord,
+            screen_coord,
             //color:  color,
-            normal: normal,
-            light: light,
+            normal,
+            light,
             //eye:    eye,
-            halfway: halfway,
-            depth: depth,
+            halfway,
+            depth,
             texture_coord: txt_coord,
         }
     }
@@ -427,7 +403,7 @@ impl Canvas {
             .iter_mut()
             .for_each(|pixel| *pixel = Pixel::azul_bb());
 
-        if self.depth_frame.len() > 0 {
+        if !self.depth_frame.is_empty() {
             self.init_depth(self.depth_max);
         }
     }
@@ -440,10 +416,10 @@ impl Canvas {
         texture: Option<&Texture>,
         clipping_rect: Option<Rectangle>,
     ) {
-        let default = &Texture::default();
+        //let default = &Texture::default();
         let texture = texture.unwrap_or_else(move || {
-            assert!(false);
-            default
+            unreachable!();
+            //default
         });
         let diffuse_map = &texture.map_kd;
 
@@ -480,6 +456,8 @@ impl Canvas {
                 - (a_center.x * c_center.y)
         };
 
+        // TODO: replace this min() and max() funcs with something
+        // more appropriate
         let min = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = f32::INFINITY;
             [x, y, z].iter().for_each(|v| {
@@ -513,8 +491,7 @@ impl Canvas {
 
         drawable_rect = Rectangle::clip(drawable_rect, screen_rect.clone());
 
-        let valid_rect =
-            Rectangle::clip(clipping_rect.unwrap_or_else(|| screen_rect), drawable_rect);
+        let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
         x_min = valid_rect.x_min();
         y_min = valid_rect.y_min();
@@ -648,8 +625,7 @@ impl Canvas {
 
         drawable_rect = Rectangle::clip(drawable_rect, screen_rect.clone());
 
-        let valid_rect =
-            Rectangle::clip(clipping_rect.unwrap_or_else(|| screen_rect), drawable_rect);
+        let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
         x_min = valid_rect.x_min();
         y_min = valid_rect.y_min();

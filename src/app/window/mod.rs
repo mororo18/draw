@@ -3,10 +3,10 @@ mod wayland_impl;
 #[cfg(x11_impl)]
 mod x11_impl;
 
-#[cfg(x11_impl)]
-pub use x11_impl::X11Window;
 #[cfg(wayland_impl)]
 pub use wayland_impl::WaylandWindow;
+#[cfg(x11_impl)]
+pub use x11_impl::X11Window;
 
 #[cfg(x11_impl)]
 pub type AppWindow = X11Window;

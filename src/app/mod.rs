@@ -2,7 +2,7 @@ mod gui;
 mod window;
 
 use gui::*;
-use window::{Event, Key, Window, AppWindow};
+use window::{AppWindow, Event, Key, Window};
 
 use rfd::FileDialog;
 use std::ffi::{CStr, CString};
@@ -200,10 +200,10 @@ impl Application {
                     .as_mut_slice()
                     .copy_from_slice(self.canvas.as_bytes_slice());
 
-                self.gui.new_frame(&mut self.win, &frame_events, elapsed);
+                self.gui
+                    .new_frame(&mut self.win, frame_events.drain(..).as_slice(), elapsed);
                 self.gui.build_ui(&mut user_action);
                 self.gui.render(&mut self.canvas);
-                frame_events.clear();
 
                 let frame_slice = self.canvas.as_bytes_slice();
                 self.win.write_frame_from_slice(frame_slice);

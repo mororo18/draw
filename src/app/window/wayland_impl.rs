@@ -1,6 +1,7 @@
 use std::os::fd::AsFd;
 use wayland_client::{
-    protocol::wl_buffer, protocol::wl_compositor, protocol::wl_display, protocol::wl_registry,
+    protocol::wl_buffer, protocol::wl_compositor, protocol::wl_seat, protocol::wl_registry,
+    protocol::wl_pointer, protocol::wl_keyboard,
     protocol::wl_shm, protocol::wl_shm_pool, protocol::wl_surface, Connection, Dispatch, Proxy,
     QueueHandle,
 };
@@ -12,10 +13,11 @@ struct WindowState {
     height: i32,
     max_width: i32,
     max_height: i32,
-    frame_buffer: Vec<u8>,
     latest_events: Vec<super::Event>,
     compositor: Option<wl_compositor::WlCompositor>,
     base_surface: Option<wl_surface::WlSurface>,
+    pointer: Option<wl_pointer::WlPointer>,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
     configured_xdg_surface: bool,
@@ -65,10 +67,6 @@ impl WindowState {
 
         self.file = Some(file);
         self.buffer = Some(buffer);
-    }
-
-    fn store_frame(&mut self, frame: &[u8]) {
-        self.frame_buffer.copy_from_slice(frame);
     }
 
     fn draw_frame(&mut self, frame: &[u8]) {
@@ -137,11 +135,13 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_buffer::WlBuffer::interface().name,
             event
         );
+        */
     }
 }
 
@@ -239,6 +239,72 @@ impl Dispatch<xdg_wm_base::XdgWmBase, ()> for WindowState {
     }
 }
 
+impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
+    fn event(
+        _: &mut Self,
+        seat: &wl_seat::WlSeat,
+        event: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_seat::WlSeat::interface().name,
+            event
+        );
+        if let wl_seat::Event::Capabilities { capabilities: wayland_client::WEnum::Value(capabilities) } = event {
+            if capabilities.contains(wl_seat::Capability::Keyboard) {
+                seat.get_keyboard(qh, ());
+            }
+
+            if capabilities.contains(wl_seat::Capability::Pointer) {
+                seat.get_pointer(qh, ());
+            }
+        }
+    }
+}
+
+impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
+    fn event(
+        state: &mut Self,
+        _: &wl_pointer::WlPointer,
+        event: wl_pointer::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_pointer::WlPointer::interface().name,
+            event
+        );
+    }
+}
+
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for WindowState {
+    fn event(
+        state: &mut Self,
+        _: &wl_keyboard::WlKeyboard,
+        event: wl_keyboard::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_keyboard::WlKeyboard::interface().name,
+            event
+        );
+        if let wl_keyboard::Event::Key { key, .. } = event {
+            if key == 1 {
+                // ESC key
+                //state.running = false;
+            }
+        }
+    }
+}
+
 impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
     fn event(
         state: &mut Self,
@@ -248,6 +314,11 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<WindowState>,
     ) {
+        println!(
+            "Global: Recived {} event: {:#?}",
+            wl_registry::WlRegistry::interface().name,
+            event
+        );
         if let wl_registry::Event::Global {
             name,
             interface,
@@ -274,6 +345,16 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
 
                     state.shm = Some(shm);
                 }
+                "wl_seat" => {
+                    let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
+
+                    /*
+                    let pointer = seat.get_pointer(qh, ());
+                    let keyboard = seat.get_keyboard(qh, ());
+                    state.pointer = Some(pointer);
+                    state.keyboard = Some(keyboard);
+                    */
+                }
                 _ => {}
             }
         }
@@ -290,7 +371,6 @@ impl super::Window for WaylandWindow {
         let mut state = WindowState {
             width: width as i32,
             height: height as i32,
-            frame_buffer: vec![0; width * height * 4],
             ..Default::default()
         };
         let conn = wayland_client::Connection::connect_to_env().unwrap();
@@ -313,15 +393,13 @@ impl super::Window for WaylandWindow {
     }
 
     fn handle(&mut self) -> Vec<super::Event> {
-        self.event_queue.flush().unwrap();
-        self.event_queue.dispatch_pending(&mut self.state).unwrap();
+        self.event_queue.blocking_dispatch(&mut self.state).unwrap();
         self.state.latest_events.drain(..).collect()
     }
     fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
     fn write_frame_from_slice(&mut self, src: &[u8]) {
         assert_eq!(self.state.width * self.state.height * 4, src.len() as i32);
         self.state.draw_frame(src);
-        //self.state.store_frame(src);
 
         if self.state.configured_xdg_surface {
             let buffer = self.state.buffer.as_ref().unwrap();

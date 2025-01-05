@@ -16,8 +16,6 @@ struct WindowState {
     latest_events: Vec<super::Event>,
     compositor: Option<wl_compositor::WlCompositor>,
     base_surface: Option<wl_surface::WlSurface>,
-    pointer: Option<wl_pointer::WlPointer>,
-    keyboard: Option<wl_keyboard::WlKeyboard>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
     configured_xdg_surface: bool,
@@ -130,7 +128,7 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for WindowState {
     fn event(
         _: &mut Self,
         _: &wl_buffer::WlBuffer,
-        event: wl_buffer::Event,
+        _event: wl_buffer::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<WindowState>,
@@ -267,8 +265,8 @@ impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
 
 impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
     fn event(
-        state: &mut Self,
-        _: &wl_pointer::WlPointer,
+        _state: &mut Self,
+        _pointer: &wl_pointer::WlPointer,
         event: wl_pointer::Event,
         _: &(),
         _: &Connection,
@@ -279,12 +277,20 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
             wl_pointer::WlPointer::interface().name,
             event
         );
+
+        /*
+        if let wl_pointer::Event::Enter { serial, surface, surface_x, surface_y } = event {
+        // TODO: load cursor theme and attach its buffer to a surface
+        //https://docs.rs/wayland-cursor/latest/wayland_cursor/
+            pointer.set_cursor(serial, Some(&surface_cursor_theme), surface_x as i32, surface_y as i32);
+        }
+        */
     }
 }
 
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for WindowState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         _: &wl_keyboard::WlKeyboard,
         event: wl_keyboard::Event,
         _: &(),
@@ -346,14 +352,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
                     state.shm = Some(shm);
                 }
                 "wl_seat" => {
-                    let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
-
-                    /*
-                    let pointer = seat.get_pointer(qh, ());
-                    let keyboard = seat.get_keyboard(qh, ());
-                    state.pointer = Some(pointer);
-                    state.keyboard = Some(keyboard);
-                    */
+                    registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
                 }
                 _ => {}
             }
@@ -413,9 +412,9 @@ impl super::Window for WaylandWindow {
         (0, 0)
     }
     fn get_screen_dim(&self) -> (usize, usize) {
-        // FIXME: Currently we use the maximum dimensions that the window
-        // is bounded (not fullscreen). In order to get the screen
-        // dimension we need to bind de wl_output and handle a Geometry event.
+        // FIXME: Currently we use the dimensions of the maximized window.
+        // In order to get the fullscreen dimensions we need to bind de wl_output
+        // and handle a Geometry event.
         // See: https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_output/enum.Event.html#variant.Geometry
         (
             self.state.max_width as usize,

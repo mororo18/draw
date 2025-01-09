@@ -1,11 +1,12 @@
 use std::os::fd::AsFd;
 use wayland_client::{
-    protocol::wl_buffer, protocol::wl_compositor, protocol::wl_seat, protocol::wl_registry,
-    protocol::wl_pointer, protocol::wl_keyboard,
-    protocol::wl_shm, protocol::wl_shm_pool, protocol::wl_surface, Connection, Dispatch, Proxy,
-    QueueHandle,
+    protocol::wl_buffer, protocol::wl_compositor, protocol::wl_keyboard, protocol::wl_pointer,
+    protocol::wl_registry, protocol::wl_seat, protocol::wl_shm, protocol::wl_shm_pool,
+    protocol::wl_surface, Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
+
+const CURSOR_SIZE: u32 = 24;
 
 #[derive(Default)]
 struct WindowState {
@@ -14,6 +15,9 @@ struct WindowState {
     max_width: i32,
     max_height: i32,
     latest_events: Vec<super::Event>,
+    mouse_cursor: super::MouseCursor,
+    mouse_pointer_info: super::MouseInfo,
+    cursor_theme: Option<wayland_cursor::CursorTheme>,
     compositor: Option<wl_compositor::WlCompositor>,
     base_surface: Option<wl_surface::WlSurface>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
@@ -25,15 +29,23 @@ struct WindowState {
 }
 
 impl WindowState {
+    // https://docs.rs/smithay-client-toolkit/latest/src/smithay_client_toolkit/seat/pointer/mod.rs.html#599
+    fn load_cursor_theme(&mut self, conn: &Connection) {
+        use wayland_cursor::CursorTheme;
+
+        let system_theme = linicon::get_system_theme().unwrap_or("default".to_string());
+
+        let shm = self.shm.as_ref().unwrap();
+        let cursor_theme =
+            CursorTheme::load_or(conn, shm.clone(), system_theme.as_str(), CURSOR_SIZE)
+                .expect("Could not load cursor theme");
+
+        self.cursor_theme = Some(cursor_theme);
+    }
+
     fn init_xdg_surface(&mut self, qh: &QueueHandle<Self>) {
-        let xdg_wm_base = self
-            .xdg_wm_base
-            .as_ref()
-            .expect("missing xdg_wm_base binding");
-        let base_surface = self
-            .base_surface
-            .as_ref()
-            .expect("missing wl_surface binding");
+        let xdg_wm_base = self.xdg_wm_base.as_ref().unwrap();
+        let base_surface = self.base_surface.as_ref().unwrap();
 
         let xdg_surface = xdg_wm_base.get_xdg_surface(base_surface, qh, ());
 
@@ -251,7 +263,10 @@ impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
             wl_seat::WlSeat::interface().name,
             event
         );
-        if let wl_seat::Event::Capabilities { capabilities: wayland_client::WEnum::Value(capabilities) } = event {
+        if let wl_seat::Event::Capabilities {
+            capabilities: wayland_client::WEnum::Value(capabilities),
+        } = event
+        {
             if capabilities.contains(wl_seat::Capability::Keyboard) {
                 seat.get_keyboard(qh, ());
             }
@@ -265,12 +280,12 @@ impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
 
 impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
     fn event(
-        _state: &mut Self,
-        _pointer: &wl_pointer::WlPointer,
+        win_state: &mut Self,
+        pointer: &wl_pointer::WlPointer,
         event: wl_pointer::Event,
         _: &(),
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         println!(
             "Recived {} event: {:#?}",
@@ -278,13 +293,85 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
             event
         );
 
-        /*
-        if let wl_pointer::Event::Enter { serial, surface, surface_x, surface_y } = event {
-        // TODO: load cursor theme and attach its buffer to a surface
-        //https://docs.rs/wayland-cursor/latest/wayland_cursor/
-            pointer.set_cursor(serial, Some(&surface_cursor_theme), surface_x as i32, surface_y as i32);
+        match event {
+            wl_pointer::Event::Button { button, state, .. } => {
+                let mouse_button = match button {
+                    input_event_codes::BTN_LEFT!() => super::Button::MouseLeft,
+                    input_event_codes::BTN_MIDDLE!() => super::Button::MouseMiddle,
+                    input_event_codes::BTN_RIGHT!() => super::Button::MouseRight,
+                    input_event_codes::BTN_GEAR_UP!() => super::Button::WheelUp,
+                    input_event_codes::BTN_GEAR_DOWN!() => super::Button::WheelDown,
+                    _ => super::Button::Unknown,
+                };
+
+                match state.into_result().unwrap() {
+                    wl_pointer::ButtonState::Released => {
+                        win_state
+                            .latest_events
+                            .push(super::Event::ButtonRelease(mouse_button));
+                    }
+                    wl_pointer::ButtonState::Pressed => {
+                        win_state
+                            .latest_events
+                            .push(super::Event::ButtonPress(mouse_button));
+                    }
+                    _ => {}
+                }
+            }
+
+            wl_pointer::Event::Motion {
+                surface_x,
+                surface_y,
+                ..
+            } => {
+                // TODO: Enable cursor animations
+
+                let dx = surface_x as i32 - win_state.mouse_pointer_info.x;
+                let dy = surface_y as i32 - win_state.mouse_pointer_info.y;
+
+                let pointer_info = super::MouseInfo {
+                    x: surface_x as i32,
+                    y: surface_y as i32,
+                    dx,
+                    dy,
+                };
+
+                win_state.mouse_pointer_info = pointer_info.clone();
+
+                win_state
+                    .latest_events
+                    .push(super::Event::MouseMotion(pointer_info));
+            }
+
+            wl_pointer::Event::Enter { serial, .. } => {
+                // TODO: load cursor theme and attach its buffer to a surface
+                //https://docs.rs/wayland-cursor/latest/wayland_cursor/
+
+                let cursor_theme = win_state.cursor_theme.as_mut().unwrap();
+                let cursor_name: &str = From::from(win_state.mouse_cursor);
+                let cursor = cursor_theme
+                    .get_cursor(cursor_name)
+                    .expect(format!("Failed to get '{}' cursor", cursor_name).as_str());
+
+                // TODO: Do We need to create a surface every time?
+                let comp = win_state.compositor.as_ref().unwrap();
+                let cursor_surface = comp.create_surface(qh, ());
+
+                // TODO: Enable cursor animations
+                let (hotspot_x, hotspot_y) = cursor[0].hotspot();
+                cursor_surface.attach(Some(&*cursor[0]), 0, 0);
+                cursor_surface.commit();
+
+                pointer.set_cursor(
+                    serial,
+                    Some(&cursor_surface),
+                    hotspot_x as i32,
+                    hotspot_y as i32,
+                );
+            }
+
+            _ => {}
         }
-        */
     }
 }
 
@@ -384,6 +471,7 @@ impl super::Window for WaylandWindow {
 
         state.init_xdg_surface(&qh);
         state.allocate_shared_buffer(&qh);
+        state.load_cursor_theme(&conn);
 
         // TODO: check if this second roundtrip is really necessary
         event_queue.roundtrip(&mut state).unwrap();
@@ -427,6 +515,24 @@ impl super::Window for WaylandWindow {
     fn hide_mouse_cursor(&mut self) {}
     fn show_mouse_cursor(&mut self) {}
     fn toggle_fullscreen(&mut self) {}
-    fn update_mouse_cursor(&mut self, _cursor: super::MouseCursor) {}
+    fn update_mouse_cursor(&mut self, cursor: super::MouseCursor) {
+        self.state.mouse_cursor = cursor;
+    }
     fn set_mouse_position(&mut self, _x: i32, _y: i32) {}
+}
+
+impl From<super::MouseCursor> for &str {
+    fn from(value: super::MouseCursor) -> Self {
+        match value {
+            super::MouseCursor::Arrow => "arrow",
+            super::MouseCursor::TextInput => "xterm",
+            super::MouseCursor::ResizeAll => "fleur",
+            super::MouseCursor::ResizeNS => "sb_v_double_arrow",
+            super::MouseCursor::ResizeEW => "sb_h_double_arrow",
+            super::MouseCursor::ResizeNESW => "bottom_left_corner",
+            super::MouseCursor::ResizeNWSE => "bottom_right_corner",
+            super::MouseCursor::Hand => "hand1",
+            super::MouseCursor::NotAllowed => "circle",
+        }
+    }
 }

@@ -142,16 +142,17 @@ pub enum Key {
     //Sym((u32, u32)),
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Button {
     MouseLeft,
-    MouseRight,
     MouseMiddle,
+    MouseRight,
     WheelUp,
     WheelDown,
+    Unknown,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum MouseCursor {
     Arrow,
     TextInput,
@@ -164,20 +165,9 @@ pub enum MouseCursor {
     NotAllowed,
 }
 
-// TODO: move this to x11_impl.rs
-impl MouseCursor {
-    fn as_c_str(self) -> *const i8 {
-        match self {
-            MouseCursor::Arrow => c"default".as_ptr(),
-            MouseCursor::TextInput => c"xterm".as_ptr(),
-            MouseCursor::ResizeAll => c"fleur".as_ptr(),
-            MouseCursor::ResizeNS => c"sb_v_double_arrow".as_ptr(),
-            MouseCursor::ResizeEW => c"sb_h_double_arrow".as_ptr(),
-            MouseCursor::ResizeNESW => c"bottom_left_corner".as_ptr(),
-            MouseCursor::ResizeNWSE => c"bottom_right_corner".as_ptr(),
-            MouseCursor::Hand => c"hand1".as_ptr(),
-            MouseCursor::NotAllowed => c"circle".as_ptr(),
-        }
+impl Default for MouseCursor {
+    fn default() -> Self {
+        Self::Arrow
     }
 }
 
@@ -192,12 +182,14 @@ pub enum Event {
 
     RedimWindow((usize, usize)),
     ReposWindow((i32, i32)),
+    // TODO: Rename to PointerMotion?
     MouseMotion(MouseInfo),
 
     Empty,
 }
 
-#[derive(Clone, PartialEq)]
+// TODO: Rename to PointerInfo?
+#[derive(Clone, PartialEq, Default)]
 pub struct MouseInfo {
     pub x: i32,
     pub y: i32,

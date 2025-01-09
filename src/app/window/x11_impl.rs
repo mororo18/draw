@@ -607,7 +607,7 @@ impl super::Window for X11Window {
 
     fn update_mouse_cursor(&mut self, cursor: super::MouseCursor) {
         let xlib_cursor: xlib::Cursor =
-            unsafe { x11::xcursor::XcursorLibraryLoadCursor(self.x11.display, cursor.as_c_str()) };
+            unsafe { x11::xcursor::XcursorLibraryLoadCursor(self.x11.display, From::from(cursor)) };
         unsafe {
             xlib::XDefineCursor(self.x11.display, self.x11.window, xlib_cursor);
         }
@@ -686,9 +686,25 @@ impl super::Window for X11Window {
     //fn get_pitch(&self) -> usize {self.width * self.pixel_bytes}
 }
 
+impl From<super::MouseCursor> for *const i8 {
+    fn from(value: super::MouseCursor) -> Self {
+        match value {
+            super::MouseCursor::Arrow => c"default".as_ptr(),
+            super::MouseCursor::TextInput => c"xterm".as_ptr(),
+            super::MouseCursor::ResizeAll => c"fleur".as_ptr(),
+            super::MouseCursor::ResizeNS => c"sb_v_double_arrow".as_ptr(),
+            super::MouseCursor::ResizeEW => c"sb_h_double_arrow".as_ptr(),
+            super::MouseCursor::ResizeNESW => c"bottom_left_corner".as_ptr(),
+            super::MouseCursor::ResizeNWSE => c"bottom_right_corner".as_ptr(),
+            super::MouseCursor::Hand => c"hand1".as_ptr(),
+            super::MouseCursor::NotAllowed => c"circle".as_ptr(),
+        }
+    }
+}
+
 #[allow(non_snake_case, non_upper_case_globals)]
 impl std::convert::From<u32> for super::Key {
-    fn from(keysym: u32) -> super::Key {
+    fn from(keysym: u32) -> Self {
         match keysym {
             XK_Tab => super::Key::Tab,
             XK_Left => super::Key::LeftArrow,

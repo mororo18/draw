@@ -8,12 +8,15 @@ build = "build.rs"
 debug_print = "1.0.0"
 font-awesome = "0.2.0"
 imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"}
+input-event-codes = "6.2.0"
 itertools = "0.13.0"
+linicon = "2.3.0"
 material-icons = "0.2.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 rfd = "0.15.0"
 stb = { git = "https://github.com/mororo18/stb.git", branch = "fix-ubuntu-24.10-build" }
+wayland-cursor = "0.31.7"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tempfile = "3.14.0"

@@ -184,6 +184,7 @@ impl Gui {
                     Button::WheelDown => {
                         io.mouse_wheel -= 1.0;
                     }
+                    _ => {}
                 },
 
                 Event::ButtonRelease(button_event) => match button_event {
@@ -196,7 +197,7 @@ impl Gui {
                         };
                         io.mouse_down[idx] = false;
                     }
-                    Button::WheelUp | Button::WheelDown => {}
+                    _ => {}
                 },
 
                 Event::KeyPress(key) => {

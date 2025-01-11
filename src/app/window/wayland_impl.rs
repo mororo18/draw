@@ -2,7 +2,7 @@ use std::os::fd::AsFd;
 use wayland_client::{
     protocol::wl_buffer, protocol::wl_compositor, protocol::wl_keyboard, protocol::wl_pointer,
     protocol::wl_registry, protocol::wl_seat, protocol::wl_shm, protocol::wl_shm_pool,
-    protocol::wl_surface, Connection, Dispatch, Proxy, QueueHandle,
+    protocol::wl_subcompositor, protocol::wl_surface, Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
@@ -17,11 +17,16 @@ struct WindowState {
     latest_events: Vec<super::Event>,
     mouse_cursor: super::MouseCursor,
     mouse_pointer_info: super::MouseInfo,
+    cursor_visibility: bool,
     cursor_theme: Option<wayland_cursor::CursorTheme>,
     compositor: Option<wl_compositor::WlCompositor>,
+    seat: Option<wl_seat::WlSeat>,
+    subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     base_surface: Option<wl_surface::WlSurface>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
+    xdg_toplevel: Option<xdg_toplevel::XdgToplevel>,
+    is_fullscreen: bool,
     configured_xdg_surface: bool,
     shm: Option<wl_shm::WlShm>,
     buffer: Option<wl_buffer::WlBuffer>,
@@ -55,6 +60,7 @@ impl WindowState {
         base_surface.commit();
 
         self.xdg_surface = Some(xdg_surface);
+        self.xdg_toplevel = Some(toplevel);
     }
 
     fn allocate_shared_buffer(&mut self, qh: &QueueHandle<Self>) {
@@ -86,6 +92,114 @@ impl WindowState {
         let mut buf = std::io::BufWriter::new(file);
         buf.write_all(frame).unwrap();
         buf.flush().unwrap();
+    }
+}
+
+pub struct WaylandWindow {
+    state: WindowState,
+    event_queue: wayland_client::EventQueue<WindowState>,
+}
+
+impl super::Window for WaylandWindow {
+    fn new(width: usize, height: usize) -> Self {
+        let mut state = WindowState {
+            width: width as i32,
+            height: height as i32,
+            cursor_visibility: true,
+            ..Default::default()
+        };
+        let conn = wayland_client::Connection::connect_to_env().unwrap();
+
+        let display = conn.display();
+
+        let mut event_queue = conn.new_event_queue::<WindowState>();
+        let qh = event_queue.handle();
+
+        let _registry = display.get_registry(&qh, ());
+        event_queue.roundtrip(&mut state).unwrap();
+
+        state.init_xdg_surface(&qh);
+        state.allocate_shared_buffer(&qh);
+        state.load_cursor_theme(&conn);
+
+        // TODO: check if this second roundtrip is really necessary
+        event_queue.roundtrip(&mut state).unwrap();
+
+        Self { state, event_queue }
+    }
+
+    fn handle(&mut self) -> Vec<super::Event> {
+        self.event_queue.blocking_dispatch(&mut self.state).unwrap();
+        self.state.latest_events.drain(..).collect()
+    }
+    fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
+    fn write_frame_from_slice(&mut self, src: &[u8]) {
+        assert_eq!(self.state.width * self.state.height * 4, src.len() as i32);
+        self.state.draw_frame(src);
+
+        if self.state.configured_xdg_surface {
+            //self.frame.draw();
+            let buffer = self.state.buffer.as_ref().unwrap();
+            let surface = self.state.base_surface.as_ref().unwrap();
+            surface.attach(Some(buffer), 0, 0);
+            surface.damage_buffer(0, 0, self.state.width, self.state.height);
+            surface.commit();
+        }
+    }
+    fn get_window_position(&self) -> (i32, i32) {
+        (0, 0)
+    }
+    fn get_screen_dim(&self) -> (usize, usize) {
+        // FIXME: Currently we use the dimensions of the maximized window.
+        // In order to get the fullscreen dimensions we need to bind de wl_output
+        // and handle a Geometry event.
+        // See: https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_output/enum.Event.html#variant.Geometry
+        (
+            self.state.max_width as usize,
+            self.state.max_height as usize,
+        )
+    }
+    fn get_window_dim(&self) -> (usize, usize) {
+        (self.state.width as usize, self.state.height as usize)
+    }
+    fn hide_mouse_cursor(&mut self) {
+        self.state.cursor_visibility = false;
+    }
+    fn show_mouse_cursor(&mut self) {
+        self.state.cursor_visibility = true;
+    }
+    fn toggle_fullscreen(&mut self) {
+        let toplevel = self.state.xdg_toplevel.as_ref().unwrap();
+        if self.state.is_fullscreen {
+            toplevel.unset_fullscreen();
+        } else {
+            // FIXME: We need to pass the current (or last??)
+            // wl_output which the wl_surface entered
+            // https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_surface/enum.Event.html#variant.Enter
+            toplevel.set_fullscreen(None);
+        }
+
+        self.state.is_fullscreen = !self.state.is_fullscreen;
+    }
+    fn update_mouse_cursor(&mut self, cursor: super::MouseCursor) {
+        self.state.mouse_cursor = cursor;
+    }
+    fn set_mouse_position(&mut self, _x: i32, _y: i32) {}
+}
+
+impl From<super::MouseCursor> for &str {
+    fn from(value: super::MouseCursor) -> Self {
+        match value {
+            super::MouseCursor::Arrow => "arrow",
+            super::MouseCursor::TextInput => "xterm",
+            super::MouseCursor::ResizeAll => "fleur",
+            super::MouseCursor::ResizeNS => "sb_v_double_arrow",
+            super::MouseCursor::ResizeEW => "sb_h_double_arrow",
+            super::MouseCursor::ResizeNESW => "bottom_left_corner",
+            super::MouseCursor::ResizeNWSE => "bottom_right_corner",
+            super::MouseCursor::Hand => "hand1",
+            super::MouseCursor::NotAllowed => "circle",
+        }
     }
 }
 
@@ -155,6 +269,23 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for WindowState {
     }
 }
 
+impl Dispatch<wl_subcompositor::WlSubcompositor, ()> for WindowState {
+    fn event(
+        _: &mut Self,
+        _: &wl_subcompositor::WlSubcompositor,
+        event: wl_subcompositor::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<WindowState>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_subcompositor::WlSubcompositor::interface().name,
+            event
+        );
+    }
+}
+
 impl Dispatch<wl_compositor::WlCompositor, ()> for WindowState {
     fn event(
         _: &mut Self,
@@ -187,14 +318,28 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
             event
         );
 
+        // https://docs.rs/wayland-protocols/latest/wayland_protocols/xdg/shell/client/xdg_toplevel/enum.Event.html
         match event {
-            // Current window bounds (non-maximized)
+            // 'Suggest' a surface change
+            xdg_toplevel::Event::Configure { width, height, .. } => {
+                if width != 0 && height != 0 {
+                    state.width = width;
+                    state.height = height;
+                }
+            }
+            // Current window bounds (non-fullscreen)
             xdg_toplevel::Event::ConfigureBounds { width, height } => {
-                state.max_width = width;
-                state.max_height = height;
+                if width != 0 && height != 0 {
+                    state.max_width = width;
+                    state.max_height = height;
+                } else {
+                    // TODO: Unknown bounds
+                }
             }
             xdg_toplevel::Event::Close => {
-                println!("Close button clicked!");
+                // TODO;
+                println!("Compositor wants us to stop!");
+                unimplemented!();
             }
             _ => {}
         }
@@ -304,19 +449,24 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                     _ => super::Button::Unknown,
                 };
 
-                match state.into_result().unwrap() {
-                    wl_pointer::ButtonState::Released => {
-                        win_state
-                            .latest_events
-                            .push(super::Event::ButtonRelease(mouse_button));
-                    }
+                let button_event = match state.into_result().unwrap() {
+                    wl_pointer::ButtonState::Released => super::Event::ButtonRelease(mouse_button),
                     wl_pointer::ButtonState::Pressed => {
-                        win_state
-                            .latest_events
-                            .push(super::Event::ButtonPress(mouse_button));
+                        /*  TODO: In order to move the window we need to verify
+                         *  if the ButtonPress occurred over the title bar of the
+                         *  window frame.
+                         *
+                         *  let seat = win_state.seat.as_ref().unwrap();
+                         *  let toplevel = win_state.xdg_toplevel.as_ref().unwrap();
+                         *  toplevel._move(seat, serial);
+                         */
+
+                        super::Event::ButtonPress(mouse_button)
                     }
-                    _ => {}
-                }
+                    _ => super::Event::Empty,
+                };
+
+                win_state.latest_events.push(button_event);
             }
 
             wl_pointer::Event::Motion {
@@ -344,9 +494,6 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
             }
 
             wl_pointer::Event::Enter { serial, .. } => {
-                // TODO: load cursor theme and attach its buffer to a surface
-                //https://docs.rs/wayland-cursor/latest/wayland_cursor/
-
                 let cursor_theme = win_state.cursor_theme.as_mut().unwrap();
                 let cursor_name: &str = From::from(win_state.mouse_cursor);
                 let cursor = cursor_theme
@@ -358,10 +505,16 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 let cursor_surface = comp.create_surface(qh, ());
 
                 // TODO: Enable cursor animations
-                let (hotspot_x, hotspot_y) = cursor[0].hotspot();
-                cursor_surface.attach(Some(&*cursor[0]), 0, 0);
+                let cursor_image = if win_state.cursor_visibility {
+                    Some(&*cursor[0])
+                } else {
+                    None
+                };
+
+                cursor_surface.attach(cursor_image, 0, 0);
                 cursor_surface.commit();
 
+                let (hotspot_x, hotspot_y) = cursor[0].hotspot();
                 pointer.set_cursor(
                     serial,
                     Some(&cursor_surface),
@@ -427,6 +580,16 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
                     state.compositor = Some(compositor);
                     state.base_surface = Some(surface);
                 }
+                "wl_subcompositor" => {
+                    let subcompositor = registry.bind::<wl_subcompositor::WlSubcompositor, _, _>(
+                        name,
+                        version,
+                        qh,
+                        (),
+                    );
+
+                    state.subcompositor = Some(subcompositor);
+                }
                 "xdg_wm_base" => {
                     let xdg_wm_base =
                         registry.bind::<xdg_wm_base::XdgWmBase, _, _>(name, version, qh, ());
@@ -439,100 +602,12 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
                     state.shm = Some(shm);
                 }
                 "wl_seat" => {
-                    registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
+                    let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
+
+                    state.seat = Some(seat);
                 }
                 _ => {}
             }
-        }
-    }
-}
-
-pub struct WaylandWindow {
-    state: WindowState,
-    event_queue: wayland_client::EventQueue<WindowState>,
-}
-
-impl super::Window for WaylandWindow {
-    fn new(width: usize, height: usize) -> Self {
-        let mut state = WindowState {
-            width: width as i32,
-            height: height as i32,
-            ..Default::default()
-        };
-        let conn = wayland_client::Connection::connect_to_env().unwrap();
-
-        let display = conn.display();
-
-        let mut event_queue = conn.new_event_queue::<WindowState>();
-        let qh = event_queue.handle();
-
-        let _registry = display.get_registry(&qh, ());
-        event_queue.roundtrip(&mut state).unwrap();
-
-        state.init_xdg_surface(&qh);
-        state.allocate_shared_buffer(&qh);
-        state.load_cursor_theme(&conn);
-
-        // TODO: check if this second roundtrip is really necessary
-        event_queue.roundtrip(&mut state).unwrap();
-
-        Self { state, event_queue }
-    }
-
-    fn handle(&mut self) -> Vec<super::Event> {
-        self.event_queue.blocking_dispatch(&mut self.state).unwrap();
-        self.state.latest_events.drain(..).collect()
-    }
-    fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
-    fn write_frame_from_slice(&mut self, src: &[u8]) {
-        assert_eq!(self.state.width * self.state.height * 4, src.len() as i32);
-        self.state.draw_frame(src);
-
-        if self.state.configured_xdg_surface {
-            let buffer = self.state.buffer.as_ref().unwrap();
-            let surface = self.state.base_surface.as_ref().unwrap();
-            surface.attach(Some(buffer), 0, 0);
-            surface.damage_buffer(0, 0, self.state.width, self.state.height);
-            surface.commit();
-        }
-    }
-    fn get_window_position(&self) -> (i32, i32) {
-        (0, 0)
-    }
-    fn get_screen_dim(&self) -> (usize, usize) {
-        // FIXME: Currently we use the dimensions of the maximized window.
-        // In order to get the fullscreen dimensions we need to bind de wl_output
-        // and handle a Geometry event.
-        // See: https://docs.rs/wayland-client/latest/wayland_client/protocol/wl_output/enum.Event.html#variant.Geometry
-        (
-            self.state.max_width as usize,
-            self.state.max_height as usize,
-        )
-    }
-    fn get_window_dim(&self) -> (usize, usize) {
-        (self.state.width as usize, self.state.height as usize)
-    }
-    fn hide_mouse_cursor(&mut self) {}
-    fn show_mouse_cursor(&mut self) {}
-    fn toggle_fullscreen(&mut self) {}
-    fn update_mouse_cursor(&mut self, cursor: super::MouseCursor) {
-        self.state.mouse_cursor = cursor;
-    }
-    fn set_mouse_position(&mut self, _x: i32, _y: i32) {}
-}
-
-impl From<super::MouseCursor> for &str {
-    fn from(value: super::MouseCursor) -> Self {
-        match value {
-            super::MouseCursor::Arrow => "arrow",
-            super::MouseCursor::TextInput => "xterm",
-            super::MouseCursor::ResizeAll => "fleur",
-            super::MouseCursor::ResizeNS => "sb_v_double_arrow",
-            super::MouseCursor::ResizeEW => "sb_h_double_arrow",
-            super::MouseCursor::ResizeNESW => "bottom_left_corner",
-            super::MouseCursor::ResizeNWSE => "bottom_right_corner",
-            super::MouseCursor::Hand => "hand1",
-            super::MouseCursor::NotAllowed => "circle",
         }
     }
 }

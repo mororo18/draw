@@ -2,11 +2,85 @@ use std::os::fd::AsFd;
 use wayland_client::{
     protocol::wl_buffer, protocol::wl_compositor, protocol::wl_keyboard, protocol::wl_pointer,
     protocol::wl_registry, protocol::wl_seat, protocol::wl_shm, protocol::wl_shm_pool,
-    protocol::wl_subcompositor, protocol::wl_surface, Connection, Dispatch, Proxy, QueueHandle,
+    protocol::wl_subcompositor, protocol::wl_subsurface, protocol::wl_surface, Connection,
+    Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
 const CURSOR_SIZE: u32 = 24;
+
+struct WindowFrameDecorations {
+    base_surface: Option<wl_surface::WlSurface>,
+    subsurface_role: Option<wl_subsurface::WlSubsurface>,
+    file: Option<std::fs::File>,
+    buffer: Option<wl_buffer::WlBuffer>,
+    width: i32,
+    height: i32,
+}
+
+impl WindowFrameDecorations {
+    fn new(
+        compositor: &wl_compositor::WlCompositor,
+        subcompositor: &wl_subcompositor::WlSubcompositor,
+        parent_surface: &wl_surface::WlSurface,
+        shm: &wl_shm::WlShm,
+        qh: &QueueHandle<WindowState>,
+        frame_dimensions: (i32, i32),
+    ) -> Self {
+        let new_surface = compositor.create_surface(qh, ());
+        let subsurface = subcompositor.get_subsurface(&new_surface, parent_surface, qh, ());
+
+        // FIXME: consider the size of the decorations in the dimensions;
+        let (width, height) = frame_dimensions;
+
+        // TODO: set the right position given the dimensions of the decorations
+        subsurface.set_position(0, -20);
+
+        let file = tempfile::tempfile().unwrap();
+        file.set_len((width * height * 4) as u64)
+            .expect("Unable te resize file");
+
+        let shm_pool = shm.create_pool(file.as_fd(), width * height * 4, qh, ());
+
+        let buffer = shm_pool.create_buffer(
+            0,
+            width,
+            height,
+            width * 4,
+            wl_shm::Format::Argb8888,
+            qh,
+            (),
+        );
+
+        Self {
+            base_surface: Some(new_surface),
+            subsurface_role: Some(subsurface),
+            file: Some(file),
+            buffer: Some(buffer),
+            width,
+            height,
+        }
+    }
+
+    fn draw(&self, _frame: &[u8]) {
+        let frame = vec![255_u8; 800 * 4];
+
+        use std::io::{Seek, Write};
+        let mut file = self.file.as_ref().unwrap();
+        file.rewind().unwrap();
+        let mut buf = std::io::BufWriter::new(file);
+        buf.write_all(&frame).unwrap();
+        buf.flush().unwrap();
+
+        let subsurface = self.subsurface_role.as_ref().unwrap();
+        let surface = self.base_surface.as_ref().unwrap();
+
+        subsurface.set_sync();
+        surface.attach(Some(self.buffer.as_ref().unwrap()), 0, 0);
+        surface.damage(0, 0, self.width, self.height);
+        surface.commit();
+    }
+}
 
 #[derive(Default)]
 struct WindowState {
@@ -48,6 +122,7 @@ impl WindowState {
         self.cursor_theme = Some(cursor_theme);
     }
 
+    // TODO: We could set the opaque region here
     fn init_xdg_surface(&mut self, qh: &QueueHandle<Self>) {
         let xdg_wm_base = self.xdg_wm_base.as_ref().unwrap();
         let base_surface = self.base_surface.as_ref().unwrap();
@@ -97,6 +172,7 @@ impl WindowState {
 
 pub struct WaylandWindow {
     state: WindowState,
+    window_frame: WindowFrameDecorations,
     event_queue: wayland_client::EventQueue<WindowState>,
 }
 
@@ -125,7 +201,25 @@ impl super::Window for WaylandWindow {
         // TODO: check if this second roundtrip is really necessary
         event_queue.roundtrip(&mut state).unwrap();
 
-        Self { state, event_queue }
+        let base_surface = state.base_surface.as_ref().unwrap();
+        let compositor = state.compositor.as_ref().unwrap();
+        let subcompositor = state.subcompositor.as_ref().unwrap();
+        let shm = state.shm.as_ref().unwrap();
+
+        let window_frame = WindowFrameDecorations::new(
+            compositor,
+            subcompositor,
+            base_surface,
+            shm,
+            &qh,
+            (width as i32, height as i32),
+        );
+
+        Self {
+            state,
+            window_frame,
+            event_queue,
+        }
     }
 
     fn handle(&mut self) -> Vec<super::Event> {
@@ -138,7 +232,8 @@ impl super::Window for WaylandWindow {
         self.state.draw_frame(src);
 
         if self.state.configured_xdg_surface {
-            //self.frame.draw();
+            self.window_frame.draw(&[]);
+
             let buffer = self.state.buffer.as_ref().unwrap();
             let surface = self.state.base_surface.as_ref().unwrap();
             surface.attach(Some(buffer), 0, 0);
@@ -215,7 +310,6 @@ impl Dispatch<wl_shm::WlShm, ()> for WindowState {
         //println!("Recived {} event: {:#?}", wl_shm::WlShm::interface().name, event);
     }
 }
-
 impl Dispatch<wl_surface::WlSurface, ()> for WindowState {
     fn event(
         _: &mut Self,
@@ -228,6 +322,23 @@ impl Dispatch<wl_surface::WlSurface, ()> for WindowState {
         println!(
             "Recived {} event: {:#?}",
             wl_surface::WlSurface::interface().name,
+            event
+        );
+    }
+}
+
+impl Dispatch<wl_subsurface::WlSubsurface, ()> for WindowState {
+    fn event(
+        _: &mut Self,
+        _: &wl_subsurface::WlSubsurface,
+        event: wl_subsurface::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<WindowState>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_subsurface::WlSubsurface::interface().name,
             event
         );
     }
@@ -323,6 +434,7 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
             // 'Suggest' a surface change
             xdg_toplevel::Event::Configure { width, height, .. } => {
                 if width != 0 && height != 0 {
+                    // NOTE: This dimensions include the area ocupied by the subsurfaces
                     state.width = width;
                     state.height = height;
                 }

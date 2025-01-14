@@ -3,6 +3,8 @@ mod wayland_impl;
 #[cfg(x11_impl)]
 mod x11_impl;
 
+mod window_decorator;
+
 #[cfg(wayland_impl)]
 pub use wayland_impl::WaylandWindow;
 #[cfg(x11_impl)]

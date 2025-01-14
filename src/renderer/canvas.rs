@@ -26,7 +26,9 @@ pub enum Color {
     Blue,
 
     Grey,
+    Transparent,
     Custom([u8; 3]),
+    CustomWithAlpha([u8; 4]),
 }
 
 impl Color {
@@ -37,8 +39,10 @@ impl Color {
             Color::Red => Pixel::red(),
             Color::Green => Pixel::green(),
             Color::Blue => Pixel::blue(),
-            Color::Grey => Pixel::new(128, 128, 128),
-            Color::Custom(col) => Pixel::new(col[0], col[1], col[2]),
+            Color::Grey => Pixel::new(128, 128, 128, 255),
+            Color::Transparent => Pixel::new(0, 0, 0, 0),
+            Color::Custom(col) => Pixel::new(col[0], col[1], col[2], 255),
+            Color::CustomWithAlpha(col) => Pixel::new(col[0], col[1], col[2], col[3]),
         }
     }
 
@@ -54,13 +58,13 @@ struct Pixel {
     g: u8,
     r: u8,
     #[allow(dead_code)]
-    padd: u8,
+    alpha: u8,
 }
 
 // TODO: criar func "from_hex(cod: str)" e constantes com cores
 impl Pixel {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b, padd: 255 }
+    pub fn new(r: u8, g: u8, b: u8, alpha: u8) -> Self {
+        Self { r, g, b, alpha }
     }
 
     pub fn blend(a: Self, b: Self) -> Self {
@@ -82,7 +86,7 @@ impl Pixel {
 
     pub fn from_normalized_vec3(src: Vec3) -> Self {
         let scaled = src * 255.0;
-        Self::new(scaled.x() as u8, scaled.y() as u8, scaled.z() as u8)
+        Self::new(scaled.x() as u8, scaled.y() as u8, scaled.z() as u8, 255)
     }
 
     pub fn as_vec4(&self) -> Vec4 {
@@ -90,27 +94,27 @@ impl Pixel {
             self.b as f32,
             self.g as f32,
             self.r as f32,
-            self.padd as f32,
+            self.alpha as f32,
         ])
     }
 
     pub fn red() -> Self {
-        Pixel::new(255, 0, 0)
+        Pixel::new(255, 0, 0, 255)
     }
     pub fn green() -> Self {
-        Pixel::new(0, 255, 00)
+        Pixel::new(0, 255, 0, 255)
     }
     pub fn blue() -> Self {
-        Pixel::new(0, 0, 255)
+        Pixel::new(0, 0, 255, 255)
     }
     pub fn white() -> Self {
-        Pixel::new(255, 255, 255)
+        Pixel::new(255, 255, 255, 255)
     }
     pub fn black() -> Self {
-        Pixel::new(0, 0, 0)
+        Pixel::new(0, 0, 0, 255)
     }
     pub fn azul_bb() -> Self {
-        Pixel::new(155, 186, 255)
+        Pixel::new(155, 186, 255, 255)
     }
 }
 
@@ -127,7 +131,7 @@ impl Add for Pixel {
             g: g_sum,
             b: b_sum,
 
-            padd: 0,
+            alpha: 255,
         }
     }
 }
@@ -140,7 +144,7 @@ impl Mul<f32> for Pixel {
         let g = ((self.g as f32) * rhs) as u8;
         let b = ((self.b as f32) * rhs) as u8;
 
-        Pixel { r, g, b, padd: 255 }
+        Pixel { r, g, b, alpha: 255 }
     }
 }
 
@@ -269,8 +273,8 @@ impl Mul<f32> for VertexAttributes {
 #[derive(Debug, Clone)]
 pub struct Rectangle {
     pub pos: PixelPos,
-    pub height: usize,
     pub width: usize,
+    pub height: usize,
 }
 
 impl Rectangle {
@@ -286,6 +290,14 @@ impl Rectangle {
     }
     fn y_max(&self) -> usize {
         self.pos.y + self.height
+    }
+
+    pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+        Rectangle {
+            pos: PixelPos { x, y },
+            width,
+            height,
+        }
     }
 
     pub fn from_coords(x0: usize, y0: usize, x1: usize, y1: usize) -> Self {
@@ -396,6 +408,12 @@ impl Canvas {
         unsafe {
             *self.depth_frame.get_unchecked_mut(self.width * y + x) = depth;
         }
+    }
+
+    pub fn fill_color(&mut self, color: Color) {
+        self.frame
+            .iter_mut()
+            .for_each(|pixel| *pixel = color.as_pixel());
     }
 
     pub fn clear(&mut self) {
@@ -674,6 +692,7 @@ impl Canvas {
                             diffuse_color_slice[0],
                             diffuse_color_slice[1],
                             diffuse_color_slice[2],
+                            255
                         )
                         .normalized_as_vec3();
 
@@ -681,6 +700,7 @@ impl Canvas {
                             ambient_color_slice[0],
                             ambient_color_slice[1],
                             ambient_color_slice[2],
+                            255
                         )
                         .normalized_as_vec3();
 

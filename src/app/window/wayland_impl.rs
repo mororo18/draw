@@ -2,23 +2,29 @@ use std::os::fd::AsFd;
 use wayland_client::{
     protocol::wl_buffer, protocol::wl_compositor, protocol::wl_keyboard, protocol::wl_pointer,
     protocol::wl_registry, protocol::wl_seat, protocol::wl_shm, protocol::wl_shm_pool,
-    protocol::wl_subcompositor, protocol::wl_subsurface, protocol::wl_surface, Connection,
+    protocol::wl_subcompositor, protocol::wl_subsurface, protocol::wl_surface, protocol::wl_region, Connection,
     Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
+use super::window_decorator::WindowDecorator;
+
 const CURSOR_SIZE: u32 = 24;
 
-struct WindowFrameDecorations {
+struct WindowFrame {
     base_surface: Option<wl_surface::WlSurface>,
     subsurface_role: Option<wl_subsurface::WlSubsurface>,
     file: Option<std::fs::File>,
     buffer: Option<wl_buffer::WlBuffer>,
+
+
     width: i32,
     height: i32,
+
+    decorator: WindowDecorator,
 }
 
-impl WindowFrameDecorations {
+impl WindowFrame {
     fn new(
         compositor: &wl_compositor::WlCompositor,
         subcompositor: &wl_subcompositor::WlSubcompositor,
@@ -30,40 +36,48 @@ impl WindowFrameDecorations {
         let new_surface = compositor.create_surface(qh, ());
         let subsurface = subcompositor.get_subsurface(&new_surface, parent_surface, qh, ());
 
-        // FIXME: consider the size of the decorations in the dimensions;
-        let (width, height) = frame_dimensions;
+        let title_bar_height = 20;
+        let side_bar_width = 3;
 
-        // TODO: set the right position given the dimensions of the decorations
-        subsurface.set_position(0, -20);
+        let (width, height) = frame_dimensions;
+        let window_dimensions = (width + side_bar_width * 2, height + title_bar_height + side_bar_width);
+        let (win_width, win_height) = window_dimensions;
+        let subsurface_position = (-side_bar_width, - title_bar_height);
+
+        subsurface.set_position(subsurface_position.0, subsurface_position.1);
 
         let file = tempfile::tempfile().unwrap();
         file.set_len((width * height * 4) as u64)
             .expect("Unable te resize file");
 
-        let shm_pool = shm.create_pool(file.as_fd(), width * height * 4, qh, ());
+        let shm_pool = shm.create_pool(file.as_fd(), win_width * win_height * 4, qh, ());
 
         let buffer = shm_pool.create_buffer(
             0,
-            width,
-            height,
-            width * 4,
+            win_width,
+            win_height,
+            win_width * 4,
             wl_shm::Format::Argb8888,
             qh,
             (),
         );
 
         Self {
-            base_surface: Some(new_surface),
+            base_surface: Some(new_surface.clone()),
             subsurface_role: Some(subsurface),
             file: Some(file),
             buffer: Some(buffer),
-            width,
-            height,
+            width: win_width,
+            height: win_height,
+            decorator: WindowDecorator::new(frame_dimensions, window_dimensions),
         }
     }
 
-    fn draw(&self, _frame: &[u8]) {
-        let frame = vec![255_u8; 800 * 4];
+    fn draw(&mut self, _frame: &[u8]) {
+
+        self.decorator.render();
+        //let frame = vec![255_u8; 800 * 4];
+        let frame = self.decorator.frame_as_bytes_slice();
 
         use std::io::{Seek, Write};
         let mut file = self.file.as_ref().unwrap();
@@ -172,7 +186,7 @@ impl WindowState {
 
 pub struct WaylandWindow {
     state: WindowState,
-    window_frame: WindowFrameDecorations,
+    window_frame: WindowFrame,
     event_queue: wayland_client::EventQueue<WindowState>,
 }
 
@@ -206,7 +220,7 @@ impl super::Window for WaylandWindow {
         let subcompositor = state.subcompositor.as_ref().unwrap();
         let shm = state.shm.as_ref().unwrap();
 
-        let window_frame = WindowFrameDecorations::new(
+        let window_frame = WindowFrame::new(
             compositor,
             subcompositor,
             base_surface,
@@ -392,6 +406,23 @@ impl Dispatch<wl_subcompositor::WlSubcompositor, ()> for WindowState {
         println!(
             "Recived {} event: {:#?}",
             wl_subcompositor::WlSubcompositor::interface().name,
+            event
+        );
+    }
+}
+
+impl Dispatch<wl_region::WlRegion, ()> for WindowState {
+    fn event(
+        _: &mut Self,
+        _: &wl_region::WlRegion,
+        event: wl_region::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<WindowState>,
+    ) {
+        println!(
+            "Recived {} event: {:#?}",
+            wl_region::WlRegion::interface().name,
             event
         );
     }

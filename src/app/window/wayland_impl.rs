@@ -1,9 +1,11 @@
 use std::os::fd::AsFd;
 use wayland_client::{
-    protocol::wl_buffer, protocol::wl_compositor, protocol::wl_keyboard, protocol::wl_pointer,
-    protocol::wl_registry, protocol::wl_seat, protocol::wl_shm, protocol::wl_shm_pool,
-    protocol::wl_subcompositor, protocol::wl_subsurface, protocol::wl_surface, protocol::wl_region, Connection,
-    Dispatch, Proxy, QueueHandle,
+    backend::ObjectId,
+    protocol::{
+        wl_buffer, wl_compositor, wl_keyboard, wl_pointer, wl_region, wl_registry, wl_seat, wl_shm,
+        wl_shm_pool, wl_subcompositor, wl_subsurface, wl_surface,
+    },
+    Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
@@ -16,7 +18,6 @@ struct WindowFrame {
     subsurface_role: Option<wl_subsurface::WlSubsurface>,
     file: Option<std::fs::File>,
     buffer: Option<wl_buffer::WlBuffer>,
-
 
     width: i32,
     height: i32,
@@ -31,23 +32,38 @@ impl WindowFrame {
         parent_surface: &wl_surface::WlSurface,
         shm: &wl_shm::WlShm,
         qh: &QueueHandle<WindowState>,
-        frame_dimensions: (i32, i32),
+        content_dimensions: (i32, i32),
     ) -> Self {
         let new_surface = compositor.create_surface(qh, ());
-        let subsurface = subcompositor.get_subsurface(&new_surface, parent_surface, qh, ());
 
         let title_bar_height = 20;
         let side_bar_width = 3;
 
-        let (width, height) = frame_dimensions;
-        let window_dimensions = (width + side_bar_width * 2, height + title_bar_height + side_bar_width);
+        let (content_width, content_height) = content_dimensions;
+        let window_dimensions = (
+            content_width + side_bar_width * 2,
+            content_height + title_bar_height + side_bar_width,
+        );
         let (win_width, win_height) = window_dimensions;
-        let subsurface_position = (-side_bar_width, - title_bar_height);
+        let subsurface_position = (-side_bar_width, -title_bar_height);
 
+        // Add input region using surface coordinates
+        let input_region = compositor.create_region(qh, ());
+        input_region.add(0, 0, win_width, win_height);
+        input_region.subtract(
+            side_bar_width,
+            title_bar_height,
+            content_width,
+            content_height,
+        );
+        new_surface.set_input_region(Some(&input_region));
+
+        // Create the subsurface role
+        let subsurface = subcompositor.get_subsurface(&new_surface, parent_surface, qh, ());
         subsurface.set_position(subsurface_position.0, subsurface_position.1);
 
         let file = tempfile::tempfile().unwrap();
-        file.set_len((width * height * 4) as u64)
+        file.set_len((win_width * win_height * 4) as u64)
             .expect("Unable te resize file");
 
         let shm_pool = shm.create_pool(file.as_fd(), win_width * win_height * 4, qh, ());
@@ -69,12 +85,11 @@ impl WindowFrame {
             buffer: Some(buffer),
             width: win_width,
             height: win_height,
-            decorator: WindowDecorator::new(frame_dimensions, window_dimensions),
+            decorator: WindowDecorator::new(content_dimensions, window_dimensions),
         }
     }
 
     fn draw(&mut self, _frame: &[u8]) {
-
         self.decorator.render();
         //let frame = vec![255_u8; 800 * 4];
         let frame = self.decorator.frame_as_bytes_slice();
@@ -102,7 +117,7 @@ struct WindowState {
     height: i32,
     max_width: i32,
     max_height: i32,
-    latest_events: Vec<super::Event>,
+    output_events: Vec<super::Event>,
     mouse_cursor: super::MouseCursor,
     mouse_pointer_info: super::MouseInfo,
     cursor_visibility: bool,
@@ -111,6 +126,7 @@ struct WindowState {
     seat: Option<wl_seat::WlSeat>,
     subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     base_surface: Option<wl_surface::WlSurface>,
+    pointer_focused_surface: Option<ObjectId>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
     xdg_toplevel: Option<xdg_toplevel::XdgToplevel>,
@@ -196,6 +212,7 @@ impl super::Window for WaylandWindow {
             width: width as i32,
             height: height as i32,
             cursor_visibility: true,
+            pointer_focused_surface: Some(ObjectId::null()),
             ..Default::default()
         };
         let conn = wayland_client::Connection::connect_to_env().unwrap();
@@ -238,7 +255,7 @@ impl super::Window for WaylandWindow {
 
     fn handle(&mut self) -> Vec<super::Event> {
         self.event_queue.blocking_dispatch(&mut self.state).unwrap();
-        self.state.latest_events.drain(..).collect()
+        self.state.output_events.drain(..).collect()
     }
     fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
     fn write_frame_from_slice(&mut self, src: &[u8]) {
@@ -432,16 +449,18 @@ impl Dispatch<wl_compositor::WlCompositor, ()> for WindowState {
     fn event(
         _: &mut Self,
         _: &wl_compositor::WlCompositor,
-        event: wl_compositor::Event,
+        _event: wl_compositor::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_compositor::WlCompositor::interface().name,
             event
         );
+        */
     }
 }
 
@@ -454,11 +473,13 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_toplevel::XdgToplevel::interface().name,
             event
         );
+        */
 
         // https://docs.rs/wayland-protocols/latest/wayland_protocols/xdg/shell/client/xdg_toplevel/enum.Event.html
         match event {
@@ -498,11 +519,13 @@ impl Dispatch<xdg_surface::XdgSurface, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_surface::XdgSurface::interface().name,
             event
         );
+        */
 
         if let xdg_surface::Event::Configure { serial } = event {
             xdg_surface.ack_configure(serial);
@@ -526,11 +549,13 @@ impl Dispatch<xdg_wm_base::XdgWmBase, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_wm_base::XdgWmBase::interface().name,
             event
         );
+        */
         if let xdg_wm_base::Event::Ping { serial } = event {
             xdg_wm_base.pong(serial);
         }
@@ -546,11 +571,13 @@ impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_seat::WlSeat::interface().name,
             event
         );
+        */
         if let wl_seat::Event::Capabilities {
             capabilities: wayland_client::WEnum::Value(capabilities),
         } = event
@@ -609,7 +636,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                     _ => super::Event::Empty,
                 };
 
-                win_state.latest_events.push(button_event);
+                win_state.output_events.push(button_event);
             }
 
             wl_pointer::Event::Motion {
@@ -617,26 +644,34 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 surface_y,
                 ..
             } => {
-                // TODO: Enable cursor animations
+                let base_surface = win_state.base_surface.as_ref().unwrap();
+                let pointer_focus = win_state.pointer_focused_surface.as_ref();
 
-                let dx = surface_x as i32 - win_state.mouse_pointer_info.x;
-                let dy = surface_y as i32 - win_state.mouse_pointer_info.y;
+                // Only output events if the pointer is focused on the window content
+                if pointer_focus.is_some_and(|focus| focus == &base_surface.id()) {
+                    // TODO: Enable cursor animations
+                    let dx = surface_x as i32 - win_state.mouse_pointer_info.x;
+                    let dy = surface_y as i32 - win_state.mouse_pointer_info.y;
 
-                let pointer_info = super::MouseInfo {
-                    x: surface_x as i32,
-                    y: surface_y as i32,
-                    dx,
-                    dy,
-                };
+                    let pointer_info = super::MouseInfo {
+                        x: surface_x as i32,
+                        y: surface_y as i32,
+                        dx,
+                        dy,
+                    };
 
-                win_state.mouse_pointer_info = pointer_info.clone();
+                    win_state.mouse_pointer_info = pointer_info.clone();
 
-                win_state
-                    .latest_events
-                    .push(super::Event::MouseMotion(pointer_info));
+                    win_state
+                        .output_events
+                        .push(super::Event::MouseMotion(pointer_info));
+                }
             }
 
-            wl_pointer::Event::Enter { serial, .. } => {
+            wl_pointer::Event::Enter {
+                serial, surface, ..
+            } => {
+                win_state.pointer_focused_surface = Some(surface.id());
                 let cursor_theme = win_state.cursor_theme.as_mut().unwrap();
                 let cursor_name: &str = From::from(win_state.mouse_cursor);
                 let cursor = cursor_theme
@@ -666,6 +701,10 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 );
             }
 
+            wl_pointer::Event::Leave { serial, surface } => {
+                win_state.pointer_focused_surface = None;
+            }
+
             _ => {}
         }
     }
@@ -680,11 +719,13 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_keyboard::WlKeyboard::interface().name,
             event
         );
+        */
         if let wl_keyboard::Event::Key { key, .. } = event {
             if key == 1 {
                 // ESC key
@@ -703,11 +744,13 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Global: Recived {} event: {:#?}",
             wl_registry::WlRegistry::interface().name,
             event
         );
+        */
         if let wl_registry::Event::Global {
             name,
             interface,

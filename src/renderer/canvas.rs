@@ -144,7 +144,12 @@ impl Mul<f32> for Pixel {
         let g = ((self.g as f32) * rhs) as u8;
         let b = ((self.b as f32) * rhs) as u8;
 
-        Pixel { r, g, b, alpha: 255 }
+        Pixel {
+            r,
+            g,
+            b,
+            alpha: 255,
+        }
     }
 }
 
@@ -692,7 +697,7 @@ impl Canvas {
                             diffuse_color_slice[0],
                             diffuse_color_slice[1],
                             diffuse_color_slice[2],
-                            255
+                            255,
                         )
                         .normalized_as_vec3();
 
@@ -700,7 +705,7 @@ impl Canvas {
                             ambient_color_slice[0],
                             ambient_color_slice[1],
                             ambient_color_slice[2],
-                            255
+                            255,
                         )
                         .normalized_as_vec3();
 

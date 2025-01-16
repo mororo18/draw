@@ -9,7 +9,7 @@ use wayland_client::{
 };
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
 
-use super::window_decorator::WindowDecorator;
+use super::window_decorator::{DecorationArea, WindowDecorator};
 
 const CURSOR_SIZE: u32 = 24;
 
@@ -112,10 +112,11 @@ impl WindowFrame {
     }
 }
 
+// TODO: rm this Default, and unnecessery Option's
 #[derive(Default)]
 struct WindowState {
-    width: i32,
-    height: i32,
+    content_width: i32,
+    content_height: i32,
     max_width: i32,
     max_height: i32,
     output_events: Vec<super::Event>,
@@ -127,6 +128,7 @@ struct WindowState {
     seat: Option<wl_seat::WlSeat>,
     subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     base_surface: Option<wl_surface::WlSurface>,
+    window_frame: Option<WindowFrame>,
     pointer_focused_surface: Option<ObjectId>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
@@ -172,16 +174,21 @@ impl WindowState {
     fn allocate_shared_buffer(&mut self, qh: &QueueHandle<Self>) {
         let shm = self.shm.as_ref().unwrap();
         let file = tempfile::tempfile().unwrap();
-        file.set_len((self.width * self.height * 4) as u64)
+        file.set_len((self.content_width * self.content_height * 4) as u64)
             .expect("unable te resize file");
 
-        let shm_pool = shm.create_pool(file.as_fd(), self.width * self.height * 4, qh, ());
+        let shm_pool = shm.create_pool(
+            file.as_fd(),
+            self.content_width * self.content_height * 4,
+            qh,
+            (),
+        );
 
         let buffer = shm_pool.create_buffer(
             0,
-            self.width,
-            self.height,
-            self.width * 4,
+            self.content_width,
+            self.content_height,
+            self.content_width * 4,
             wl_shm::Format::Xrgb8888,
             qh,
             (),
@@ -203,15 +210,14 @@ impl WindowState {
 
 pub struct WaylandWindow {
     state: WindowState,
-    window_frame: WindowFrame,
     event_queue: wayland_client::EventQueue<WindowState>,
 }
 
 impl super::Window for WaylandWindow {
     fn new(width: usize, height: usize) -> Self {
         let mut state = WindowState {
-            width: width as i32,
-            height: height as i32,
+            content_width: width as i32,
+            content_height: height as i32,
             cursor_visibility: true,
             pointer_focused_surface: Some(ObjectId::null()),
             ..Default::default()
@@ -247,11 +253,9 @@ impl super::Window for WaylandWindow {
             (width as i32, height as i32),
         );
 
-        Self {
-            state,
-            window_frame,
-            event_queue,
-        }
+        state.window_frame = Some(window_frame);
+
+        Self { state, event_queue }
     }
 
     fn handle(&mut self) -> Vec<super::Event> {
@@ -260,16 +264,19 @@ impl super::Window for WaylandWindow {
     }
     fn write_frame_from_ptr(&mut self, _src: *const u8, _sz: usize) {}
     fn write_frame_from_slice(&mut self, src: &[u8]) {
-        assert_eq!(self.state.width * self.state.height * 4, src.len() as i32);
+        assert_eq!(
+            self.state.content_width * self.state.content_height * 4,
+            src.len() as i32
+        );
         self.state.draw_frame(src);
 
         if self.state.configured_xdg_surface {
-            self.window_frame.draw(&[]);
+            self.state.window_frame.as_mut().unwrap().draw(&[]);
 
             let buffer = self.state.buffer.as_ref().unwrap();
             let surface = self.state.base_surface.as_ref().unwrap();
             surface.attach(Some(buffer), 0, 0);
-            surface.damage_buffer(0, 0, self.state.width, self.state.height);
+            surface.damage_buffer(0, 0, self.state.content_width, self.state.content_height);
             surface.commit();
         }
     }
@@ -287,7 +294,10 @@ impl super::Window for WaylandWindow {
         )
     }
     fn get_window_dim(&self) -> (usize, usize) {
-        (self.state.width as usize, self.state.height as usize)
+        (
+            self.state.content_width as usize,
+            self.state.content_height as usize,
+        )
     }
     fn hide_mouse_cursor(&mut self) {
         self.state.cursor_visibility = false;
@@ -474,25 +484,26 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
-        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_toplevel::XdgToplevel::interface().name,
             event
         );
-        */
 
         // https://docs.rs/wayland-protocols/latest/wayland_protocols/xdg/shell/client/xdg_toplevel/enum.Event.html
         match event {
             // 'Suggest' a surface change
             xdg_toplevel::Event::Configure { width, height, .. } => {
                 if width != 0 && height != 0 {
-                    // NOTE: This dimensions include the area ocupied by the subsurfaces
-                    state.width = width;
-                    state.height = height;
+                    // NOTE: This dimensions includes the area ocupied by the subsurfaces
+                    // TODO: We need to check if the WindowDecoration subsurface is alreday
+                    // attached before updating the content dimensions state.
+
+                    // state.content_width = width - frame_side_border_thickness * 2;
+                    // state.content_height = height - frame_side_border_thickness - titlebar_height;
                 }
             }
-            // Current window bounds (non-fullscreen)
+            // Current window bounds (maximized)
             xdg_toplevel::Event::ConfigureBounds { width, height } => {
                 if width != 0 && height != 0 {
                     state.max_width = width;
@@ -603,14 +614,21 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_pointer::WlPointer::interface().name,
             event
         );
+        */
 
         match event {
-            wl_pointer::Event::Button { button, state, .. } => {
+            wl_pointer::Event::Button {
+                button,
+                state,
+                serial,
+                ..
+            } => {
                 let mouse_button = match button {
                     input_event_codes::BTN_LEFT!() => super::Button::MouseLeft,
                     input_event_codes::BTN_MIDDLE!() => super::Button::MouseMiddle,
@@ -623,14 +641,26 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 let button_event = match state.into_result().unwrap() {
                     wl_pointer::ButtonState::Released => super::Event::ButtonRelease(mouse_button),
                     wl_pointer::ButtonState::Pressed => {
-                        /*  TODO: In order to move the window we need to verify
-                         *  if the ButtonPress occurred over the title bar of the
-                         *  window frame.
-                         *
-                         *  let seat = win_state.seat.as_ref().unwrap();
-                         *  let toplevel = win_state.xdg_toplevel.as_ref().unwrap();
-                         *  toplevel._move(seat, serial);
-                         */
+                        // In order to move the window we need to verify
+                        // if the ButtonPress occurred over the title bar of the
+                        // window frame.
+                        let window_frame = win_state.window_frame.as_ref().unwrap();
+                        let decoration_surface = window_frame.base_surface.as_ref().unwrap();
+                        let pointer_focus = win_state.pointer_focused_surface.as_ref();
+                        let pointer_x = win_state.mouse_pointer_info.x;
+                        let pointer_y = win_state.mouse_pointer_info.y;
+
+                        if pointer_focus.is_some_and(|focus| focus == &decoration_surface.id())
+                            && window_frame.decorator.is_inside_area(
+                                pointer_x,
+                                pointer_y,
+                                DecorationArea::TitleBar,
+                            )
+                        {
+                            let seat = win_state.seat.as_ref().unwrap();
+                            let toplevel = win_state.xdg_toplevel.as_ref().unwrap();
+                            toplevel._move(seat, serial);
+                        }
 
                         super::Event::ButtonPress(mouse_button)
                     }
@@ -645,34 +675,46 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 surface_y,
                 ..
             } => {
+                // TODO: Enable cursor animations
+
+                // Update pointer position
+                win_state
+                    .mouse_pointer_info
+                    .update(surface_x as i32, surface_y as i32);
+
                 let base_surface = win_state.base_surface.as_ref().unwrap();
                 let pointer_focus = win_state.pointer_focused_surface.as_ref();
 
                 // Only output events if the pointer is focused on the window content
                 if pointer_focus.is_some_and(|focus| focus == &base_surface.id()) {
-                    // TODO: Enable cursor animations
-                    let dx = surface_x as i32 - win_state.mouse_pointer_info.x;
-                    let dy = surface_y as i32 - win_state.mouse_pointer_info.y;
-
-                    let pointer_info = super::MouseInfo {
-                        x: surface_x as i32,
-                        y: surface_y as i32,
-                        dx,
-                        dy,
-                    };
-
-                    win_state.mouse_pointer_info = pointer_info.clone();
-
-                    win_state
-                        .output_events
-                        .push(super::Event::MouseMotion(pointer_info));
+                    win_state.output_events.push(super::Event::MouseMotion(
+                        win_state.mouse_pointer_info.clone(),
+                    ));
                 }
             }
 
             wl_pointer::Event::Enter {
-                serial, surface, ..
+                serial,
+                surface,
+                surface_x,
+                surface_y,
             } => {
+                // Update pointer position
+                win_state
+                    .mouse_pointer_info
+                    .update(surface_x as i32, surface_y as i32);
+
+                // Only output events if the pointer is focused on the window content
+                let base_surface = win_state.base_surface.as_ref().unwrap();
+                if surface.id() == base_surface.id() {
+                    win_state.output_events.push(super::Event::MouseMotion(
+                        win_state.mouse_pointer_info.clone(),
+                    ));
+                }
+
+                // Update focused surface
                 win_state.pointer_focused_surface = Some(surface.id());
+
                 let cursor_theme = win_state.cursor_theme.as_mut().unwrap();
                 let cursor_name: &str = From::from(win_state.mouse_cursor);
                 let cursor = cursor_theme
@@ -702,8 +744,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 );
             }
 
-            wl_pointer::Event::Leave { serial, surface } => {
+            wl_pointer::Event::Leave { .. } => {
                 win_state.pointer_focused_surface = None;
+
+                // TODO: Send output MouseUpdate event when leaving the
+                // content's surface. The GUI needs to know that the pointer
+                // position is not hovering any elements.
             }
 
             _ => {}

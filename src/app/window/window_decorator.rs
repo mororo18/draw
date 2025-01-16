@@ -3,8 +3,8 @@ use crate::renderer::linalg::Vec2;
 use crate::renderer::scene::{Texture, TextureMap};
 
 // Clockwise
-#[derive(Debug)]
-enum DecorationArea {
+#[derive(Clone, Debug, PartialEq)]
+pub enum DecorationArea {
     TitleBar = 0,
     RightSideBar = 1,
     BottomBar = 2,
@@ -50,18 +50,15 @@ impl WindowDecorator {
 
         let flip_rect_y = |y: i32, rect_height: i32| -> i32 { win_height - y - rect_height };
 
-        println!("win_width {}", win_width);
-        println!("win_height {}", win_height);
-
-        println!("content_width {}", content_width);
-        println!("content_height {}", content_height);
-
-        println!("top rectangle {:?}", Rectangle::new(0, flip_rect_y(0, content_y) as _, win_width as _, content_y as _));
-
         let decoration_areas = [
             (
                 DecorationArea::TitleBar,
-                Rectangle::new(0, flip_rect_y(0, content_y) as _, win_width as _, content_y as _),
+                Rectangle::new(
+                    0,
+                    flip_rect_y(0, content_y) as _,
+                    win_width as _,
+                    content_y as _,
+                ),
             ),
             (
                 DecorationArea::RightSideBar,
@@ -109,11 +106,21 @@ impl WindowDecorator {
         }
     }
 
+    pub fn is_inside_area(&self, x: i32, y: i32, area: DecorationArea) -> bool {
+        assert!(x > 0);
+        assert!(y > 0);
+        let invert_y = |y: i32| -> i32 { self.height - y - 1 };
+        let y = invert_y(y);
+
+        let (area_id, rect) = &self.decoration_areas[area.clone() as usize];
+        assert!(area_id == &area);
+        rect.contains(x as usize, y as usize)
+    }
+
     pub fn render(&mut self) {
         self.canvas.fill_color(Color::Transparent);
         for area in self.decoration_areas.iter() {
-            let (tag, rect) = area;
-            println!("{:?}", tag);
+            let (_, rect) = area;
             self.canvas.draw_rect(rect.clone(), Color::Red);
         }
     }

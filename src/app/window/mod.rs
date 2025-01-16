@@ -28,6 +28,7 @@ pub trait Window {
     fn write_frame_from_slice(&mut self, src: &[u8]);
     fn get_window_position(&self) -> (i32, i32);
     fn get_screen_dim(&self) -> (usize, usize);
+    // TODO: This propabilly should be called 'get_window_content_dimension'
     fn get_window_dim(&self) -> (usize, usize);
 }
 
@@ -197,4 +198,13 @@ pub struct MouseInfo {
     pub y: i32,
     pub dx: i32,
     pub dy: i32,
+}
+
+impl MouseInfo {
+    pub fn update(&mut self, new_x: i32, new_y: i32) {
+        self.dx = new_x - self.x;
+        self.dy = new_y - self.y;
+        self.x = new_x;
+        self.y = new_y;
+    }
 }

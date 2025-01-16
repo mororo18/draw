@@ -297,6 +297,11 @@ impl Rectangle {
         self.pos.y + self.height - 1
     }
 
+    pub fn contains(&self, x: usize, y: usize) -> bool {
+        (self.pos.x..self.pos.x + self.width).contains(&x)
+            && (self.pos.y..self.pos.y + self.height).contains(&y)
+    }
+
     pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
         Rectangle {
             pos: PixelPos { x, y },

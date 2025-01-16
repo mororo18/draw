@@ -291,10 +291,10 @@ impl Rectangle {
     }
 
     fn x_max(&self) -> usize {
-        self.pos.x + self.width
+        self.pos.x + self.width - 1
     }
     fn y_max(&self) -> usize {
-        self.pos.y + self.height
+        self.pos.y + self.height - 1
     }
 
     pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
@@ -317,8 +317,8 @@ impl Rectangle {
         Self {
             pos: PixelPos { x: x_min, y: y_min },
 
-            height: y_max - y_min,
-            width: x_max - x_min,
+            height: y_max - y_min + 1,
+            width: x_max - x_min + 1,
         }
     }
 

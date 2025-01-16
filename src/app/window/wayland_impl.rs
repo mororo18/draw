@@ -36,8 +36,9 @@ impl WindowFrame {
     ) -> Self {
         let new_surface = compositor.create_surface(qh, ());
 
-        let title_bar_height = 20;
-        let side_bar_width = 3;
+        // PARAMETERS
+        let title_bar_height = 50;
+        let side_bar_width = 10;
 
         let (content_width, content_height) = content_dimensions;
         let window_dimensions = (
@@ -85,7 +86,7 @@ impl WindowFrame {
             buffer: Some(buffer),
             width: win_width,
             height: win_height,
-            decorator: WindowDecorator::new(content_dimensions, window_dimensions),
+            decorator: WindowDecorator::new(content_dimensions, title_bar_height, side_bar_width),
         }
     }
 

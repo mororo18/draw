@@ -192,7 +192,7 @@ pub enum Event {
 }
 
 // TODO: Rename to PointerInfo?
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct MouseInfo {
     pub x: i32,
     pub y: i32,

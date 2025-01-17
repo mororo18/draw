@@ -7,8 +7,9 @@ use crate::renderer::scene::{Texture, TextureMap};
 pub enum DecorationArea {
     TitleBar = 0,
     RightSideBar = 1,
-    BottomBar = 2,
+    BottomSideBar = 2,
     LeftSideBar = 3,
+    TopSideBar = 4,
 }
 
 pub struct WindowDecorator {
@@ -20,33 +21,32 @@ pub struct WindowDecorator {
     window_rect: Rectangle,
     content_rect: Rectangle,
 
-    decoration_areas: [(DecorationArea, Rectangle); 4],
+    decoration_areas: [(DecorationArea, Rectangle); 5],
 }
 
 impl WindowDecorator {
     //pub const FONT_SIZE: f32 = 14.0;
     pub fn new(
         content_dimensions: (i32, i32),
-        top_bar_height: i32,
+        title_bar_height: i32,
         side_bar_thickness: i32,
     ) -> Self {
+        // TODO: Find better name for these variables
         let (content_width, content_height) = content_dimensions;
 
         let win_width = content_width + side_bar_thickness * 2;
-        let win_height = content_height + side_bar_thickness + top_bar_height;
+        let win_height = content_height + side_bar_thickness * 2 + title_bar_height;
         let content_x = side_bar_thickness;
-        let content_y = top_bar_height;
-
-        let top_bar_width = win_width;
+        let content_y = title_bar_height;
 
         let bottom_bar_x = 0;
-        let bottom_bar_y = top_bar_height + content_height;
+        let bottom_bar_y = side_bar_thickness + content_height + title_bar_height;
 
         let left_bar_x = 0;
-        let left_bar_y = top_bar_height;
+        let left_bar_y = side_bar_thickness;
 
         let right_bar_x = side_bar_thickness + content_width;
-        let right_bar_y = top_bar_height;
+        let right_bar_y = side_bar_thickness;
 
         let flip_rect_y = |y: i32, rect_height: i32| -> i32 { win_height - y - rect_height };
 
@@ -54,9 +54,9 @@ impl WindowDecorator {
             (
                 DecorationArea::TitleBar,
                 Rectangle::new(
-                    0,
-                    flip_rect_y(0, content_y) as _,
-                    win_width as _,
+                    side_bar_thickness as _,
+                    flip_rect_y(side_bar_thickness, content_y) as _,
+                    content_width as _,
                     content_y as _,
                 ),
             ),
@@ -64,13 +64,13 @@ impl WindowDecorator {
                 DecorationArea::RightSideBar,
                 Rectangle::new(
                     right_bar_x as _,
-                    flip_rect_y(right_bar_y, content_height) as _,
+                    flip_rect_y(right_bar_y, content_height + title_bar_height) as _,
                     side_bar_thickness as _,
-                    content_height as _,
+                    (content_height + title_bar_height) as _,
                 ),
             ),
             (
-                DecorationArea::BottomBar,
+                DecorationArea::BottomSideBar,
                 Rectangle::new(
                     bottom_bar_x as _,
                     flip_rect_y(bottom_bar_y, side_bar_thickness) as _,
@@ -82,9 +82,18 @@ impl WindowDecorator {
                 DecorationArea::LeftSideBar,
                 Rectangle::new(
                     left_bar_x as _,
-                    flip_rect_y(left_bar_y, content_height) as _,
+                    flip_rect_y(left_bar_y, content_height + title_bar_height) as _,
                     side_bar_thickness as _,
-                    content_height as _,
+                    (content_height + title_bar_height) as _,
+                ),
+            ),
+            (
+                DecorationArea::TopSideBar,
+                Rectangle::new(
+                    0,
+                    flip_rect_y(0, side_bar_thickness) as _,
+                    win_width as _,
+                    side_bar_thickness as _,
                 ),
             ),
         ];
@@ -106,15 +115,19 @@ impl WindowDecorator {
         }
     }
 
-    pub fn is_inside_area(&self, x: i32, y: i32, area: DecorationArea) -> bool {
+    pub fn inside_area(&self, x: i32, y: i32) -> Option<DecorationArea> {
         assert!(x > 0);
         assert!(y > 0);
         let invert_y = |y: i32| -> i32 { self.height - y - 1 };
         let y = invert_y(y);
 
-        let (area_id, rect) = &self.decoration_areas[area.clone() as usize];
-        assert!(area_id == &area);
-        rect.contains(x as usize, y as usize)
+        for (area_id, rect) in self.decoration_areas.iter() {
+            if rect.contains(x as usize, y as usize) {
+                return Some(area_id.clone());
+            }
+        }
+
+        None
     }
 
     pub fn render(&mut self) {

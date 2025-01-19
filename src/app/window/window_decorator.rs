@@ -17,6 +17,8 @@ pub struct WindowDecorator {
 
     width: i32,
     height: i32,
+    title_bar_height: i32,
+    side_bar_thickness: i32,
 
     window_rect: Rectangle,
     content_rect: Rectangle,
@@ -101,6 +103,8 @@ impl WindowDecorator {
         Self {
             width: win_width,
             height: win_height,
+            title_bar_height,
+            side_bar_thickness,
             canvas: Canvas::new(win_width as _, win_height as _),
 
             decoration_areas,
@@ -140,5 +144,86 @@ impl WindowDecorator {
 
     pub fn frame_as_bytes_slice(&self) -> &[u8] {
         self.canvas.as_bytes_slice()
+    }
+
+    // FIXME: This is the same as the initialization function.
+    // REWRITE!!
+    pub fn resize_content(&mut self, content_dimensions: (i32, i32)) {
+        // TODO: Find better name for these variables
+        let (content_width, content_height) = content_dimensions;
+
+        let win_width = content_width + self.side_bar_thickness * 2;
+        let win_height = content_height + self.side_bar_thickness * 2 + self.title_bar_height;
+        let content_x = self.side_bar_thickness;
+        let content_y = self.title_bar_height;
+
+        let bottom_bar_x = 0;
+        let bottom_bar_y = self.side_bar_thickness + content_height + self.title_bar_height;
+
+        let left_bar_x = 0;
+        let left_bar_y = self.side_bar_thickness;
+
+        let right_bar_x = self.side_bar_thickness + content_width;
+        let right_bar_y = self.side_bar_thickness;
+
+        let flip_rect_y = |y: i32, rect_height: i32| -> i32 { win_height - y - rect_height };
+
+        self.decoration_areas = [
+            (
+                DecorationArea::TitleBar,
+                Rectangle::new(
+                    self.side_bar_thickness as _,
+                    flip_rect_y(self.side_bar_thickness, content_y) as _,
+                   content_width as _,
+                    content_y as _,
+                ),
+            ),
+            (
+                DecorationArea::RightSideBar,
+                Rectangle::new(
+                    right_bar_x as _,
+                    flip_rect_y(right_bar_y, content_height + self.title_bar_height) as _,
+                    self.side_bar_thickness as _,
+                    (content_height + self.title_bar_height) as _,
+                ),
+            ),
+            (
+                DecorationArea::BottomSideBar,
+                Rectangle::new(
+                    bottom_bar_x as _,
+                    flip_rect_y(bottom_bar_y, self.side_bar_thickness) as _,
+                    win_width as _,
+                    self.side_bar_thickness as _,
+                ),
+            ),
+            (
+                DecorationArea::LeftSideBar,
+                Rectangle::new(
+                    left_bar_x as _,
+                    flip_rect_y(left_bar_y, content_height + self.title_bar_height) as _,
+                    self.side_bar_thickness as _,
+                    (content_height + self.title_bar_height) as _,
+                ),
+            ),
+            (
+                DecorationArea::TopSideBar,
+                Rectangle::new(
+                    0,
+                    flip_rect_y(0, self.side_bar_thickness) as _,
+                    win_width as _,
+                   self.side_bar_thickness as _,
+                ),
+            ),
+        ];
+
+        self.canvas =  Canvas::new(win_width as _, win_height as _);
+
+        self.window_rect = Rectangle::new(0, 0, win_width as _, win_height as _);
+        self.content_rect = Rectangle::new(
+            content_x as _,
+            content_y as _,
+            content_width as _,
+            content_height as _,
+        );
     }
 }

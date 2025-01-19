@@ -2,8 +2,8 @@ use std::os::fd::AsFd;
 use wayland_client::{
     backend::ObjectId,
     protocol::{
-        wl_buffer, wl_compositor, wl_keyboard, wl_pointer, wl_region, wl_registry, wl_seat, wl_shm,
-        wl_shm_pool, wl_subcompositor, wl_subsurface, wl_surface, wl_output,
+        wl_buffer, wl_compositor, wl_keyboard, wl_output, wl_pointer, wl_region, wl_registry,
+        wl_seat, wl_shm, wl_shm_pool, wl_subcompositor, wl_subsurface, wl_surface,
     },
     Connection, Dispatch, Proxy, QueueHandle,
 };
@@ -11,7 +11,7 @@ use wayland_protocols::xdg::shell::client::{
     xdg_surface, xdg_toplevel, xdg_toplevel::ResizeEdge, xdg_wm_base,
 };
 
-use super::window_decorator::{DecorationArea, WindowDecorator};
+use super::window_decorator::{DecorationArea, WindowDecorator, WindowEdges};
 
 const CURSOR_SIZE: u32 = 24;
 
@@ -31,7 +31,6 @@ struct WindowFrame {
     side_bar_thickness: u32,
 
     decorator: WindowDecorator,
-
 }
 
 impl WindowFrame {
@@ -74,7 +73,8 @@ impl WindowFrame {
 
         let shm_pool_len = win_width * win_height * 4;
         let file = tempfile::tempfile().unwrap();
-        file.set_len(shm_pool_len as u64).expect("Unable te resize file");
+        file.set_len(shm_pool_len as u64)
+            .expect("Unable te resize file");
         let shm_pool = shm.create_pool(file.as_fd(), shm_pool_len, qh, ());
 
         let buffer = shm_pool.create_buffer(
@@ -97,7 +97,11 @@ impl WindowFrame {
             shm_pool_len: shm_pool_len as u32,
             width: win_width,
             height: win_height,
-            decorator: WindowDecorator::new(content_dimensions, title_bar_height, side_bar_thickness),
+            decorator: WindowDecorator::new(
+                content_dimensions,
+                title_bar_height,
+                side_bar_thickness,
+            ),
             title_bar_height: title_bar_height as u32,
             side_bar_thickness: side_bar_thickness as u32,
             content_dimensions,
@@ -128,13 +132,13 @@ impl WindowFrame {
     }
 
     fn resize_buffer(&mut self, qh: &QueueHandle<WindowState>) {
-
         let new_len = (self.height * self.width * 4) as u32;
 
         // NOTE: We can only make the pool bigger
         if self.shm_pool_len < new_len {
             let file = self.file.as_ref().unwrap();
-            file.set_len(new_len as u64).expect("Failed to resize file!");
+            file.set_len(new_len as u64)
+                .expect("Failed to resize file!");
             self.shm_pool.resize(new_len as i32);
             self.shm_pool_len = new_len;
         }
@@ -159,8 +163,8 @@ impl WindowFrame {
 struct WindowState {
     content_width: i32,
     content_height: i32,
-    max_width: i32,
-    max_height: i32,
+    screen_width: i32,
+    screen_height: i32,
     output_events: Vec<super::Event>,
     mouse_cursor: super::MouseCursor,
     mouse_pointer_info: super::MouseInfo,
@@ -267,31 +271,31 @@ impl WindowState {
         let pointer_y = self.mouse_pointer_info.y;
 
         if pointer_focus.is_some_and(|focus| focus == &decoration_surface.id()) {
-            if let Some(area_pressed) = window_frame.decorator.inside_area(pointer_x, pointer_y) {
-                let seat = self.seat.as_ref().unwrap();
-                let toplevel = self.xdg_toplevel.as_ref().unwrap();
+            let area_pressed = window_frame.decorator.inside_area(pointer_x, pointer_y);
+            let seat = self.seat.as_ref().unwrap();
+            let toplevel = self.xdg_toplevel.as_ref().unwrap();
 
-                match area_pressed {
-                    DecorationArea::TitleBar => {
-                        toplevel._move(seat, serial);
-                    }
-                    DecorationArea::TopSideBar
-                    | DecorationArea::BottomSideBar
-                    | DecorationArea::RightSideBar
-                    | DecorationArea::LeftSideBar => {
-                        let edge = match area_pressed {
-                            DecorationArea::TopSideBar => ResizeEdge::Top,
-                            DecorationArea::BottomSideBar => ResizeEdge::Bottom,
-                            DecorationArea::RightSideBar => ResizeEdge::Right,
-                            DecorationArea::LeftSideBar => ResizeEdge::Left,
-                            _ => ResizeEdge::None,
-                        };
-
-                        // TODO: 
-                        // https://pop-os.github.io/cosmic-protocols/wayland_protocols/xdg/shell/client/xdg_toplevel/struct.XdgToplevel.html#method.resize
-                        toplevel.resize(seat, serial, edge);
-                    }
+            match area_pressed {
+                DecorationArea::TitleBar => {
+                    toplevel._move(seat, serial);
                 }
+                DecorationArea::Edge( edge ) => {
+                    let edge = match edge {
+                        WindowEdges::Top => ResizeEdge::Top,
+                        WindowEdges::Left => ResizeEdge::Left,
+                        WindowEdges::Right => ResizeEdge::Right,
+                        WindowEdges::Bottom => ResizeEdge::Bottom,
+                        WindowEdges::TopLeft => ResizeEdge::TopLeft,
+                        WindowEdges::TopRight => ResizeEdge::TopRight,
+                        WindowEdges::BottomLeft => ResizeEdge::BottomLeft,
+                        WindowEdges::BottomRight => ResizeEdge::BottomRight,
+                    };
+
+                    // TODO:
+                    // https://pop-os.github.io/cosmic-protocols/wayland_protocols/xdg/shell/client/xdg_toplevel/struct.XdgToplevel.html#method.resize
+                    toplevel.resize(seat, serial, edge);
+                }
+                _ => {}
             }
         }
     }
@@ -314,11 +318,11 @@ impl WindowState {
         // NOTE: We can only make the pool bigger
         if self.shm_pool_len < new_len {
             let file = self.file.as_ref().unwrap();
-            file.set_len(new_len as u64).expect("Failed to resize file!");
+            file.set_len(new_len as u64)
+                .expect("Failed to resize file!");
             shm_pool.resize(new_len as i32);
             self.shm_pool_len = new_len;
         }
-
 
         let buffer = shm_pool.create_buffer(
             0,
@@ -335,7 +339,6 @@ impl WindowState {
     }
 
     fn resize_window(&mut self, width: u32, height: u32) {
-
         let (content_width, content_height) = if self.window_frame.is_some() {
             // TODO: Update WindowFrame input region
             let frame = self.window_frame.as_mut().unwrap();
@@ -343,8 +346,10 @@ impl WindowState {
             // Subtract the current input region
             frame.input_region.subtract(0, 0, frame.width, frame.height);
 
-            frame.content_dimensions = 
-            ((width - frame.side_bar_thickness * 2) as i32, (height - frame.side_bar_thickness * 2 - frame.title_bar_height) as i32);
+            frame.content_dimensions = (
+                (width - frame.side_bar_thickness * 2) as i32,
+                (height - frame.side_bar_thickness * 2 - frame.title_bar_height) as i32,
+            );
             frame.decorator.resize_content(frame.content_dimensions);
             let (content_width, content_height) = frame.content_dimensions;
             frame.width = width as i32;
@@ -375,11 +380,10 @@ impl WindowState {
 
         self.resize_buffer();
 
-        self.output_events.push(
-            super::Event::RedimWindow(
-                (content_width as usize, content_height as usize)
-            )
-        );
+        self.output_events.push(super::Event::RedimWindow((
+            content_width as usize,
+            content_height as usize,
+        )));
     }
 }
 
@@ -463,8 +467,8 @@ impl super::Window for WaylandWindow {
     }
     fn get_screen_dim(&self) -> (usize, usize) {
         (
-            self.state.max_width as usize,
-            self.state.max_height as usize,
+            self.state.screen_width as usize,
+            self.state.screen_height as usize,
         )
     }
     fn get_window_dim(&self) -> (usize, usize) {
@@ -542,6 +546,10 @@ impl Dispatch<wl_surface::WlSurface, ()> for WindowState {
             event
         );
         */
+
+        if let wl_surface::Event::Enter { output } = event {
+            //println!("Surface entered output: {:?}", output.id());
+        }
     }
 }
 
@@ -649,15 +657,17 @@ impl Dispatch<wl_output::WlOutput, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_output::WlOutput::interface().name,
             event
         );
+        */
 
-        if let wl_output::Event::Mode{ width, height, .. } = event {
-            state.max_width = width;
-            state.max_height = height;
+        if let wl_output::Event::Mode { width, height, .. } = event {
+            state.screen_width = width;
+            state.screen_height = height;
         }
     }
 }
@@ -690,31 +700,29 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_toplevel::XdgToplevel::interface().name,
             event
         );
+        */
 
         // https://docs.rs/wayland-protocols/latest/wayland_protocols/xdg/shell/client/xdg_toplevel/enum.Event.html
         match event {
             // 'Suggest' a surface change
             xdg_toplevel::Event::Configure { width, height, .. } => {
                 let size_changed = width != state.content_width || height != state.content_height;
-                if width != 0 && height != 0 && size_changed
-                {
-                    println!("resize WINDOW!!");
+                if width != 0 && height != 0 && size_changed {
                     // NOTE: This dimensions includes the area ocupied by the subsurfaces
-                    // TODO: We need to check if the WindowDecoration subsurface is alreday
-                    // attached before updating the content dimensions state.
                     state.resize_window(width as u32, height as u32);
                 }
             }
             // Current window bounds (maximized)
             xdg_toplevel::Event::ConfigureBounds { width, height } => {
                 if width != 0 && height != 0 {
-                    //state.max_width = width;
-                    //state.max_height = height;
+                    //state.screen_width = width;
+                    //state.screen_height = height;
                 } else {
                     // TODO: Unknown bounds
                 }
@@ -762,11 +770,13 @@ impl Dispatch<xdg_wm_base::XdgWmBase, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_wm_base::XdgWmBase::interface().name,
             event
         );
+        */
         if let xdg_wm_base::Event::Ping { serial } = event {
             xdg_wm_base.pong(serial);
         }
@@ -782,11 +792,13 @@ impl Dispatch<wl_seat::WlSeat, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_seat::WlSeat::interface().name,
             event
         );
+        */
 
         if let wl_seat::Event::Capabilities {
             capabilities: wayland_client::WEnum::Value(capabilities),
@@ -812,11 +824,13 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
+        /*
         println!(
             "Recived {} event: {:#?}",
             wl_pointer::WlPointer::interface().name,
             event
         );
+        */
 
         match event {
             wl_pointer::Event::Button {
@@ -861,6 +875,11 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 win_state.push_out_mouse_event(super::Event::MouseMotion(
                     win_state.mouse_pointer_info.clone(),
                 ));
+
+                // TODO: To be able to change the cursor image depending on
+                // the pointer position, we need to create a surface for each edge
+                // of the window decoration. To set the cursor image the need
+                // the serial number releated to the wl_pointer Enter event.
             }
 
             wl_pointer::Event::Enter {

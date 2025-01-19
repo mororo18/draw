@@ -51,17 +51,35 @@ impl DecorationIntersection {
 
         let title_bar = Self::empty().add(Decoration::TitleBar);
 
-        if self.0 == title_bar.0 { return DecorationArea::TitleBar; }
+        if self.0 == title_bar.0 {
+            return DecorationArea::TitleBar;
+        }
 
-        if self.0 == top.0 { return DecorationArea::Edge(WindowEdges::Top); }
-        if self.0 == left.0 { return DecorationArea::Edge(WindowEdges::Left); }
-        if self.0 == right.0 { return DecorationArea::Edge(WindowEdges::Right); }
-        if self.0 == bottom.0 { return DecorationArea::Edge(WindowEdges::Bottom); }
+        if self.0 == top.0 {
+            return DecorationArea::Edge(WindowEdges::Top);
+        }
+        if self.0 == left.0 {
+            return DecorationArea::Edge(WindowEdges::Left);
+        }
+        if self.0 == right.0 {
+            return DecorationArea::Edge(WindowEdges::Right);
+        }
+        if self.0 == bottom.0 {
+            return DecorationArea::Edge(WindowEdges::Bottom);
+        }
 
-        if self.0 == top_left.0 { return DecorationArea::Edge(WindowEdges::TopLeft); }
-        if self.0 == top_right.0 { return DecorationArea::Edge(WindowEdges::TopRight); }
-        if self.0 == bottom_left.0 { return DecorationArea::Edge(WindowEdges::BottomLeft); }
-        if self.0 == bottom_right.0 { return DecorationArea::Edge(WindowEdges::BottomRight); }
+        if self.0 == top_left.0 {
+            return DecorationArea::Edge(WindowEdges::TopLeft);
+        }
+        if self.0 == top_right.0 {
+            return DecorationArea::Edge(WindowEdges::TopRight);
+        }
+        if self.0 == bottom_left.0 {
+            return DecorationArea::Edge(WindowEdges::BottomLeft);
+        }
+        if self.0 == bottom_right.0 {
+            return DecorationArea::Edge(WindowEdges::BottomRight);
+        }
 
         DecorationArea::None
     }
@@ -197,8 +215,12 @@ impl WindowDecorator {
     }
 
     pub fn inside_area(&self, x: i32, y: i32) -> DecorationArea {
-        assert!(x > 0);
-        assert!(y > 0);
+        // FIXME: We need to refactor canvas::Rectangle to be able
+        // to use signed integers.
+        if x < 0 || y < 0 {
+            return DecorationArea::None;
+        }
+
         let invert_y = |y: i32| -> i32 { self.height - y - 1 };
         let y = invert_y(y);
 

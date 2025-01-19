@@ -177,6 +177,7 @@ struct WindowState {
     base_surface: Option<wl_surface::WlSurface>,
     window_frame: Option<WindowFrame>,
     pointer_focused_surface: Option<ObjectId>,
+    serial_of_pointer_focused_surface: Option<u32>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
     xdg_toplevel: Option<xdg_toplevel::XdgToplevel>,
@@ -279,7 +280,7 @@ impl WindowState {
                 DecorationArea::TitleBar => {
                     toplevel._move(seat, serial);
                 }
-                DecorationArea::Edge( edge ) => {
+                DecorationArea::Edge(edge) => {
                     let edge = match edge {
                         WindowEdges::Top => ResizeEdge::Top,
                         WindowEdges::Left => ResizeEdge::Left,
@@ -385,6 +386,56 @@ impl WindowState {
             content_height as usize,
         )));
     }
+
+    fn update_cursor(&mut self, surface_x: i32, surface_y: i32, pointer: &wl_pointer::WlPointer) {
+        let window_frame = self.window_frame.as_ref().unwrap();
+        let decoration_surface = window_frame.base_surface.as_ref().unwrap();
+        let pointer_focus = self.pointer_focused_surface.as_ref();
+        let qh = self.queue_handle.as_ref().unwrap();
+
+        // If the pointer is over the window decoration
+        if pointer_focus.is_some_and(|focus| focus == &decoration_surface.id()) {
+            let cursor_theme = self.cursor_theme.as_mut().unwrap();
+            let area_over = window_frame.decorator.inside_area(surface_x, surface_y);
+            let mouse_cursor = match area_over {
+                DecorationArea::Edge(edge) => match edge {
+                    WindowEdges::Top | WindowEdges::Bottom => super::MouseCursor::ResizeNS,
+                    WindowEdges::Right | WindowEdges::Left => super::MouseCursor::ResizeEW,
+                    WindowEdges::TopRight | WindowEdges::BottomLeft => {
+                        super::MouseCursor::ResizeNESW
+                    }
+                    WindowEdges::TopLeft | WindowEdges::BottomRight => {
+                        super::MouseCursor::ResizeNWSE
+                    }
+                },
+                _ => super::MouseCursor::Arrow,
+            };
+
+            let cursor_name: &str = From::from(mouse_cursor);
+            let cursor = cursor_theme
+                .get_cursor(cursor_name)
+                .expect(format!("Failed to get '{}' cursor", cursor_name).as_str());
+
+            // FIXME: Store the cursor surface
+            // TODO: Do We need to create a surface every time?
+            let comp = self.compositor.as_ref().unwrap();
+            let cursor_surface = comp.create_surface(qh, ());
+
+            // TODO: Enable cursor animations
+            let cursor_image = Some(&*cursor[0]);
+
+            cursor_surface.attach(cursor_image, 0, 0);
+            cursor_surface.commit();
+
+            let (hotspot_x, hotspot_y) = cursor[0].hotspot();
+            pointer.set_cursor(
+                self.serial_of_pointer_focused_surface.unwrap(),
+                Some(&cursor_surface),
+                hotspot_x as i32,
+                hotspot_y as i32,
+            );
+        }
+    }
 }
 
 pub struct WaylandWindow {
@@ -478,9 +529,11 @@ impl super::Window for WaylandWindow {
         )
     }
     fn hide_mouse_cursor(&mut self) {
+        // TODO: check if the pointer is focused on the base content surface
         self.state.cursor_visibility = false;
     }
     fn show_mouse_cursor(&mut self) {
+        // TODO: check if the pointer is focused on the base content surface
         self.state.cursor_visibility = true;
     }
     fn toggle_fullscreen(&mut self) {
@@ -876,10 +929,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                     win_state.mouse_pointer_info.clone(),
                 ));
 
-                // TODO: To be able to change the cursor image depending on
-                // the pointer position, we need to create a surface for each edge
-                // of the window decoration. To set the cursor image the need
-                // the serial number releated to the wl_pointer Enter event.
+                win_state.update_cursor(surface_x as i32, surface_y as i32, pointer);
             }
 
             wl_pointer::Event::Enter {
@@ -890,6 +940,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
             } => {
                 // Update focused surface
                 win_state.pointer_focused_surface = Some(surface.id());
+                win_state.serial_of_pointer_focused_surface = Some(serial);
 
                 // Update pointer position
                 win_state
@@ -913,6 +964,8 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 let cursor_surface = comp.create_surface(qh, ());
 
                 // TODO: Enable cursor animations
+                // FIXME: Make this condition occurs only when the pointer
+                // is focused on the content surface.
                 let cursor_image = if win_state.cursor_visibility {
                     Some(&*cursor[0])
                 } else {
@@ -933,6 +986,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
 
             wl_pointer::Event::Leave { .. } => {
                 win_state.pointer_focused_surface = None;
+                win_state.serial_of_pointer_focused_surface = None;
 
                 // TODO: Send output MouseUpdate event when leaving the
                 // content's surface. The GUI needs to know that the pointer

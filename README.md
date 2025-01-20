@@ -12,7 +12,7 @@
 </h6>
 
 ## description
-A CPU-based real-time renderer built in Rust, this project implements core graphics techniques like triangle rasterization, perspective projection, Phong shading, and texture mapping, rendering directly to the frame buffer via X11. It serves as a hands-on learning tool and a foundation for exploring efficient CPU-based software rendering.
+A CPU-based real-time renderer built in Rust, this project implements core graphics techniques like triangle rasterization, perspective projection, Phong shading, and texture mapping, rendering via X11. It serves as a hands-on learning tool and a foundation for exploring efficient CPU-based software rendering.
 
 ### dependencies
 install the latest version of [rust](https://www.rust-lang.org/tools/install) and:

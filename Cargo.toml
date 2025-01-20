@@ -12,6 +12,7 @@ input-event-codes = "6.2.0"
 itertools = "0.13.0"
 linicon = "2.3.0"
 material-icons = "0.2.0"
+more-asserts = "0.3.1"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 rfd = "0.15.0"

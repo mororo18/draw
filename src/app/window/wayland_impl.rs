@@ -110,14 +110,13 @@ impl WindowFrame {
 
     fn draw(&mut self) {
         self.decorator.render();
-        //let frame = vec![255_u8; 800 * 4];
         let frame = self.decorator.frame_as_bytes_slice();
 
         use std::io::{Seek, Write};
         let mut file = self.file.as_ref().unwrap();
         file.rewind().unwrap();
         let mut buf = std::io::BufWriter::new(file);
-        buf.write_all(&frame).unwrap();
+        buf.write_all(frame).unwrap();
         buf.flush().unwrap();
     }
 
@@ -165,25 +164,33 @@ struct WindowState {
     content_height: i32,
     screen_width: i32,
     screen_height: i32,
+    maximized_width: Option<i32>,
+    maximized_height: Option<i32>,
+
     output_events: Vec<super::Event>,
+
     mouse_cursor: super::MouseCursor,
     mouse_pointer_info: super::MouseInfo,
     cursor_visibility: bool,
     cursor_theme: Option<wayland_cursor::CursorTheme>,
+
+    queue_handle: Option<QueueHandle<Self>>,
     compositor: Option<wl_compositor::WlCompositor>,
+    subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     seat: Option<wl_seat::WlSeat>,
     output: Option<wl_output::WlOutput>,
-    subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     base_surface: Option<wl_surface::WlSurface>,
-    window_frame: Option<WindowFrame>,
     pointer_focused_surface: Option<ObjectId>,
     serial_of_pointer_focused_surface: Option<u32>,
     xdg_wm_base: Option<xdg_wm_base::XdgWmBase>,
     xdg_surface: Option<xdg_surface::XdgSurface>,
-    xdg_toplevel: Option<xdg_toplevel::XdgToplevel>,
-    queue_handle: Option<QueueHandle<Self>>,
-    is_fullscreen: bool,
     configured_xdg_surface: bool,
+    xdg_toplevel: Option<xdg_toplevel::XdgToplevel>,
+
+    window_frame: Option<WindowFrame>,
+    is_fullscreen: bool,
+    is_maximized: bool,
+
     shm: Option<wl_shm::WlShm>,
     shm_pool: Option<wl_shm_pool::WlShmPool>,
     shm_pool_len: u32,
@@ -340,19 +347,50 @@ impl WindowState {
     }
 
     fn resize_window(&mut self, width: u32, height: u32) {
+
         let (content_width, content_height) = if self.window_frame.is_some() {
-            // TODO: Update WindowFrame input region
+            // TODO: We need to clean this mess
+            let is_maximized =
+                self.maximized_width.unwrap() == width as i32
+                && self.maximized_height.unwrap() == height as i32;
+
+            self.is_maximized = is_maximized;
+
             let frame = self.window_frame.as_mut().unwrap();
+
+            // Set new Subsurface position if maximized
+            if is_maximized {
+                frame.subsurface_role.as_ref().unwrap().set_position(
+                    0,
+                    -(frame.title_bar_height as i32)
+                );
+            } else {
+                frame.subsurface_role.as_ref().unwrap().set_position(
+                    -(frame.side_bar_thickness as i32),
+                    -((frame.title_bar_height + frame.side_bar_thickness) as i32)
+                );
+            }
+
+            frame.decorator.set_maximized(is_maximized);
+            frame.decorator.resize_window_frame(width as i32, height as i32);
 
             // Subtract the current input region
             frame.input_region.subtract(0, 0, frame.width, frame.height);
 
-            frame.content_dimensions = (
-                (width - frame.side_bar_thickness * 2) as i32,
-                (height - frame.side_bar_thickness * 2 - frame.title_bar_height) as i32,
-            );
-            frame.decorator.resize_content(frame.content_dimensions);
+            frame.content_dimensions = if is_maximized {
+                (
+                    width as i32,
+                    (height - frame.title_bar_height) as i32,
+                )
+            } else {
+                (
+                    (width - frame.side_bar_thickness * 2) as i32,
+                    (height - frame.side_bar_thickness * 2 - frame.title_bar_height) as i32,
+                )
+            };
+
             let (content_width, content_height) = frame.content_dimensions;
+
             frame.width = width as i32;
             frame.height = height as i32;
 
@@ -373,6 +411,7 @@ impl WindowState {
 
             frame.content_dimensions
         } else {
+            unreachable!();
             (width as i32, height as i32)
         };
 
@@ -753,13 +792,11 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
         _: &Connection,
         _: &QueueHandle<WindowState>,
     ) {
-        /*
         println!(
             "Recived {} event: {:#?}",
             xdg_toplevel::XdgToplevel::interface().name,
             event
         );
-        */
 
         // https://docs.rs/wayland-protocols/latest/wayland_protocols/xdg/shell/client/xdg_toplevel/enum.Event.html
         match event {
@@ -774,8 +811,8 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for WindowState {
             // Current window bounds (maximized)
             xdg_toplevel::Event::ConfigureBounds { width, height } => {
                 if width != 0 && height != 0 {
-                    //state.screen_width = width;
-                    //state.screen_height = height;
+                    state.maximized_width = Some(width);
+                    state.maximized_height = Some(height);
                 } else {
                     // TODO: Unknown bounds
                 }

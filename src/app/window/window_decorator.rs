@@ -2,9 +2,11 @@ use crate::renderer::canvas::{Canvas, Color, Rectangle, VertexSimpleAttributes};
 use crate::renderer::linalg::Vec2;
 use crate::renderer::scene::{Texture, TextureMap};
 
+use more_asserts::*;
+
 // Clockwise
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Decoration {
+enum DecorationBitFlag {
     TitleBar = 1,
     RightSideBar = 2,
     BottomSideBar = 4,
@@ -26,30 +28,30 @@ impl DecorationIntersection {
         Self(0)
     }
 
-    fn add(&self, decoration: Decoration) -> Self {
+    fn add(&self, decoration: DecorationBitFlag) -> Self {
         let mut new = self.clone();
         new.0 |= decoration as u32;
         new
     }
 
     /*
-    fn contains(&self, decoration: Decoration) -> bool {
+    fn contains(&self, decoration: DecorationBitFlag) -> bool {
         self.0 & decoration as u32 != 0
     }
     */
 
     fn as_area(&self) -> DecorationArea {
-        let top = Self::empty().add(Decoration::TopSideBar);
-        let left = Self::empty().add(Decoration::LeftSideBar);
-        let right = Self::empty().add(Decoration::RightSideBar);
-        let bottom = Self::empty().add(Decoration::BottomSideBar);
+        let top = Self::empty().add(DecorationBitFlag::TopSideBar);
+        let left = Self::empty().add(DecorationBitFlag::LeftSideBar);
+        let right = Self::empty().add(DecorationBitFlag::RightSideBar);
+        let bottom = Self::empty().add(DecorationBitFlag::BottomSideBar);
 
-        let top_left = top.add(Decoration::LeftSideBar);
-        let top_right = top.add(Decoration::RightSideBar);
-        let bottom_left = bottom.add(Decoration::LeftSideBar);
-        let bottom_right = bottom.add(Decoration::RightSideBar);
+        let top_left = top.add(DecorationBitFlag::LeftSideBar);
+        let top_right = top.add(DecorationBitFlag::RightSideBar);
+        let bottom_left = bottom.add(DecorationBitFlag::LeftSideBar);
+        let bottom_right = bottom.add(DecorationBitFlag::RightSideBar);
 
-        let title_bar = Self::empty().add(Decoration::TitleBar);
+        let title_bar = Self::empty().add(DecorationBitFlag::TitleBar);
 
         if self.0 == title_bar.0 {
             return DecorationArea::TitleBar;
@@ -85,6 +87,22 @@ impl DecorationIntersection {
     }
 }
 
+struct Decoration {
+    id: DecorationBitFlag,
+    rect: Rectangle,
+    visibility: bool,
+}
+
+impl Decoration {
+    pub fn new(id: DecorationBitFlag, rect: Rectangle) -> Self {
+        Self {
+            id,
+            rect,
+            visibility: true,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum WindowEdges {
     Top,
@@ -115,7 +133,9 @@ pub struct WindowDecorator {
     window_rect: Rectangle,
     content_rect: Rectangle,
 
-    decoration_areas: [(Decoration, Rectangle); 5],
+    decorations: [Decoration; 5],
+
+    is_maximized: bool,
 }
 
 impl WindowDecorator {
@@ -125,75 +145,94 @@ impl WindowDecorator {
         title_bar_height: i32,
         side_bar_thickness: i32,
     ) -> Self {
+
         // TODO: Find better name for these variables
         let (content_width, content_height) = content_dimensions;
+        let content_x = side_bar_thickness;
+        let content_y = title_bar_height;
 
         let win_width = content_width + side_bar_thickness * 2;
         let win_height = content_height + side_bar_thickness * 2 + title_bar_height;
 
-        let content_x = side_bar_thickness;
-        let content_y = title_bar_height;
+        let flip_rect_y = |y: i32, rect_height: i32| -> i32 {
+            assert!(win_height - y - rect_height >= 0);
+            win_height - y - rect_height
+        };
+
+        let vertical_bar_width = side_bar_thickness;
+        let vertical_bar_height = win_height;
+
+        let horizontal_bar_width = win_width;
+        let horizontal_bar_height = side_bar_thickness;
+
+        let title_bar_x = 0;
+        let title_bar_y = 0;
+        let title_bar_width = content_width;
+
+        let title_bar = Decoration::new(
+            DecorationBitFlag::TitleBar,
+            Rectangle::new(
+                title_bar_x,
+                flip_rect_y(title_bar_y, title_bar_height),
+                title_bar_width,
+                title_bar_height,
+            )
+        );
+
+
+        let top_bar_x = 0;
+        let top_bar_y = 0;
+
+        let top_side_bar = Decoration::new(
+            DecorationBitFlag::TopSideBar,
+            Rectangle::new(
+                top_bar_x,
+                flip_rect_y(top_bar_y, horizontal_bar_height),
+                horizontal_bar_width,
+                horizontal_bar_height,
+            ),
+        );
 
         let bottom_bar_x = 0;
         let bottom_bar_y = side_bar_thickness + content_height + title_bar_height;
+        dbg!(bottom_bar_y);
+
+        let bottom_side_bar = Decoration::new(
+            DecorationBitFlag::BottomSideBar,
+            Rectangle::new(
+                bottom_bar_x,
+                dbg!(flip_rect_y(bottom_bar_y, horizontal_bar_height)),
+                horizontal_bar_width,
+                horizontal_bar_height,
+            ),
+        );
 
         let left_bar_x = 0;
         let left_bar_y = 0;
-        //let left_bar_y = side_bar_thickness;
+
+        let left_side_bar = Decoration::new(
+            DecorationBitFlag::LeftSideBar,
+            Rectangle::new(
+                left_bar_x as _,
+                flip_rect_y(left_bar_y, vertical_bar_height) as _,
+                vertical_bar_width as _,
+                vertical_bar_height as _,
+            ),
+        );
 
         let right_bar_x = side_bar_thickness + content_width;
         let right_bar_y = 0;
-        //let right_bar_y = side_bar_thickness;
 
-        let flip_rect_y = |y: i32, rect_height: i32| -> i32 { win_height - y - rect_height };
+        let right_side_bar = Decoration::new(
+            DecorationBitFlag::RightSideBar,
+            Rectangle::new(
+                right_bar_x as _,
+                flip_rect_y(right_bar_y, vertical_bar_height) as _,
+                vertical_bar_width as _,
+                vertical_bar_height as _,
+            ),
+        );
 
-        let decoration_areas = [
-            (
-                Decoration::TitleBar,
-                Rectangle::new(
-                    side_bar_thickness as _,
-                    flip_rect_y(side_bar_thickness, content_y) as _,
-                    content_width as _,
-                    content_y as _,
-                ),
-            ),
-            (
-                Decoration::RightSideBar,
-                Rectangle::new(
-                    right_bar_x as _,
-                    flip_rect_y(right_bar_y, win_height) as _,
-                    side_bar_thickness as _,
-                    win_height as _,
-                ),
-            ),
-            (
-                Decoration::BottomSideBar,
-                Rectangle::new(
-                    bottom_bar_x as _,
-                    flip_rect_y(bottom_bar_y, side_bar_thickness) as _,
-                    win_width as _,
-                    side_bar_thickness as _,
-                ),
-            ),
-            (
-                Decoration::LeftSideBar,
-                Rectangle::new(
-                    left_bar_x as _,
-                    flip_rect_y(left_bar_y, win_height) as _,
-                    side_bar_thickness as _,
-                    win_height as _,
-                ),
-            ),
-            (
-                Decoration::TopSideBar,
-                Rectangle::new(
-                    0,
-                    flip_rect_y(0, side_bar_thickness) as _,
-                    win_width as _,
-                    side_bar_thickness as _,
-                ),
-            ),
-        ];
 
         Self {
             width: win_width,
@@ -202,7 +241,14 @@ impl WindowDecorator {
             side_bar_thickness,
             canvas: Canvas::new(win_width as _, win_height as _),
 
-            decoration_areas,
+            decorations: [
+                title_bar,
+                top_side_bar,
+                bottom_side_bar,
+                right_side_bar,
+                left_side_bar,
+            ],
+            is_maximized: false,
 
             window_rect: Rectangle::new(0, 0, win_width as _, win_height as _),
             content_rect: Rectangle::new(
@@ -212,6 +258,16 @@ impl WindowDecorator {
                 content_height as _,
             ),
         }
+    }
+
+    fn get_decoration_mut(&mut self, decoration_id: DecorationBitFlag) -> Option<&mut Decoration> {
+        for decoration in self.decorations.iter_mut() {
+            if decoration.id == decoration_id {
+                return Some(decoration);
+            }
+        }
+
+        None
     }
 
     pub fn inside_area(&self, x: i32, y: i32) -> DecorationArea {
@@ -226,27 +282,23 @@ impl WindowDecorator {
 
         let mut intersection = DecorationIntersection::empty();
 
-        for (decoration, rect) in self.decoration_areas.iter() {
-            if rect.contains(x as usize, y as usize) {
-                println!("add {:?} as {}", decoration, *decoration as u32);
-                intersection = intersection.add(*decoration);
-                println!("intersec {}", intersection);
+        for decoration in self.decorations.iter() {
+            if decoration.rect.contains(x, y) && decoration.visibility {
+                intersection = intersection.add(decoration.id);
             }
         }
 
         let area = intersection.as_area();
-        println!("{:#?}", self.decoration_areas);
-        println!("{:?}", area);
-        println!("pointer coords ({}x{})", x, y);
 
         area
     }
 
     pub fn render(&mut self) {
         self.canvas.fill_color(Color::Transparent);
-        for area in self.decoration_areas.iter() {
-            let (_, rect) = area;
-            self.canvas.draw_rect(rect.clone(), Color::Red);
+        for decoration in self.decorations.iter() {
+            if decoration.visibility {
+                self.canvas.draw_rect(decoration.rect.clone(), Color::Red);
+            }
         }
     }
 
@@ -254,84 +306,138 @@ impl WindowDecorator {
         self.canvas.as_bytes_slice()
     }
 
+    // FIXME: thes method doesnt make sense
+    pub fn set_maximized(&mut self, is_maximized: bool) {
+        self.is_maximized = is_maximized;
+    }
+
     // FIXME: This is the same as the initialization function.
     // REWRITE!!
-    pub fn resize_content(&mut self, content_dimensions: (i32, i32)) {
+    pub fn resize_window_frame(&mut self, width: i32, height: i32) {
+
+        if width < 0 || height < 0 {
+            return;
+        }
+
         // TODO: Find better name for these variables
-        let (content_width, content_height) = content_dimensions;
+        let (content_x,
+            content_y,
+            content_width,
+            content_height) = if self.is_maximized {
+            (
+                0,
+                self.title_bar_height,
+                width,
+                height - self.title_bar_height
+            )
+        } else {
+            (
+                self.side_bar_thickness, 
+                self.title_bar_height + self.side_bar_thickness,
+                width - self.side_bar_thickness * 2,
+                height - (self.side_bar_thickness * 2 + self.title_bar_height)
+            )
+        };
 
-        let win_width = content_width + self.side_bar_thickness * 2;
-        let win_height = content_height + self.side_bar_thickness * 2 + self.title_bar_height;
-        self.width = win_width;
-        self.height = win_height;
+        self.width = width;
+        self.height = height;
 
-        let content_x = self.side_bar_thickness;
-        let content_y = self.title_bar_height;
+        let flip_rect_y = |y: i32, rect_height: i32| -> i32 {
+            //assert_ge!(height - y - rect_height, 0);
+            height - y - rect_height
+        };
+
+        let vertical_bar_width = self.side_bar_thickness;
+        let vertical_bar_height = height;
+
+        let horizontal_bar_width = width;
+        let horizontal_bar_height = self.side_bar_thickness;
+
+        let title_bar_x = content_x;
+        let title_bar_y = content_y - self.title_bar_height;
+        let title_bar_width = content_width;
+
+        let title_bar = Decoration::new(
+            DecorationBitFlag::TitleBar,
+            Rectangle::new(
+                title_bar_x as _,
+                flip_rect_y(title_bar_y, self.title_bar_height) as _,
+                title_bar_width as _,
+                self.title_bar_height as _,
+            )
+        );
+
+
+        let top_bar_x = 0;
+        let top_bar_y = 0;
+
+        let mut top_side_bar = Decoration::new(
+            DecorationBitFlag::TopSideBar,
+            Rectangle::new(
+                top_bar_x,
+                flip_rect_y(top_bar_y, horizontal_bar_height) as _,
+                horizontal_bar_width as _,
+                horizontal_bar_height as _,
+            ),
+        );
 
         let bottom_bar_x = 0;
         let bottom_bar_y = self.side_bar_thickness + content_height + self.title_bar_height;
 
+        let mut bottom_side_bar = Decoration::new(
+            DecorationBitFlag::BottomSideBar,
+            Rectangle::new(
+                bottom_bar_x as _,
+                flip_rect_y(bottom_bar_y, horizontal_bar_height) ,
+                horizontal_bar_width as _,
+                horizontal_bar_height as _,
+            ),
+        );
+
         let left_bar_x = 0;
         let left_bar_y = 0;
-        //let left_bar_y = self.side_bar_thickness;
+
+        let mut left_side_bar = Decoration::new(
+            DecorationBitFlag::LeftSideBar,
+            Rectangle::new(
+                left_bar_x as _,
+                flip_rect_y(left_bar_y, vertical_bar_height) as _,
+                vertical_bar_width as _,
+                vertical_bar_height as _,
+            ),
+        );
 
         let right_bar_x = self.side_bar_thickness + content_width;
         let right_bar_y = 0;
-        //let right_bar_y = self.side_bar_thickness;
 
-        let flip_rect_y = |y: i32, rect_height: i32| -> i32 { win_height - y - rect_height };
+        let mut right_side_bar = Decoration::new(
+            DecorationBitFlag::RightSideBar,
+            Rectangle::new(
+                right_bar_x as _,
+                flip_rect_y(right_bar_y, vertical_bar_height) as _,
+                vertical_bar_width as _,
+                vertical_bar_height as _,
+            ),
+        );
 
-        self.decoration_areas = [
-            (
-                Decoration::TitleBar,
-                Rectangle::new(
-                    self.side_bar_thickness as _,
-                    flip_rect_y(self.side_bar_thickness, content_y) as _,
-                    content_width as _,
-                    content_y as _,
-                ),
-            ),
-            (
-                Decoration::RightSideBar,
-                Rectangle::new(
-                    right_bar_x as _,
-                    flip_rect_y(right_bar_y, win_height) as _,
-                    self.side_bar_thickness as _,
-                    win_height as _,
-                ),
-            ),
-            (
-                Decoration::BottomSideBar,
-                Rectangle::new(
-                    bottom_bar_x as _,
-                    flip_rect_y(bottom_bar_y, self.side_bar_thickness) as _,
-                    win_width as _,
-                    self.side_bar_thickness as _,
-                ),
-            ),
-            (
-                Decoration::LeftSideBar,
-                Rectangle::new(
-                    left_bar_x as _,
-                    flip_rect_y(left_bar_y, win_height) as _,
-                    self.side_bar_thickness as _,
-                    win_height as _,
-                ),
-            ),
-            (
-                Decoration::TopSideBar,
-                Rectangle::new(
-                    0,
-                    flip_rect_y(0, self.side_bar_thickness) as _,
-                    win_width as _,
-                    self.side_bar_thickness as _,
-                ),
-            ),
+        if self.is_maximized {
+            top_side_bar.visibility = false;
+            bottom_side_bar.visibility = false;
+            left_side_bar.visibility = false;
+            right_side_bar.visibility = false;
+        }
+
+        self.decorations = [
+            title_bar,
+            top_side_bar,
+            bottom_side_bar,
+            left_side_bar,
+            right_side_bar,
         ];
 
-        self.canvas = Canvas::new(win_width as _, win_height as _);
+        self.canvas = Canvas::new(width as _, height as _);
 
-        self.window_rect = Rectangle::new(0, 0, win_width as _, win_height as _);
+        self.window_rect = Rectangle::new(0, 0, width as _, height as _);
         self.content_rect = Rectangle::new(
             content_x as _,
             content_y as _,

@@ -1,4 +1,5 @@
 use itertools::Either;
+use more_asserts::*;
 use std::ops::{Add, Mul, Sub};
 
 use super::linalg::{Vec2, Vec3, Vec4};
@@ -277,39 +278,45 @@ impl Mul<f32> for VertexAttributes {
 
 #[derive(Debug, Clone)]
 pub struct Rectangle {
-    pub pos: PixelPos,
-    pub width: usize,
-    pub height: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 impl Rectangle {
-    pub fn x_min(&self) -> usize {
-        self.pos.x
+    pub fn x_min(&self) -> i32 {
+        self.x
     }
-    fn y_min(&self) -> usize {
-        self.pos.y
-    }
-
-    fn x_max(&self) -> usize {
-        self.pos.x + self.width - 1
-    }
-    fn y_max(&self) -> usize {
-        self.pos.y + self.height - 1
+    fn y_min(&self) -> i32 {
+        self.y
     }
 
-    pub fn contains(&self, x: usize, y: usize) -> bool {
-        (self.pos.x..self.pos.x + self.width).contains(&x)
-            && (self.pos.y..self.pos.y + self.height).contains(&y)
+    fn x_max(&self) -> i32 {
+        self.x + self.width - 1
+    }
+    fn y_max(&self) -> i32 {
+        self.y + self.height - 1
     }
 
-    pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        (self.x..self.x + self.width).contains(&x)
+            && (self.y..self.y + self.height).contains(&y)
+    }
+
+    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        assert_ge!(width, 0);
+        assert_ge!(height, 0);
+
         Rectangle {
-            pos: PixelPos { x, y },
+            x,
+            y,
             width,
             height,
         }
     }
 
+    // FIXME: use i32 instead of usize
     pub fn from_coords(x0: usize, y0: usize, x1: usize, y1: usize) -> Self {
         use std::cmp;
 
@@ -320,20 +327,21 @@ impl Rectangle {
         let y_max = cmp::max(y0, y1);
 
         Self {
-            pos: PixelPos { x: x_min, y: y_min },
+            x: x_min as _,
+            y: y_min as _,
 
-            height: y_max - y_min + 1,
-            width: x_max - x_min + 1,
+            height: (y_max - y_min + 1) as _,
+            width: (x_max - x_min + 1) as _,
         }
     }
 
     pub fn clip(a: Self, b: Self) -> Self {
         use std::cmp;
-        let mut x_min = cmp::max(a.pos.x, b.pos.x);
-        let mut y_min = cmp::max(a.pos.y, b.pos.y);
+        let mut x_min = cmp::max(a.x, b.x);
+        let mut y_min = cmp::max(a.y, b.y);
 
-        let mut x_max = cmp::min(a.pos.x + a.width, b.pos.x + b.width);
-        let mut y_max = cmp::min(a.pos.y + a.height, b.pos.y + b.height);
+        let mut x_max = cmp::min(a.x + a.width, b.x + b.width);
+        let mut y_max = cmp::min(a.y + a.height, b.y + b.height);
 
         if x_min > x_max {
             x_min = 0;
@@ -344,7 +352,7 @@ impl Rectangle {
             y_max = 0;
         }
 
-        Self::from_coords(x_min, y_min, x_max, y_max)
+        Self::from_coords(x_min as usize, y_min as usize, x_max as usize, y_max as usize)
     }
 }
 
@@ -521,11 +529,11 @@ impl Canvas {
 
         let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
-        x_min = valid_rect.x_min();
-        y_min = valid_rect.y_min();
+        x_min = valid_rect.x_min() as usize;
+        y_min = valid_rect.y_min() as usize;
 
-        x_max = valid_rect.x_max();
-        y_max = valid_rect.y_max();
+        x_max = valid_rect.x_max() as usize;
+        y_max = valid_rect.y_max() as usize;
 
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta = f_ca(b_center.x, b_center.y);
@@ -655,11 +663,11 @@ impl Canvas {
 
         let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
-        x_min = valid_rect.x_min();
-        y_min = valid_rect.y_min();
+        x_min = valid_rect.x_min() as usize;
+        y_min = valid_rect.y_min() as usize;
 
-        x_max = valid_rect.x_max();
-        y_max = valid_rect.y_max();
+        x_max = valid_rect.x_max() as usize;
+        y_max = valid_rect.y_max() as usize;
 
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta = f_ca(b_center.x, b_center.y);

@@ -268,6 +268,38 @@ impl WindowState {
         buf.flush().unwrap();
     }
 
+    fn treat_button_release_event(&mut self) {
+        let window_frame = self.window_frame.as_ref().unwrap();
+        let decoration_surface = window_frame.base_surface.as_ref().unwrap();
+        let pointer_focus = self.pointer_focused_surface.as_ref();
+        let pointer_x = self.mouse_pointer_info.x;
+        let pointer_y = self.mouse_pointer_info.y;
+
+        if pointer_focus.is_some_and(|focus| focus == &decoration_surface.id()) {
+            let area_released = window_frame.decorator.inside_area(pointer_x, pointer_y);
+            let toplevel = self.xdg_toplevel.as_ref().unwrap();
+
+            match area_released {
+                DecorationArea::CloseButton => {
+                    self.output_events.push(
+                        super::Event::CloseWindow
+                    );
+                }
+                DecorationArea::MaximizeButton => {
+                    if !self.is_maximized {
+                        toplevel.set_maximized();
+                    } else {
+                        toplevel.unset_maximized();
+                    }
+                }
+                DecorationArea::MinimizeButton => {
+                    toplevel.set_minimized();
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn treat_button_press_event(&mut self, serial: u32) {
         // In order to move the window we need to verify
         // if the ButtonPress occurred over the title bar of the
@@ -284,7 +316,10 @@ impl WindowState {
             let toplevel = self.xdg_toplevel.as_ref().unwrap();
 
             match area_pressed {
-                DecorationArea::TitleBar => {
+                DecorationArea::TitleBar
+                | DecorationArea::CloseButton
+                | DecorationArea::MaximizeButton
+                | DecorationArea::MinimizeButton => {
                     toplevel._move(seat, serial);
                 }
                 DecorationArea::Edge(edge) => {
@@ -939,7 +974,10 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WindowState {
                 };
 
                 let button_event = match state.into_result().unwrap() {
-                    wl_pointer::ButtonState::Released => super::Event::ButtonRelease(mouse_button),
+                    wl_pointer::ButtonState::Released => {
+                        win_state.treat_button_release_event();
+                        super::Event::ButtonRelease(mouse_button)
+                    }
                     wl_pointer::ButtonState::Pressed => {
                         win_state.treat_button_press_event(serial);
                         super::Event::ButtonPress(mouse_button)

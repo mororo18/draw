@@ -288,14 +288,14 @@ impl Rectangle {
     pub fn x_min(&self) -> i32 {
         self.x
     }
-    fn y_min(&self) -> i32 {
+    pub fn y_min(&self) -> i32 {
         self.y
     }
 
-    fn x_max(&self) -> i32 {
+    pub fn x_max(&self) -> i32 {
         self.x + self.width - 1
     }
-    fn y_max(&self) -> i32 {
+    pub fn y_max(&self) -> i32 {
         self.y + self.height - 1
     }
 

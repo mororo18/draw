@@ -4,6 +4,8 @@ use crate::renderer::scene::{Texture, TextureMap};
 
 use more_asserts::*;
 
+// TODO: Maybe use this crate
+// https://docs.rs/enumflags2/latest/enumflags2/
 // Clockwise
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum DecorationBitFlag {
@@ -12,6 +14,9 @@ enum DecorationBitFlag {
     BottomSideBar = 4,
     LeftSideBar = 8,
     TopSideBar = 16,
+    CloseButton = 32,
+    MaximizeButton = 64,
+    MinimizeButton = 128,
 }
 
 #[derive(Clone)]
@@ -52,9 +57,22 @@ impl DecorationIntersection {
         let bottom_right = bottom.add(DecorationBitFlag::RightSideBar);
 
         let title_bar = Self::empty().add(DecorationBitFlag::TitleBar);
+        let close_btn = title_bar.add(DecorationBitFlag::CloseButton);
+        let max_btn = title_bar.add(DecorationBitFlag::MaximizeButton);
+        let min_btn = title_bar.add(DecorationBitFlag::MinimizeButton);
 
         if self.0 == title_bar.0 {
             return DecorationArea::TitleBar;
+        }
+
+        if self.0 == close_btn.0 {
+            return DecorationArea::CloseButton;
+        }
+        if self.0 == max_btn.0 {
+            return DecorationArea::MaximizeButton;
+        }
+        if self.0 == min_btn.0 {
+            return DecorationArea::MinimizeButton;
         }
 
         if self.0 == top.0 {
@@ -119,6 +137,9 @@ pub enum WindowEdges {
 pub enum DecorationArea {
     Edge(WindowEdges),
     TitleBar,
+    CloseButton,
+    MaximizeButton,
+    MinimizeButton,
     None,
 }
 
@@ -133,13 +154,13 @@ pub struct WindowDecorator {
     window_rect: Rectangle,
     content_rect: Rectangle,
 
-    decorations: [Decoration; 5],
+    decorations: Vec<Decoration>,
 
     is_maximized: bool,
 }
 
 impl WindowDecorator {
-    //pub const FONT_SIZE: f32 = 14.0;
+    pub const BUTTON_RADIUS: i32 = 10;
     pub fn new(
         content_dimensions: (i32, i32),
         title_bar_height: i32,
@@ -233,6 +254,16 @@ impl WindowDecorator {
             ),
         );
 
+        let mut buttons = Self::make_buttons(&title_bar);
+        let mut decorations = vec![
+            title_bar,
+            top_side_bar,
+            bottom_side_bar,
+            right_side_bar,
+            left_side_bar,
+        ];
+
+        decorations.append(&mut buttons);
 
         Self {
             width: win_width,
@@ -241,13 +272,8 @@ impl WindowDecorator {
             side_bar_thickness,
             canvas: Canvas::new(win_width as _, win_height as _),
 
-            decorations: [
-                title_bar,
-                top_side_bar,
-                bottom_side_bar,
-                right_side_bar,
-                left_side_bar,
-            ],
+            decorations,
+
             is_maximized: false,
 
             window_rect: Rectangle::new(0, 0, win_width as _, win_height as _),
@@ -258,6 +284,53 @@ impl WindowDecorator {
                 content_height as _,
             ),
         }
+    }
+
+    fn make_buttons(title_bar: &Decoration) -> Vec<Decoration> {
+        assert_eq!(title_bar.id, DecorationBitFlag::TitleBar);
+
+        const SPACE_BETWEEN: i32 = 20;
+        let button_diameter = 2 * Self::BUTTON_RADIUS;
+
+        let buttons_y = title_bar.rect.y + (title_bar.rect.height / 2) - Self::BUTTON_RADIUS;
+
+        let title_bar_end_x = title_bar.rect.x_max();
+
+        let close_x = title_bar_end_x - SPACE_BETWEEN - button_diameter;
+        let maximize_x = close_x - SPACE_BETWEEN - button_diameter;
+        let minimize_x = maximize_x - SPACE_BETWEEN - button_diameter;
+
+        let close_button = Decoration::new(
+            DecorationBitFlag::CloseButton,
+            Rectangle::new(
+                close_x,
+                buttons_y,
+                button_diameter,
+                button_diameter
+            )
+        );
+
+        let maximize_button = Decoration::new(
+            DecorationBitFlag::MaximizeButton,
+            Rectangle::new(
+                maximize_x,
+                buttons_y,
+                button_diameter,
+                button_diameter
+            )
+        );
+
+        let minimize_button = Decoration::new(
+            DecorationBitFlag::MinimizeButton,
+            Rectangle::new(
+                minimize_x,
+                buttons_y,
+                button_diameter,
+                button_diameter
+            )
+        );
+
+        vec![close_button, maximize_button, minimize_button]
     }
 
     fn get_decoration_mut(&mut self, decoration_id: DecorationBitFlag) -> Option<&mut Decoration> {
@@ -288,9 +361,7 @@ impl WindowDecorator {
             }
         }
 
-        let area = intersection.as_area();
-
-        area
+        intersection.as_area()
     }
 
     pub fn render(&mut self) {
@@ -427,13 +498,16 @@ impl WindowDecorator {
             right_side_bar.visibility = false;
         }
 
-        self.decorations = [
+        let mut buttons = Self::make_buttons(&title_bar);
+        self.decorations = vec![
             title_bar,
             top_side_bar,
             bottom_side_bar,
             left_side_bar,
             right_side_bar,
         ];
+
+        self.decorations.append(&mut buttons);
 
         self.canvas = Canvas::new(width as _, height as _);
 

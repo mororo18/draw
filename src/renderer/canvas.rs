@@ -340,8 +340,8 @@ impl Rectangle {
         let mut x_min = cmp::max(a.x, b.x);
         let mut y_min = cmp::max(a.y, b.y);
 
-        let mut x_max = cmp::min(a.x + a.width, b.x + b.width);
-        let mut y_max = cmp::min(a.y + a.height, b.y + b.height);
+        let mut x_max = cmp::min(a.x + a.width - 1, b.x + b.width - 1);
+        let mut y_max = cmp::min(a.y + a.height - 1, b.y + b.height - 1);
 
         if x_min > x_max {
             x_min = 0;

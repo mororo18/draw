@@ -14,318 +14,11 @@ use x11::xlib;
 
 use std::ffi::CString;
 
-/*
-#[derive(PartialEq)]
-pub
-enum Key {
-    LeftArrow,
-    RightArrow,
-    UpArrow,
-    DownArrow,
-
-    Unknown,
-}
-*/
-#[derive(PartialEq)]
-pub enum Key {
-    Tab,
-    LeftArrow,
-    RightArrow,
-    UpArrow,
-    DownArrow,
-    PageUp,
-    PageDown,
-    Home,
-    End,
-    Insert,
-    Delete,
-    Backspace,
-    Space,
-    Enter,
-    Escape,
-    LeftCtrl,
-    LeftShift,
-    LeftAlt,
-    LeftSuper,
-    RightCtrl,
-    RightShift,
-    RightAlt,
-    RightSuper,
-    Menu,
-    Num0,
-    Num1,
-    Num2,
-    Num3,
-    Num4,
-    Num5,
-    Num6,
-    Num7,
-    Num8,
-    Num9,
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U,
-    V,
-    W,
-    X,
-    Y,
-    Z,
-    F1,
-    F2,
-    F3,
-    F4,
-    F5,
-    F6,
-    F7,
-    F8,
-    F9,
-    F10,
-    F11,
-    F12,
-    Apostrophe,
-    Comma,
-    Minus,
-    Period,
-    Slash,
-    Semicolon,
-    Equal,
-    LeftBracket,
-    Backslash,
-    RightBracket,
-    GraveAccent,
-    CapsLock,
-    ScrollLock,
-    NumLock,
-    PrintScreen,
-    Pause,
-    Keypad0,
-    Keypad1,
-    Keypad2,
-    Keypad3,
-    Keypad4,
-    Keypad5,
-    Keypad6,
-    Keypad7,
-    Keypad8,
-    Keypad9,
-    KeypadDecimal,
-    KeypadDivide,
-    KeypadMultiply,
-    KeypadSubtract,
-    KeypadAdd,
-    KeypadEnter,
-    KeypadEqual,
-    AppBack,
-    AppForward,
-    Unknown,
-
-    Sym((u32, u32)),
-}
-
-#[allow(non_upper_case_globals)]
-impl Key {
-    pub fn from_keysym(keysym: u32) -> Self {
-        match keysym {
-            XK_Tab => Key::Tab,
-            XK_Left => Key::LeftArrow,
-            XK_Right => Key::RightArrow,
-            XK_Up => Key::UpArrow,
-            XK_Down => Key::DownArrow,
-            XK_Prior => Key::PageUp,
-            XK_Next => Key::PageDown,
-            XK_Home => Key::Home,
-            XK_End => Key::End,
-            XK_Insert => Key::Insert,
-            XK_Delete => Key::Delete,
-            XK_BackSpace => Key::Backspace,
-            XK_space => Key::Space,
-            XK_Return => Key::Enter,
-            XK_Escape => Key::Escape,
-            XK_quoteright => Key::Apostrophe,
-            XK_comma => Key::Comma,
-            XK_minus => Key::Minus,
-            XK_period => Key::Period,
-            XK_slash => Key::Slash,
-            XK_semicolon => Key::Semicolon,
-            XK_equal => Key::Equal,
-            XK_bracketleft => Key::LeftBracket,
-            XK_backslash => Key::Backslash,
-            XK_bracketright => Key::RightBracket,
-            XK_quoteleft => Key::GraveAccent,
-            XK_Caps_Lock => Key::CapsLock,
-            XK_Scroll_Lock => Key::ScrollLock,
-            XK_Num_Lock => Key::NumLock,
-            XK_Print => Key::PrintScreen,
-            XK_Pause => Key::Pause,
-            XK_KP_0 => Key::Keypad0,
-            XK_KP_1 => Key::Keypad1,
-            XK_KP_2 => Key::Keypad2,
-            XK_KP_3 => Key::Keypad3,
-            XK_KP_4 => Key::Keypad4,
-            XK_KP_5 => Key::Keypad5,
-            XK_KP_6 => Key::Keypad6,
-            XK_KP_7 => Key::Keypad7,
-            XK_KP_8 => Key::Keypad8,
-            XK_KP_9 => Key::Keypad9,
-            XK_KP_Decimal => Key::KeypadDecimal,
-            XK_KP_Divide => Key::KeypadDivide,
-            XK_KP_Multiply => Key::KeypadMultiply,
-            XK_KP_Subtract => Key::KeypadSubtract,
-            XK_KP_Add => Key::KeypadAdd,
-            XK_KP_Enter => Key::KeypadEnter,
-            XK_KP_Equal => Key::KeypadEqual,
-            XK_Control_L => Key::LeftCtrl,
-            XK_Shift_L => Key::LeftShift,
-            XK_Alt_L => Key::LeftAlt,
-            XK_Super_L => Key::LeftSuper,
-            XK_Control_R => Key::RightCtrl,
-            XK_Shift_R => Key::RightShift,
-            XK_Alt_R => Key::RightAlt,
-            XK_Super_R => Key::RightSuper,
-            XK_Menu => Key::Menu,
-            XK_0 => Key::Num0,
-            XK_1 => Key::Num1,
-            XK_2 => Key::Num2,
-            XK_3 => Key::Num3,
-            XK_4 => Key::Num4,
-            XK_5 => Key::Num5,
-            XK_6 => Key::Num6,
-            XK_7 => Key::Num7,
-            XK_8 => Key::Num8,
-            XK_9 => Key::Num9,
-            XK_a => Key::A,
-            XK_b => Key::B,
-            XK_c => Key::C,
-            XK_d => Key::D,
-            XK_e => Key::E,
-            XK_f => Key::F,
-            XK_g => Key::G,
-            XK_h => Key::H,
-            XK_i => Key::I,
-            XK_j => Key::J,
-            XK_k => Key::K,
-            XK_l => Key::L,
-            XK_m => Key::M,
-            XK_n => Key::N,
-            XK_o => Key::O,
-            XK_p => Key::P,
-            XK_q => Key::Q,
-            XK_r => Key::R,
-            XK_s => Key::S,
-            XK_t => Key::T,
-            XK_u => Key::U,
-            XK_v => Key::V,
-            XK_w => Key::W,
-            XK_x => Key::X,
-            XK_y => Key::Y,
-            XK_z => Key::Z,
-            XK_F1 => Key::F1,
-            XK_F2 => Key::F2,
-            XK_F3 => Key::F3,
-            XK_F4 => Key::F4,
-            XK_F5 => Key::F5,
-            XK_F6 => Key::F6,
-            XK_F7 => Key::F7,
-            XK_F8 => Key::F8,
-            XK_F9 => Key::F9,
-            XK_F10 => Key::F10,
-            XK_F11 => Key::F11,
-            XK_F12 => Key::F12,
-            XF86XK_Back => Key::AppBack,
-            XF86XK_Forward => Key::AppForward,
-            _ => Key::Unknown,
-        }
-    }
-}
-
-#[derive(PartialEq)]
-pub enum Button {
-    MouseLeft,
-    MouseRight,
-    MouseMiddle,
-    WheelUp,
-    WheelDown,
-}
-
-#[derive(PartialEq)]
-pub enum MouseCursor {
-    Arrow,
-    TextInput,
-    ResizeAll,
-    ResizeNS,
-    ResizeEW,
-    ResizeNESW,
-    ResizeNWSE,
-    Hand,
-    NotAllowed,
-}
-
-impl MouseCursor {
-    fn as_c_str(self) -> *const i8 {
-        match self {
-            MouseCursor::Arrow => c"default".as_ptr(),
-            MouseCursor::TextInput => c"xterm".as_ptr(),
-            MouseCursor::ResizeAll => c"fleur".as_ptr(),
-            MouseCursor::ResizeNS => c"sb_v_double_arrow".as_ptr(),
-            MouseCursor::ResizeEW => c"sb_h_double_arrow".as_ptr(),
-            MouseCursor::ResizeNESW => c"bottom_left_corner".as_ptr(),
-            MouseCursor::ResizeNWSE => c"bottom_right_corner".as_ptr(),
-            MouseCursor::Hand => c"hand1".as_ptr(),
-            MouseCursor::NotAllowed => c"circle".as_ptr(),
-        }
-    }
-}
-
-#[derive(PartialEq)]
-pub enum Event {
-    CloseWindow,
-    KeyPress(Key),
-    KeyRelease(Key),
-
-    ButtonPress(Button),
-    ButtonRelease(Button),
-
-    RedimWindow((usize, usize)),
-    ReposWindow((i32, i32)),
-    MouseMotion(MouseInfo),
-
-    Empty,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct MouseInfo {
-    pub x: i32,
-    pub y: i32,
-    pub dx: i32,
-    pub dy: i32,
-}
-
 pub struct X11Info {
     pixel_bits: usize,
     pixel_bytes: usize,
 
     display: *mut xlib::Display,
-    root: c_long,
-    screen: c_int,
-    screen_bit_depth: c_int,
     visinfo: xlib::XVisualInfo,
 
     window: xlib::Window,
@@ -338,7 +31,7 @@ pub struct X11Info {
     wm_delete_window: xlib::Atom,
 }
 
-pub struct Window {
+pub struct X11Window {
     width: usize,
     height: usize,
     min_width: usize,
@@ -352,17 +45,12 @@ pub struct Window {
     x11: X11Info,
 
     mouse_grabbed: bool,
-    mouse_info: MouseInfo,
+    mouse_info: super::MouseInfo,
     just_warped_pointer: bool,
 }
 
-impl Window {
-    pub fn new(width: usize, height: usize) -> Self {
-        assert!(
-            env!("XDG_SESSION_TYPE") == "x11",
-            "Wayland is not supported."
-        );
-
+impl super::Window for X11Window {
+    fn new(width: usize, height: usize) -> Self {
         let min_width = width as i32;
         let min_height = height as i32;
         let max_width = 0;
@@ -571,12 +259,13 @@ impl Window {
             );
         }
 
-        Window {
-            width: width,
+        Self {
+            width,
+            height,
+
             min_width: min_width as _,
             max_width: max_width as _,
 
-            height: height,
             min_height: min_height as _,
             max_height: max_height as _,
 
@@ -587,25 +276,22 @@ impl Window {
                 pixel_bits: pixel_bits as _,
                 pixel_bytes: pixel_bytes as _,
 
-                display: display,
-                root: root as _,
-                screen: default_screen,
-                screen_bit_depth: screen_bit_depth,
-                visinfo: visinfo,
+                display,
+                visinfo,
 
-                window: window,
-                window_attr: window_attr,
-                window_buffer: window_buffer,
+                window,
+                window_attr,
+                window_buffer,
                 window_buffer_size: window_buffer_size as _,
-                mem: mem,
+                mem,
 
-                default_gc: default_gc,
-                wm_delete_window: wm_delete_window,
+                default_gc,
+                wm_delete_window,
             },
 
             just_warped_pointer: false,
             mouse_grabbed: false,
-            mouse_info: MouseInfo {
+            mouse_info: super::MouseInfo {
                 x: win_x_return,
                 y: win_y_return,
                 dx: 0,
@@ -616,7 +302,7 @@ impl Window {
 
     // criar funcao "handle" que retorna um enum, ou vec de enums, contendo os eventos recebidos
     //
-    pub fn handle(&mut self) -> Vec<Event> {
+    fn handle(&mut self) -> Vec<super::Event> {
         unsafe {
             xlib::XPutImage(
                 self.x11.display,
@@ -635,7 +321,7 @@ impl Window {
         let mut ev = unsafe { MaybeUninit::<xlib::XEvent>::zeroed().assume_init() };
 
         let mut size_change = false;
-        let mut events: Vec<Event> = Vec::new();
+        let mut events: Vec<super::Event> = Vec::new();
 
         while unsafe { xlib::XPending(self.x11.display) } > 0 {
             unsafe {
@@ -715,12 +401,12 @@ impl Window {
                     let e: xlib::XButtonEvent = From::from(ev);
 
                     let button_event = match e.button {
-                        xlib::Button1 => Event::ButtonPress(Button::MouseLeft),
-                        xlib::Button2 => Event::ButtonPress(Button::MouseMiddle),
-                        xlib::Button3 => Event::ButtonPress(Button::MouseRight),
-                        xlib::Button4 => Event::ButtonPress(Button::WheelUp),
-                        xlib::Button5 => Event::ButtonPress(Button::WheelDown),
-                        _ => Event::Empty,
+                        xlib::Button1 => super::Event::ButtonPress(super::Button::MouseLeft),
+                        xlib::Button2 => super::Event::ButtonPress(super::Button::MouseMiddle),
+                        xlib::Button3 => super::Event::ButtonPress(super::Button::MouseRight),
+                        xlib::Button4 => super::Event::ButtonPress(super::Button::WheelUp),
+                        xlib::Button5 => super::Event::ButtonPress(super::Button::WheelDown),
+                        _ => super::Event::Empty,
                     };
 
                     events.push(button_event);
@@ -730,12 +416,12 @@ impl Window {
                     let e: xlib::XButtonEvent = From::from(ev);
 
                     let button_event = match e.button {
-                        xlib::Button1 => Event::ButtonRelease(Button::MouseLeft),
-                        xlib::Button2 => Event::ButtonRelease(Button::MouseMiddle),
-                        xlib::Button3 => Event::ButtonRelease(Button::MouseRight),
-                        xlib::Button4 => Event::ButtonRelease(Button::WheelUp),
-                        xlib::Button5 => Event::ButtonRelease(Button::WheelDown),
-                        _ => Event::Empty,
+                        xlib::Button1 => super::Event::ButtonRelease(super::Button::MouseLeft),
+                        xlib::Button2 => super::Event::ButtonRelease(super::Button::MouseMiddle),
+                        xlib::Button3 => super::Event::ButtonRelease(super::Button::MouseRight),
+                        xlib::Button4 => super::Event::ButtonRelease(super::Button::WheelUp),
+                        xlib::Button5 => super::Event::ButtonRelease(super::Button::WheelDown),
+                        _ => super::Event::Empty,
                     };
 
                     events.push(button_event);
@@ -750,7 +436,7 @@ impl Window {
                         }
                     }
 
-                    events.push(Event::CloseWindow);
+                    events.push(super::Event::CloseWindow);
                 }
 
                 xlib::ConfigureNotify => {
@@ -761,14 +447,14 @@ impl Window {
                         self.height = e.height as _;
 
                         size_change = true;
-                        events.push(Event::RedimWindow((self.width, self.height)));
+                        events.push(super::Event::RedimWindow((self.width, self.height)));
                     }
 
                     if self.pos_x != e.x || self.pos_y != e.y {
                         self.pos_x = e.x;
                         self.pos_y = e.y;
 
-                        events.push(Event::ReposWindow((e.x, e.y)));
+                        events.push(super::Event::ReposWindow((e.x, e.y)));
                     }
                 }
 
@@ -777,12 +463,12 @@ impl Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym(&mut e as *mut _, 0) as u32 };
 
-                    match Key::from_keysym(keysym) {
-                        Key::F11 => self.toggle_fullscreen(),
+                    match From::from(keysym) {
+                        super::Key::F11 => self.toggle_fullscreen(),
                         _ => {}
                     };
 
-                    events.push(Event::KeyPress(Key::from_keysym(keysym)));
+                    events.push(super::Event::KeyPress(From::from(keysym)));
                 }
 
                 xlib::KeyRelease => {
@@ -790,7 +476,7 @@ impl Window {
 
                     let keysym = unsafe { xlib::XLookupKeysym(&mut e as *mut _, 0) as u32 };
 
-                    events.push(Event::KeyRelease(Key::from_keysym(keysym)));
+                    events.push(super::Event::KeyRelease(From::from(keysym)));
                 }
 
                 xlib::MotionNotify => {
@@ -813,7 +499,7 @@ impl Window {
                     // https://forums.thedarkmod.com/index.php?/topic/21691-incorrect-mouse-movement-in-3d-2d-views-on-plasma-wayland/page/2/
 
                     if self.mouse_info.x != e.x || self.mouse_info.y != e.y {
-                        let mut mouse_info = MouseInfo {
+                        let mut mouse_info = super::MouseInfo {
                             x: e.x,
                             y: e.y,
                             dx: self.mouse_info.x - e.x,
@@ -828,7 +514,7 @@ impl Window {
 
                         self.mouse_info = mouse_info.clone();
 
-                        events.push(Event::MouseMotion(mouse_info));
+                        events.push(super::Event::MouseMotion(mouse_info));
                     }
                 }
 
@@ -869,21 +555,21 @@ impl Window {
         events
     }
 
-    pub fn hide_mouse_cursor(&mut self) {
+    fn hide_mouse_cursor(&mut self) {
         unsafe { x11::xfixes::XFixesHideCursor(self.x11.display, self.x11.window) };
         unsafe {
             xlib::XFlush(self.x11.display);
         }
     }
 
-    pub fn show_mouse_cursor(&mut self) {
+    fn show_mouse_cursor(&mut self) {
         unsafe { x11::xfixes::XFixesShowCursor(self.x11.display, self.x11.window) };
         unsafe {
             xlib::XFlush(self.x11.display);
         }
     }
 
-    pub fn toggle_fullscreen(&mut self) {
+    fn toggle_fullscreen(&mut self) {
         unsafe {
             let mut ev: xlib::XClientMessageEvent = MaybeUninit::zeroed().assume_init();
             let wm_state: xlib::Atom = xlib::XInternAtom(
@@ -903,10 +589,10 @@ impl Window {
                 ev.format = 32;
                 ev.window = self.x11.window;
                 ev.message_type = wm_state;
-                ev.data.as_longs_mut()[0] = 2 as i64; // _NET_WM_STATE_TOGGLE 2 according to spec
+                ev.data.as_longs_mut()[0] = 2; // _NET_WM_STATE_TOGGLE 2 according to spec
                 ev.data.as_longs_mut()[1] = fullscreen as i64;
                 ev.data.as_longs_mut()[2] = 0;
-                ev.data.as_longs_mut()[3] = 1 as i64;
+                ev.data.as_longs_mut()[3] = 1;
 
                 let _ = xlib::XSendEvent(
                     self.x11.display,
@@ -919,9 +605,9 @@ impl Window {
         }
     }
 
-    pub fn update_mouse_cursor(&mut self, cursor: MouseCursor) {
+    fn update_mouse_cursor(&mut self, cursor: super::MouseCursor) {
         let xlib_cursor: xlib::Cursor =
-            unsafe { x11::xcursor::XcursorLibraryLoadCursor(self.x11.display, cursor.as_c_str()) };
+            unsafe { x11::xcursor::XcursorLibraryLoadCursor(self.x11.display, From::from(cursor)) };
         unsafe {
             xlib::XDefineCursor(self.x11.display, self.x11.window, xlib_cursor);
         }
@@ -930,7 +616,7 @@ impl Window {
         }
     }
 
-    pub fn set_mouse_position(&mut self, x: i32, y: i32) {
+    fn set_mouse_position(&mut self, x: i32, y: i32) {
         assert!(0 <= x && x < self.width as i32);
         assert!(0 <= y && y < self.height as i32);
 
@@ -962,7 +648,7 @@ impl Window {
         // https://projects.blender.org/blender/blender/issues/53004#issuecomment-551561
     }
 
-    pub fn write_frame_from_ptr(&mut self, src: *const u8, sz: usize) {
+    fn write_frame_from_ptr(&mut self, src: *const u8, sz: usize) {
         let mem_len = self.width * self.height * self.x11.pixel_bytes;
         if src.is_null() || sz > mem_len {
             panic!("frame overflow");
@@ -973,19 +659,19 @@ impl Window {
         }
     }
 
-    pub fn write_frame_from_slice(&mut self, src: &[u8]) {
+    fn write_frame_from_slice(&mut self, src: &[u8]) {
         self.write_frame_from_ptr(src.as_ptr() as *const _, src.len());
     }
 
-    pub fn get_window_position(&self) -> (i32, i32) {
+    fn get_window_position(&self) -> (i32, i32) {
         (self.pos_x, self.pos_y)
     }
 
-    pub fn get_window_dim(&self) -> (usize, usize) {
+    fn get_window_dim(&self) -> (usize, usize) {
         (self.width, self.height)
     }
 
-    pub fn get_screen_dim(&self) -> (usize, usize) {
+    fn get_screen_dim(&self) -> (usize, usize) {
         unsafe {
             let screen = xlib::XDefaultScreenOfDisplay(self.x11.display);
             let width: usize = xlib::XWidthOfScreen(screen).try_into().unwrap();
@@ -998,4 +684,136 @@ impl Window {
 
     //pub
     //fn get_pitch(&self) -> usize {self.width * self.pixel_bytes}
+}
+
+impl From<super::MouseCursor> for *const i8 {
+    fn from(value: super::MouseCursor) -> Self {
+        match value {
+            super::MouseCursor::Arrow => c"default".as_ptr(),
+            super::MouseCursor::TextInput => c"xterm".as_ptr(),
+            super::MouseCursor::ResizeAll => c"fleur".as_ptr(),
+            super::MouseCursor::ResizeNS => c"sb_v_double_arrow".as_ptr(),
+            super::MouseCursor::ResizeEW => c"sb_h_double_arrow".as_ptr(),
+            super::MouseCursor::ResizeNESW => c"bottom_left_corner".as_ptr(),
+            super::MouseCursor::ResizeNWSE => c"bottom_right_corner".as_ptr(),
+            super::MouseCursor::Hand => c"hand1".as_ptr(),
+            super::MouseCursor::NotAllowed => c"circle".as_ptr(),
+        }
+    }
+}
+
+#[allow(non_snake_case, non_upper_case_globals)]
+impl std::convert::From<u32> for super::Key {
+    fn from(keysym: u32) -> Self {
+        match keysym {
+            XK_Tab => super::Key::Tab,
+            XK_Left => super::Key::LeftArrow,
+            XK_Right => super::Key::RightArrow,
+            XK_Up => super::Key::UpArrow,
+            XK_Down => super::Key::DownArrow,
+            XK_Prior => super::Key::PageUp,
+            XK_Next => super::Key::PageDown,
+            XK_Home => super::Key::Home,
+            XK_End => super::Key::End,
+            XK_Insert => super::Key::Insert,
+            XK_Delete => super::Key::Delete,
+            XK_BackSpace => super::Key::Backspace,
+            XK_space => super::Key::Space,
+            XK_Return => super::Key::Enter,
+            XK_Escape => super::Key::Escape,
+            XK_quoteright => super::Key::Apostrophe,
+            XK_comma => super::Key::Comma,
+            XK_minus => super::Key::Minus,
+            XK_period => super::Key::Period,
+            XK_slash => super::Key::Slash,
+            XK_semicolon => super::Key::Semicolon,
+            XK_equal => super::Key::Equal,
+            XK_bracketleft => super::Key::LeftBracket,
+            XK_backslash => super::Key::Backslash,
+            XK_bracketright => super::Key::RightBracket,
+            XK_quoteleft => super::Key::GraveAccent,
+            XK_Caps_Lock => super::Key::CapsLock,
+            XK_Scroll_Lock => super::Key::ScrollLock,
+            XK_Num_Lock => super::Key::NumLock,
+            XK_Print => super::Key::PrintScreen,
+            XK_Pause => super::Key::Pause,
+            XK_KP_0 => super::Key::Keypad0,
+            XK_KP_1 => super::Key::Keypad1,
+            XK_KP_2 => super::Key::Keypad2,
+            XK_KP_3 => super::Key::Keypad3,
+            XK_KP_4 => super::Key::Keypad4,
+            XK_KP_5 => super::Key::Keypad5,
+            XK_KP_6 => super::Key::Keypad6,
+            XK_KP_7 => super::Key::Keypad7,
+            XK_KP_8 => super::Key::Keypad8,
+            XK_KP_9 => super::Key::Keypad9,
+            XK_KP_Decimal => super::Key::KeypadDecimal,
+            XK_KP_Divide => super::Key::KeypadDivide,
+            XK_KP_Multiply => super::Key::KeypadMultiply,
+            XK_KP_Subtract => super::Key::KeypadSubtract,
+            XK_KP_Add => super::Key::KeypadAdd,
+            XK_KP_Enter => super::Key::KeypadEnter,
+            XK_KP_Equal => super::Key::KeypadEqual,
+            XK_Control_L => super::Key::LeftCtrl,
+            XK_Shift_L => super::Key::LeftShift,
+            XK_Alt_L => super::Key::LeftAlt,
+            XK_Super_L => super::Key::LeftSuper,
+            XK_Control_R => super::Key::RightCtrl,
+            XK_Shift_R => super::Key::RightShift,
+            XK_Alt_R => super::Key::RightAlt,
+            XK_Super_R => super::Key::RightSuper,
+            XK_Menu => super::Key::Menu,
+            XK_0 => super::Key::Num0,
+            XK_1 => super::Key::Num1,
+            XK_2 => super::Key::Num2,
+            XK_3 => super::Key::Num3,
+            XK_4 => super::Key::Num4,
+            XK_5 => super::Key::Num5,
+            XK_6 => super::Key::Num6,
+            XK_7 => super::Key::Num7,
+            XK_8 => super::Key::Num8,
+            XK_9 => super::Key::Num9,
+            XK_a => super::Key::A,
+            XK_b => super::Key::B,
+            XK_c => super::Key::C,
+            XK_d => super::Key::D,
+            XK_e => super::Key::E,
+            XK_f => super::Key::F,
+            XK_g => super::Key::G,
+            XK_h => super::Key::H,
+            XK_i => super::Key::I,
+            XK_j => super::Key::J,
+            XK_k => super::Key::K,
+            XK_l => super::Key::L,
+            XK_m => super::Key::M,
+            XK_n => super::Key::N,
+            XK_o => super::Key::O,
+            XK_p => super::Key::P,
+            XK_q => super::Key::Q,
+            XK_r => super::Key::R,
+            XK_s => super::Key::S,
+            XK_t => super::Key::T,
+            XK_u => super::Key::U,
+            XK_v => super::Key::V,
+            XK_w => super::Key::W,
+            XK_x => super::Key::X,
+            XK_y => super::Key::Y,
+            XK_z => super::Key::Z,
+            XK_F1 => super::Key::F1,
+            XK_F2 => super::Key::F2,
+            XK_F3 => super::Key::F3,
+            XK_F4 => super::Key::F4,
+            XK_F5 => super::Key::F5,
+            XK_F6 => super::Key::F6,
+            XK_F7 => super::Key::F7,
+            XK_F8 => super::Key::F8,
+            XK_F9 => super::Key::F9,
+            XK_F10 => super::Key::F10,
+            XK_F11 => super::Key::F11,
+            XK_F12 => super::Key::F12,
+            XF86XK_Back => super::Key::AppBack,
+            XF86XK_Forward => super::Key::AppForward,
+            _ => super::Key::Unknown,
+        }
+    }
 }

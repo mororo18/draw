@@ -2,19 +2,27 @@
 name = "draw"
 version = "0.1.0"
 edition = "2021"
-links = "X11"
 build = "build.rs"
 
 [dependencies]
+debug_print = "1.0.0"
 font-awesome = "0.2.0"
-imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"} # https://github.com/imgui-rs/imgui-rs/pull/779
+imgui = { git = "https://github.com/imgui-rs/imgui-rs.git", rev = "5d771a8"}
+input-event-codes = "6.2.0"
 itertools = "0.13.0"
+linicon = "2.3.0"
 material-icons = "0.2.0"
+more-asserts = "0.3.1"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
 rfd = { version = "0.15.2",  default-features = false, features = ["xdg-portal", "tokio"] }
 stb = { git = "https://github.com/mororo18/stb.git", branch = "fix-ubuntu-24.10-build" }
-#stb = version = "0.3.2"
+wayland-cursor = "0.31.7"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tempfile = "3.14.0"
+wayland-client = "0.31.7"
+wayland-protocols = { version = "0.32.5", features = ["client"] }
 x11 = { git = "https://github.com/mororo18/x11-rs.git" }
 
 [rust]
@@ -23,3 +31,6 @@ debuginfo-level = 1
 
 [profile.release]
 debug = 1
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(x11_impl)', 'cfg(wayland_impl)'] }

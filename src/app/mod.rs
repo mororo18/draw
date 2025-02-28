@@ -1,17 +1,14 @@
 mod gui;
 mod window;
 
+use gui::*;
+use window::{AppWindow, Event, Key, Window};
+
 use rfd::FileDialog;
 use std::ffi::{CStr, CString};
 
 use crate::renderer::canvas::Canvas;
 use crate::renderer::scene::{Object, ObjectInfo, Scene};
-
-use gui::*;
-
-use window::{Event, Key, Window};
-
-//struct AppState();
 
 enum CameraNavigation {
     Free,
@@ -40,7 +37,7 @@ const CAMERA_DOWNWARDS: u8 = 32;
 
 pub struct Application {
     gui: Gui,
-    win: Window,
+    win: AppWindow,
     scene: Scene,
     canvas: Canvas,
 
@@ -54,12 +51,12 @@ pub struct Application {
     camera_moving_direction: u8,
 }
 
-impl Application {
-    pub fn new() -> Self {
+impl Default for Application {
+    fn default() -> Self {
         let width = 800;
         let height = 600;
 
-        let win = Window::new(width, height);
+        let win = AppWindow::new(width, height);
         let (screen_width, screen_height) = win.get_screen_dim();
 
         Self {
@@ -74,7 +71,9 @@ impl Application {
             camera_moving_direction: 0,
         }
     }
+}
 
+impl Application {
     pub fn run(&mut self) {
         let (screen_width, screen_height) = self.win.get_screen_dim();
         self.canvas.init_depth(100000.0);
@@ -201,10 +200,10 @@ impl Application {
                     .as_mut_slice()
                     .copy_from_slice(self.canvas.as_bytes_slice());
 
-                self.gui.new_frame(&mut self.win, &frame_events, elapsed);
+                self.gui
+                    .new_frame(&mut self.win, frame_events.drain(..).as_slice(), elapsed);
                 self.gui.build_ui(&mut user_action);
                 self.gui.render(&mut self.canvas);
-                frame_events.clear();
 
                 let frame_slice = self.canvas.as_bytes_slice();
                 self.win.write_frame_from_slice(frame_slice);

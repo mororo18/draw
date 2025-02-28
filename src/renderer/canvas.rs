@@ -1,4 +1,5 @@
 use itertools::Either;
+use more_asserts::*;
 use std::ops::{Add, Mul, Sub};
 
 use super::linalg::{Vec2, Vec3, Vec4};
@@ -26,7 +27,9 @@ pub enum Color {
     Blue,
 
     Grey,
+    Transparent,
     Custom([u8; 3]),
+    CustomWithAlpha([u8; 4]),
 }
 
 impl Color {
@@ -37,8 +40,10 @@ impl Color {
             Color::Red => Pixel::red(),
             Color::Green => Pixel::green(),
             Color::Blue => Pixel::blue(),
-            Color::Grey => Pixel::new(128, 128, 128),
-            Color::Custom(col) => Pixel::new(col[0], col[1], col[2]),
+            Color::Grey => Pixel::new(128, 128, 128, 255),
+            Color::Transparent => Pixel::new(0, 0, 0, 0),
+            Color::Custom(col) => Pixel::new(col[0], col[1], col[2], 255),
+            Color::CustomWithAlpha(col) => Pixel::new(col[0], col[1], col[2], col[3]),
         }
     }
 
@@ -53,20 +58,14 @@ struct Pixel {
     b: u8,
     g: u8,
     r: u8,
-
     #[allow(dead_code)]
-    padd: u8,
+    alpha: u8,
 }
 
 // TODO: criar func "from_hex(cod: str)" e constantes com cores
 impl Pixel {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self {
-            r: r,
-            g: g,
-            b: b,
-            padd: 255,
-        }
+    pub fn new(r: u8, g: u8, b: u8, alpha: u8) -> Self {
+        Self { r, g, b, alpha }
     }
 
     pub fn blend(a: Self, b: Self) -> Self {
@@ -88,7 +87,7 @@ impl Pixel {
 
     pub fn from_normalized_vec3(src: Vec3) -> Self {
         let scaled = src * 255.0;
-        Self::new(scaled.x() as u8, scaled.y() as u8, scaled.z() as u8)
+        Self::new(scaled.x() as u8, scaled.y() as u8, scaled.z() as u8, 255)
     }
 
     pub fn as_vec4(&self) -> Vec4 {
@@ -96,40 +95,27 @@ impl Pixel {
             self.b as f32,
             self.g as f32,
             self.r as f32,
-            self.padd as f32,
+            self.alpha as f32,
         ])
     }
 
-    pub fn set_red(&mut self, r: u8) {
-        self.r = r;
-    }
-    pub fn set_green(&mut self, g: u8) {
-        self.g = g;
-    }
-    pub fn set_blue(&mut self, b: u8) {
-        self.b = b;
-    }
-    pub fn set_padd(&mut self, p: u8) {
-        self.padd = p;
-    }
-
     pub fn red() -> Self {
-        Pixel::new(255, 0, 0)
+        Pixel::new(255, 0, 0, 255)
     }
     pub fn green() -> Self {
-        Pixel::new(0, 255, 00)
+        Pixel::new(0, 255, 0, 255)
     }
     pub fn blue() -> Self {
-        Pixel::new(0, 0, 255)
+        Pixel::new(0, 0, 255, 255)
     }
     pub fn white() -> Self {
-        Pixel::new(255, 255, 255)
+        Pixel::new(255, 255, 255, 255)
     }
     pub fn black() -> Self {
-        Pixel::new(0, 0, 0)
+        Pixel::new(0, 0, 0, 255)
     }
     pub fn azul_bb() -> Self {
-        Pixel::new(155, 186, 255)
+        Pixel::new(155, 186, 255, 255)
     }
 }
 
@@ -146,7 +132,7 @@ impl Add for Pixel {
             g: g_sum,
             b: b_sum,
 
-            padd: 0,
+            alpha: 255,
         }
     }
 }
@@ -160,10 +146,10 @@ impl Mul<f32> for Pixel {
         let b = ((self.b as f32) * rhs) as u8;
 
         Pixel {
-            r: r,
-            g: g,
-            b: b,
-            padd: 0,
+            r,
+            g,
+            b,
+            alpha: 255,
         }
     }
 }
@@ -214,13 +200,13 @@ impl VertexAttributes {
         txt_coord: Vec3,
     ) -> Self {
         Self {
-            screen_coord: screen_coord,
+            screen_coord,
             //color:  color,
-            normal: normal,
-            light: light,
+            normal,
+            light,
             //eye:    eye,
-            halfway: halfway,
-            depth: depth,
+            halfway,
+            depth,
             texture_coord: txt_coord,
         }
     }
@@ -292,26 +278,45 @@ impl Mul<f32> for VertexAttributes {
 
 #[derive(Debug, Clone)]
 pub struct Rectangle {
-    pub pos: PixelPos,
-    pub height: usize,
-    pub width: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 impl Rectangle {
-    pub fn x_min(&self) -> usize {
-        self.pos.x
+    pub fn x_min(&self) -> i32 {
+        self.x
     }
-    fn y_min(&self) -> usize {
-        self.pos.y
-    }
-
-    fn x_max(&self) -> usize {
-        self.pos.x + self.width
-    }
-    fn y_max(&self) -> usize {
-        self.pos.y + self.height
+    pub fn y_min(&self) -> i32 {
+        self.y
     }
 
+    pub fn x_max(&self) -> i32 {
+        self.x + self.width - 1
+    }
+    pub fn y_max(&self) -> i32 {
+        self.y + self.height - 1
+    }
+
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        (self.x..self.x + self.width).contains(&x)
+            && (self.y..self.y + self.height).contains(&y)
+    }
+
+    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        assert_ge!(width, 0);
+        assert_ge!(height, 0);
+
+        Rectangle {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    // FIXME: use i32 instead of usize
     pub fn from_coords(x0: usize, y0: usize, x1: usize, y1: usize) -> Self {
         use std::cmp;
 
@@ -322,20 +327,21 @@ impl Rectangle {
         let y_max = cmp::max(y0, y1);
 
         Self {
-            pos: PixelPos { x: x_min, y: y_min },
+            x: x_min as _,
+            y: y_min as _,
 
-            height: y_max - y_min,
-            width: x_max - x_min,
+            height: (y_max - y_min + 1) as _,
+            width: (x_max - x_min + 1) as _,
         }
     }
 
     pub fn clip(a: Self, b: Self) -> Self {
         use std::cmp;
-        let mut x_min = cmp::max(a.pos.x, b.pos.x);
-        let mut y_min = cmp::max(a.pos.y, b.pos.y);
+        let mut x_min = cmp::max(a.x, b.x);
+        let mut y_min = cmp::max(a.y, b.y);
 
-        let mut x_max = cmp::min(a.pos.x + a.width, b.pos.x + b.width);
-        let mut y_max = cmp::min(a.pos.y + a.height, b.pos.y + b.height);
+        let mut x_max = cmp::min(a.x + a.width, b.x + b.width);
+        let mut y_max = cmp::min(a.y + a.height, b.y + b.height);
 
         if x_min > x_max {
             x_min = 0;
@@ -346,7 +352,7 @@ impl Rectangle {
             y_max = 0;
         }
 
-        Self::from_coords(x_min, y_min, x_max, y_max)
+        Self::from_coords(x_min as usize, y_min as usize, x_max as usize, y_max as usize)
     }
 }
 
@@ -422,12 +428,18 @@ impl Canvas {
         }
     }
 
+    pub fn fill_color(&mut self, color: Color) {
+        self.frame
+            .iter_mut()
+            .for_each(|pixel| *pixel = color.as_pixel());
+    }
+
     pub fn clear(&mut self) {
         self.frame
             .iter_mut()
             .for_each(|pixel| *pixel = Pixel::azul_bb());
 
-        if self.depth_frame.len() > 0 {
+        if !self.depth_frame.is_empty() {
             self.init_depth(self.depth_max);
         }
     }
@@ -440,10 +452,10 @@ impl Canvas {
         texture: Option<&Texture>,
         clipping_rect: Option<Rectangle>,
     ) {
-        let default = &Texture::default();
+        //let default = &Texture::default();
         let texture = texture.unwrap_or_else(move || {
-            assert!(false);
-            default
+            unreachable!();
+            //default
         });
         let diffuse_map = &texture.map_kd;
 
@@ -480,6 +492,8 @@ impl Canvas {
                 - (a_center.x * c_center.y)
         };
 
+        // TODO: replace this min() and max() funcs with something
+        // more appropriate
         let min = |x: f32, y: f32, z: f32| -> f32 {
             let mut ret = f32::INFINITY;
             [x, y, z].iter().for_each(|v| {
@@ -513,14 +527,13 @@ impl Canvas {
 
         drawable_rect = Rectangle::clip(drawable_rect, screen_rect.clone());
 
-        let valid_rect =
-            Rectangle::clip(clipping_rect.unwrap_or_else(|| screen_rect), drawable_rect);
+        let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
-        x_min = valid_rect.x_min();
-        y_min = valid_rect.y_min();
+        x_min = valid_rect.x_min() as usize;
+        y_min = valid_rect.y_min() as usize;
 
-        x_max = valid_rect.x_max();
-        y_max = valid_rect.y_max();
+        x_max = valid_rect.x_max() as usize;
+        y_max = valid_rect.y_max() as usize;
 
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta = f_ca(b_center.x, b_center.y);
@@ -648,14 +661,13 @@ impl Canvas {
 
         drawable_rect = Rectangle::clip(drawable_rect, screen_rect.clone());
 
-        let valid_rect =
-            Rectangle::clip(clipping_rect.unwrap_or_else(|| screen_rect), drawable_rect);
+        let valid_rect = Rectangle::clip(clipping_rect.unwrap_or(screen_rect), drawable_rect);
 
-        x_min = valid_rect.x_min();
-        y_min = valid_rect.y_min();
+        x_min = valid_rect.x_min() as usize;
+        y_min = valid_rect.y_min() as usize;
 
-        x_max = valid_rect.x_max();
-        y_max = valid_rect.y_max();
+        x_max = valid_rect.x_max() as usize;
+        y_max = valid_rect.y_max() as usize;
 
         let f_alpha = f_bc(a_center.x, a_center.y);
         let f_beta = f_ca(b_center.x, b_center.y);
@@ -698,6 +710,7 @@ impl Canvas {
                             diffuse_color_slice[0],
                             diffuse_color_slice[1],
                             diffuse_color_slice[2],
+                            255,
                         )
                         .normalized_as_vec3();
 
@@ -705,6 +718,7 @@ impl Canvas {
                             ambient_color_slice[0],
                             ambient_color_slice[1],
                             ambient_color_slice[2],
+                            255,
                         )
                         .normalized_as_vec3();
 

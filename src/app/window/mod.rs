@@ -1,0 +1,210 @@
+#[cfg(wayland_impl)]
+mod wayland_impl;
+#[cfg(x11_impl)]
+mod x11_impl;
+
+mod window_decorator;
+
+#[cfg(wayland_impl)]
+pub use wayland_impl::WaylandWindow;
+#[cfg(x11_impl)]
+pub use x11_impl::X11Window;
+
+#[cfg(x11_impl)]
+pub type AppWindow = X11Window;
+#[cfg(wayland_impl)]
+pub type AppWindow = WaylandWindow;
+
+// TODO: rename this trait to leave 'Window' to the actual 'AppWindow' type
+pub trait Window {
+    fn new(width: usize, height: usize) -> Self;
+    fn handle(&mut self) -> Vec<super::Event>;
+    fn hide_mouse_cursor(&mut self);
+    fn show_mouse_cursor(&mut self);
+    fn toggle_fullscreen(&mut self);
+    fn update_mouse_cursor(&mut self, cursor: MouseCursor);
+    fn set_mouse_position(&mut self, x: i32, y: i32);
+    fn write_frame_from_ptr(&mut self, src: *const u8, sz: usize);
+    fn write_frame_from_slice(&mut self, src: &[u8]);
+    fn get_window_position(&self) -> (i32, i32);
+    fn get_screen_dim(&self) -> (usize, usize);
+    // TODO: This propabilly should be called 'get_window_content_dimension'
+    fn get_window_dim(&self) -> (usize, usize);
+}
+
+#[derive(PartialEq)]
+pub enum Key {
+    Tab,
+    LeftArrow,
+    RightArrow,
+    UpArrow,
+    DownArrow,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Insert,
+    Delete,
+    Backspace,
+    Space,
+    Enter,
+    Escape,
+    LeftCtrl,
+    LeftShift,
+    LeftAlt,
+    LeftSuper,
+    RightCtrl,
+    RightShift,
+    RightAlt,
+    RightSuper,
+    Menu,
+    Num0,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    Apostrophe,
+    Comma,
+    Minus,
+    Period,
+    Slash,
+    Semicolon,
+    Equal,
+    LeftBracket,
+    Backslash,
+    RightBracket,
+    GraveAccent,
+    CapsLock,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+    Keypad0,
+    Keypad1,
+    Keypad2,
+    Keypad3,
+    Keypad4,
+    Keypad5,
+    Keypad6,
+    Keypad7,
+    Keypad8,
+    Keypad9,
+    KeypadDecimal,
+    KeypadDivide,
+    KeypadMultiply,
+    KeypadSubtract,
+    KeypadAdd,
+    KeypadEnter,
+    KeypadEqual,
+    AppBack,
+    AppForward,
+    Unknown,
+    //Sym((u32, u32)),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Button {
+    MouseLeft,
+    MouseMiddle,
+    MouseRight,
+    WheelUp,
+    WheelDown,
+    Unknown,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum MouseCursor {
+    Arrow,
+    TextInput,
+    ResizeAll,
+    ResizeNS,
+    ResizeEW,
+    ResizeNESW,
+    ResizeNWSE,
+    Hand,
+    NotAllowed,
+}
+
+impl Default for MouseCursor {
+    fn default() -> Self {
+        Self::Arrow
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Event {
+    CloseWindow,
+    KeyPress(Key),
+    KeyRelease(Key),
+
+    ButtonPress(Button),
+    ButtonRelease(Button),
+
+    RedimWindow((usize, usize)),
+    ReposWindow((i32, i32)),
+    // TODO: Rename to PointerMotion?
+    MouseMotion(MouseInfo),
+
+    Empty,
+}
+
+// TODO: Rename to PointerInfo?
+#[derive(Clone, PartialEq, Default, Debug)]
+pub struct MouseInfo {
+    pub x: i32,
+    pub y: i32,
+    pub dx: i32,
+    pub dy: i32,
+}
+
+impl MouseInfo {
+    pub fn update(&mut self, new_x: i32, new_y: i32) {
+        self.dx = new_x - self.x;
+        self.dy = new_y - self.y;
+        self.x = new_x;
+        self.y = new_y;
+    }
+}

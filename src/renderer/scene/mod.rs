@@ -9,6 +9,8 @@ use super::canvas::{Canvas, Color, VertexAttributes};
 
 use super::linalg::{Matrix4, Vec2, Vec3, EPS};
 
+use debug_print::debug_println;
+
 #[derive(Clone, Copy, Debug)]
 struct Triangle {
     vertices: [Vec3; 3],
@@ -319,7 +321,7 @@ impl Camera {
         // |      bottom       |
         //  ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
         //           W
-        let right = dbg!(near.abs() * (fov_x_rad / 2.0).tan()); // right = W/2
+        let right = near.abs() * (fov_x_rad / 2.0).tan(); // right = W/2
         let left = -right; // left = -W/2
         let top = ratio.recip() * right; // top = H/2
         let bottom = -top; // bottom = -H/2
@@ -330,7 +332,7 @@ impl Camera {
         assert!(right > left);
         assert!(top > bottom);
 
-        println!(
+        debug_println!(
             "CameraWindow dimension ({} x {})",
             right - left,
             top - bottom

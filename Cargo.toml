@@ -12,7 +12,7 @@ itertools = "0.13.0"
 material-icons = "0.2.0"
 obj = { git = "https://github.com/kvark/obj.git" }
 rand = "0.8.5"
-rfd = { version = "0.15.2",  default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = "0.15.2"
 stb = { git = "https://github.com/mororo18/stb.git", branch = "fix-ubuntu-24.10-build" }
 #stb = version = "0.3.2"
 x11 = { git = "https://github.com/mororo18/x11-rs.git" }

@@ -301,7 +301,6 @@ impl Application {
     fn open_obj_file(&mut self) -> Option<ObjectInfo> {
         let file = FileDialog::new()
             .add_filter("text", &["obj"])
-            .set_directory("$HOME")
             .pick_file();
 
         if let Some(file_path) = file {
@@ -321,7 +320,6 @@ impl Application {
 
         let file = FileDialog::new()
             .add_filter("text", file_extensions)
-            .set_directory("$HOME")
             .save_file();
 
         if let Some(file_path) = file {
